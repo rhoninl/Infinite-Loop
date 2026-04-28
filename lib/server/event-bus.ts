@@ -1,6 +1,6 @@
-import type { RunEvent } from '../shared/types';
+import type { WorkflowEvent } from '../shared/workflow';
 
-type Subscriber = (event: RunEvent) => void;
+type Subscriber = (event: WorkflowEvent) => void;
 
 class EventBus {
   private subscribers = new Set<Subscriber>();
@@ -12,7 +12,7 @@ class EventBus {
     };
   }
 
-  emit(event: RunEvent): void {
+  emit(event: WorkflowEvent): void {
     for (const sub of this.subscribers) {
       try {
         sub(event);

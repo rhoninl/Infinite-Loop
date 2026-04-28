@@ -1,32 +1,28 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import type { RunEvent, WsStatus } from '../shared/types';
+import { useEffect } from 'react';
+import type { WorkflowEvent } from '../shared/workflow';
+import { useWorkflowStore } from './workflow-store-client';
 
-export interface UseRunEventsResult {
-  events: RunEvent[];
-  status: WsStatus;
-}
-
-const RUN_EVENT_TYPES: ReadonlySet<RunEvent['type']> = new Set([
+const VALID_EVENT_TYPES = new Set<WorkflowEvent['type']>([
   'run_started',
-  'iteration_started',
-  'stdout_chunk',
-  'iteration_finished',
+  'node_started',
+  'node_finished',
   'condition_checked',
-  'run_finished',
+  'template_warning',
   'error',
+  'run_finished',
 ]);
 
-function isRunEvent(value: unknown): value is RunEvent {
-  if (!value || typeof value !== 'object') return false;
-  const t = (value as { type?: unknown }).type;
-  return typeof t === 'string' && RUN_EVENT_TYPES.has(t as RunEvent['type']);
+function isWorkflowEvent(v: unknown): v is WorkflowEvent {
+  if (typeof v !== 'object' || v === null) return false;
+  const t = (v as { type?: unknown }).type;
+  return typeof t === 'string' && VALID_EVENT_TYPES.has(t as WorkflowEvent['type']);
 }
 
-export function useRunEvents(): UseRunEventsResult {
-  const [events, setEvents] = useState<RunEvent[]>([]);
-  const [status, setStatus] = useState<WsStatus>('connecting');
+export function useEngineWebSocket(): void {
+  const setConnectionStatus = useWorkflowStore((s) => s.setConnectionStatus);
+  const appendRunEvent = useWorkflowStore((s) => s.appendRunEvent);
 
   useEffect(() => {
     let mounted = true;
@@ -37,60 +33,46 @@ export function useRunEvents(): UseRunEventsResult {
       if (!mounted) return;
       const url = new URL('/ws', window.location.origin);
       url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-      socket = new WebSocket(url);
+      const ws = new WebSocket(url);
+      socket = ws;
+      setConnectionStatus('connecting');
 
-      socket.addEventListener('open', () => {
-        if (!mounted) return;
-        setStatus('open');
-      });
+      ws.onopen = () => {
+        if (mounted) setConnectionStatus('open');
+      };
 
-      socket.addEventListener('message', (event: MessageEvent) => {
+      ws.onmessage = (e) => {
         if (!mounted) return;
-        if (typeof event.data !== 'string') return;
-        let parsed: unknown;
+        if (typeof e.data !== 'string') return;
         try {
-          parsed = JSON.parse(event.data);
+          const data = JSON.parse(e.data);
+          if (isWorkflowEvent(data)) appendRunEvent(data);
         } catch {
-          return;
+          // ignore non-JSON
         }
-        if (isRunEvent(parsed)) {
-          setEvents((prev) => [...prev, parsed]);
-        }
-      });
+      };
 
       const handleDrop = () => {
         if (!mounted) return;
-        setStatus('closed');
-        if (reconnectTimer !== null) return;
+        setConnectionStatus('closed');
+        if (reconnectTimer) return;
         reconnectTimer = setTimeout(() => {
           reconnectTimer = null;
-          if (!mounted) return;
-          setStatus('connecting');
           connect();
         }, 1000);
       };
-
-      socket.addEventListener('close', handleDrop);
-      socket.addEventListener('error', handleDrop);
+      ws.onclose = handleDrop;
+      ws.onerror = handleDrop;
     };
 
     connect();
-
     return () => {
       mounted = false;
-      if (reconnectTimer !== null) {
+      if (reconnectTimer) {
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
       }
-      if (socket) {
-        try {
-          socket.close();
-        } catch {
-          // ignore
-        }
-      }
+      socket?.close();
     };
-  }, []);
-
-  return { events, status };
+  }, [setConnectionStatus, appendRunEvent]);
 }

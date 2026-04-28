@@ -12,10 +12,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@xyflow/react": "^12.10.2",
     "next": "15.5.15",
     "react": "19.0.0",
     "react-dom": "19.0.0",
-    "ws": "8.18.0"
+    "ws": "8.18.0",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "6.6.3",

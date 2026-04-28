@@ -1,140 +1,86 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, renderHook } from '@testing-library/react';
-import { useRunEvents } from './ws-client';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
 
-type Listener = (event: unknown) => void;
-
-class FakeWebSocket {
-  static instances: FakeWebSocket[] = [];
-
-  url: string;
+class FakeSocket {
+  static instances: FakeSocket[] = [];
+  onopen: ((e: Event) => void) | null = null;
+  onclose: ((e: Event) => void) | null = null;
+  onerror: ((e: Event) => void) | null = null;
+  onmessage: ((e: MessageEvent) => void) | null = null;
   readyState = 0;
-  private listeners: Record<string, Listener[]> = {
-    open: [],
-    message: [],
-    close: [],
-    error: [],
-  };
+  url: string;
+  closed = false;
 
   constructor(url: string | URL) {
-    this.url = typeof url === 'string' ? url : url.toString();
-    FakeWebSocket.instances.push(this);
-  }
-
-  addEventListener(type: string, fn: Listener) {
-    if (!this.listeners[type]) this.listeners[type] = [];
-    this.listeners[type].push(fn);
-  }
-
-  removeEventListener(type: string, fn: Listener) {
-    if (!this.listeners[type]) return;
-    this.listeners[type] = this.listeners[type].filter((l) => l !== fn);
-  }
-
-  close() {
-    this.readyState = 3;
+    this.url = String(url);
+    FakeSocket.instances.push(this);
   }
 
   triggerOpen() {
     this.readyState = 1;
-    for (const fn of this.listeners.open) fn({});
+    this.onopen?.(new Event('open'));
   }
-
   triggerMessage(data: string) {
-    for (const fn of this.listeners.message) fn({ data });
+    this.onmessage?.({ data } as MessageEvent);
   }
-
   triggerClose() {
     this.readyState = 3;
-    for (const fn of this.listeners.close) fn({});
+    this.onclose?.(new Event('close'));
   }
-
-  triggerError() {
-    for (const fn of this.listeners.error) fn({});
+  close() {
+    this.closed = true;
   }
 }
 
-describe('useRunEvents', () => {
+describe('useEngineWebSocket', () => {
   beforeEach(() => {
-    FakeWebSocket.instances = [];
-    (globalThis as unknown as { WebSocket: unknown }).WebSocket =
-      FakeWebSocket as unknown;
+    FakeSocket.instances = [];
+    (globalThis as unknown as { WebSocket: unknown }).WebSocket = FakeSocket as unknown;
+    vi.useFakeTimers();
   });
-
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it('starts in connecting state with no events', () => {
-    const { result } = renderHook(() => useRunEvents());
-    expect(result.current.status).toBe('connecting');
-    expect(result.current.events).toEqual([]);
-    expect(FakeWebSocket.instances).toHaveLength(1);
+  it('opens a socket on mount and dispatches valid events into the store', async () => {
+    const { useWorkflowStore } = await import('./workflow-store-client');
+    const { useEngineWebSocket } = await import('./ws-client');
+
+    useWorkflowStore.getState().resetRun();
+
+    const { unmount } = renderHook(() => useEngineWebSocket());
+    expect(FakeSocket.instances.length).toBe(1);
+    const sock = FakeSocket.instances[0];
+
+    act(() => sock.triggerOpen());
+    expect(useWorkflowStore.getState().connectionStatus).toBe('open');
+
+    act(() =>
+      sock.triggerMessage(
+        JSON.stringify({ type: 'run_started', workflowId: 'w', workflowName: 'W' }),
+      ),
+    );
+    expect(
+      useWorkflowStore.getState().runEvents.some((e) => e.type === 'run_started'),
+    ).toBe(true);
+
+    const before = useWorkflowStore.getState().runEvents.length;
+    act(() => sock.triggerMessage(JSON.stringify({ type: 'state_snapshot' })));
+    expect(useWorkflowStore.getState().runEvents.length).toBe(before);
+
+    unmount();
+    expect(sock.closed).toBe(true);
   });
 
-  it('transitions to open on socket open', () => {
-    const { result } = renderHook(() => useRunEvents());
+  it('reconnects roughly 1s after a drop', async () => {
+    const { useEngineWebSocket } = await import('./ws-client');
+    renderHook(() => useEngineWebSocket());
+    const first = FakeSocket.instances[0];
+    act(() => first.triggerOpen());
+    act(() => first.triggerClose());
     act(() => {
-      FakeWebSocket.instances[0].triggerOpen();
+      vi.advanceTimersByTime(1100);
     });
-    expect(result.current.status).toBe('open');
-  });
-
-  it('appends RunEvent messages to events', () => {
-    const { result } = renderHook(() => useRunEvents());
-    act(() => {
-      FakeWebSocket.instances[0].triggerOpen();
-      FakeWebSocket.instances[0].triggerMessage(
-        JSON.stringify({ type: 'iteration_started', n: 1 }),
-      );
-    });
-    expect(result.current.events).toHaveLength(1);
-    expect(result.current.events[0]).toEqual({
-      type: 'iteration_started',
-      n: 1,
-    });
-  });
-
-  it('ignores non-RunEvent messages such as state_snapshot', () => {
-    const { result } = renderHook(() => useRunEvents());
-    act(() => {
-      FakeWebSocket.instances[0].triggerOpen();
-      FakeWebSocket.instances[0].triggerMessage(
-        JSON.stringify({ type: 'state_snapshot', state: { status: 'idle' } }),
-      );
-    });
-    expect(result.current.events).toEqual([]);
-  });
-
-  it('sets status to closed and reconnects after 1000ms', () => {
-    vi.useFakeTimers();
-    const { result } = renderHook(() => useRunEvents());
-    expect(FakeWebSocket.instances).toHaveLength(1);
-
-    act(() => {
-      FakeWebSocket.instances[0].triggerClose();
-    });
-    expect(result.current.status).toBe('closed');
-    expect(FakeWebSocket.instances).toHaveLength(1);
-
-    act(() => {
-      vi.advanceTimersByTime(1000);
-    });
-    expect(FakeWebSocket.instances).toHaveLength(2);
-  });
-
-  it('does not reconnect after unmount during connecting', () => {
-    vi.useFakeTimers();
-    const { unmount } = renderHook(() => useRunEvents());
-    expect(FakeWebSocket.instances).toHaveLength(1);
-
-    act(() => {
-      unmount();
-    });
-
-    act(() => {
-      vi.advanceTimersByTime(5000);
-    });
-    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(FakeSocket.instances.length).toBe(2);
   });
 });

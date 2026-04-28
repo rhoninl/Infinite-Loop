@@ -3,6 +3,8 @@
  * Hand-written, no Tailwind. Design tokens at the top, components below.
  */
 
+@import '@xyflow/react/dist/style.css';
+
 :root {
   --bg: #0a0a0c;
   --bg-elevated: #111118;
@@ -31,6 +33,8 @@
 
   --top-bar-h: 56px;
   --rail-w: 380px;
+  --palette-w: 220px;
+  --right-w: 360px;
 }
 
 * {
@@ -223,6 +227,49 @@ body {
   grid-template-columns: var(--rail-w) 1fr;
   min-height: calc(100vh - var(--top-bar-h));
   position: relative;
+}
+
+.workspace-tri {
+  grid-template-columns: var(--palette-w) 1fr var(--right-w);
+}
+
+.canvas-stub,
+.palette-stub,
+.config-stub,
+.run-view-stub {
+  border: 1px dashed var(--border);
+  padding: 36px 24px;
+  color: var(--fg-dim);
+  height: calc(100vh - var(--top-bar-h));
+}
+.canvas-stub {
+  border-left: none;
+  border-right: none;
+}
+.palette-stub {
+  border-left: none;
+  border-right: 1px solid var(--border);
+}
+.config-stub,
+.run-view-stub {
+  border-left: 1px solid var(--border);
+  border-right: none;
+}
+
+.node-stub {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--fg-soft);
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  display: inline-block;
+}
+
+.workflow-menu-stub {
+  font-size: 12px;
+  color: var(--fg-dim);
+  padding-inline: 16px;
 }
 
 .rail {
