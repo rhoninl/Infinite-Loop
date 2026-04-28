@@ -266,6 +266,89 @@ body {
   display: inline-block;
 }
 
+/* ─── workflow node cards (canvas) ──────────────────────── */
+.wf-node {
+  position: relative;
+  width: 220px;
+  min-height: 72px;
+  padding: 12px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--fg-soft);
+  transition: border-color 120ms ease, box-shadow 140ms ease;
+}
+.wf-node[data-selected='true'] {
+  border-color: var(--border-bright);
+  box-shadow: 0 0 0 1px var(--border-bright);
+}
+.wf-node[data-state='live'] {
+  border-color: var(--accent-live);
+  box-shadow: 0 0 16px var(--accent-live-glow);
+}
+.wf-node[data-state='succeeded'] {
+  border-color: rgba(95, 183, 135, 0.45);
+}
+.wf-node[data-state='failed'] {
+  border-color: rgba(215, 106, 91, 0.45);
+}
+
+.wf-node-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.wf-node-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--fg);
+}
+.wf-node[data-state='live'] .wf-node-title {
+  color: var(--accent-live);
+}
+.wf-node[data-state='succeeded'] .wf-node-title {
+  color: var(--accent-ok);
+}
+.wf-node[data-state='failed'] .wf-node-title {
+  color: var(--accent-err);
+}
+
+.wf-node-state-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fg-muted);
+}
+.wf-node-state-dot[data-state='live'] {
+  background: var(--accent-live);
+  box-shadow: 0 0 0 0 var(--accent-live-glow);
+  animation: pulse 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+.wf-node-state-dot[data-state='succeeded'] {
+  background: var(--accent-ok);
+}
+.wf-node-state-dot[data-state='failed'] {
+  background: var(--accent-err);
+}
+
+.wf-node-body {
+  font-size: 12px;
+  color: var(--fg-soft);
+  line-height: 1.45;
+  word-break: break-word;
+}
+.wf-node-body-italic {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--fg-soft);
+  font-size: 13px;
+}
+
 .workflow-menu-stub {
   font-size: 12px;
   color: var(--fg-dim);
