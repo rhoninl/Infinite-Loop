@@ -21,21 +21,26 @@ describe('runClaude', () => {
     delete process.env.FAKE_STDERR;
   });
 
-  it('streams stdout lines and reports a clean exit', async () => {
+  it('streams stdout as raw chunks and reports a clean exit', async () => {
     process.env.FAKE_STDOUT_LINES = 'alpha\nbravo\ncharlie';
 
-    const lines: string[] = [];
+    const chunks: string[] = [];
     const result = await runClaude({
       prompt: 'ignored',
       cwd: process.cwd(),
       timeoutMs: 5000,
       signal: neverAbort(),
-      onStdoutChunk: (line) => lines.push(line),
+      onStdoutChunk: (chunk) => chunks.push(chunk),
     });
 
     expect(result.exitCode).toBe(0);
     expect(result.timedOut).toBe(false);
-    expect(lines).toEqual(['alpha', 'bravo', 'charlie']);
+    // The runner emits whatever the OS delivers — a chunk may contain one
+    // line, several, or part of one. The contract is "fired with non-empty
+    // raw stdout chunks as they arrive". We assert at least one chunk fired
+    // and the joined chunks equal the full stdout.
+    expect(chunks.length).toBeGreaterThan(0);
+    expect(chunks.join('')).toBe(result.stdout);
     expect(result.stdout).toContain('alpha');
     expect(result.stdout).toContain('bravo');
     expect(result.stdout).toContain('charlie');

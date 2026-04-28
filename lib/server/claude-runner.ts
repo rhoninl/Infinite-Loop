@@ -25,7 +25,6 @@ export async function runClaude(opts: RunnerOptions): Promise<RunnerResult> {
 
     let stdout = '';
     let stderr = '';
-    let stdoutLineBuf = '';
     let timedOut = false;
     let killTimer: NodeJS.Timeout | null = null;
     let timeoutTimer: NodeJS.Timeout | null = null;
@@ -89,13 +88,13 @@ export async function runClaude(opts: RunnerOptions): Promise<RunnerResult> {
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk: string) => {
       stdout += chunk;
-      stdoutLineBuf += chunk;
-      let idx: number;
-      while ((idx = stdoutLineBuf.indexOf('\n')) !== -1) {
-        const line = stdoutLineBuf.slice(0, idx);
-        stdoutLineBuf = stdoutLineBuf.slice(idx + 1);
-        opts.onStdoutChunk?.(line);
-      }
+      // Emit each chunk as it arrives instead of buffering for `\n`. Real
+      // `claude --print` running under a pipe block-buffers its stdout and
+      // can sit on KBs of output before flushing a newline; line-buffered
+      // emission means the user sees nothing live. A chunk may contain
+      // partial or multiple lines; the consumer renders with white-space:
+      // pre-wrap so visual line breaks survive.
+      if (chunk.length > 0) opts.onStdoutChunk?.(chunk);
     });
 
     child.stderr.setEncoding('utf8');

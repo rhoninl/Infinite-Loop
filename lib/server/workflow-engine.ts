@@ -416,7 +416,7 @@ export class WorkflowEngine {
 // HMR will pick up the new file but the cached instance under
 // `globalThis.__infloopWorkflowEngine` was constructed with the old class
 // definition and behaves the old way for the rest of the dev server's life.
-const ENGINE_VERSION = 3; // v3: recentEvents buffer for refresh hydration
+const ENGINE_VERSION = 4; // v4: claude-runner emits raw chunks (no line buffering)
 
 declare global {
   // eslint-disable-next-line no-var
