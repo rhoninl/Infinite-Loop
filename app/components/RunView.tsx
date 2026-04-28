@@ -31,6 +31,8 @@ function formatPayload(ev: WorkflowEvent): string {
       return ev.nodeId;
     case 'node_finished':
       return `${ev.nodeId} → ${ev.branch}`;
+    case 'stdout_chunk':
+      return `${ev.nodeId} │ ${ev.line}`;
     case 'condition_checked':
       return `${ev.nodeId} met:${ev.met ? 'Y' : 'N'} ${ev.detail}`;
     case 'template_warning':

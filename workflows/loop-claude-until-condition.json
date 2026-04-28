@@ -1,40 +1,58 @@
 {
   "id": "loop-claude-until-condition",
   "name": "Loop Claude until condition",
-  "version": 1,
+  "version": 3,
   "createdAt": 1777359000000,
-  "updatedAt": 1777359000000,
+  "updatedAt": 1777368679414,
   "nodes": [
     {
       "id": "start-1",
       "type": "start",
-      "position": { "x": 80, "y": 200 },
+      "position": {
+        "x": 80,
+        "y": 200
+      },
       "config": {}
     },
     {
       "id": "loop-1",
       "type": "loop",
-      "position": { "x": 280, "y": 120 },
-      "config": { "maxIterations": 5, "mode": "while-not-met" },
+      "position": {
+        "x": 280,
+        "y": 120
+      },
+      "config": {
+        "maxIterations": 1,
+        "mode": "while-not-met"
+      },
       "children": [
         {
           "id": "claude-1",
           "type": "claude",
-          "position": { "x": 40, "y": 60 },
+          "position": {
+            "x": 40,
+            "y": 60
+          },
           "config": {
-            "prompt": "Write a file hello.txt with the contents 'hi' and emit DONE when done.",
+            "prompt": "go",
             "cwd": "/tmp",
-            "timeoutMs": 60000
+            "timeoutMs": 10000
           }
         },
         {
           "id": "cond-1",
           "type": "condition",
-          "position": { "x": 320, "y": 60 },
+          "position": {
+            "x": 320,
+            "y": 60
+          },
           "config": {
             "kind": "sentinel",
             "against": "{{claude-1.stdout}}",
-            "sentinel": { "pattern": "DONE", "isRegex": false }
+            "sentinel": {
+              "pattern": "DONE",
+              "isRegex": false
+            }
           }
         }
       ]
@@ -42,13 +60,33 @@
     {
       "id": "end-1",
       "type": "end",
-      "position": { "x": 760, "y": 200 },
-      "config": { "outcome": "succeeded" }
+      "position": {
+        "x": 760,
+        "y": 200
+      },
+      "config": {
+        "outcome": "succeeded"
+      }
     }
   ],
   "edges": [
-    { "id": "e1", "source": "start-1", "sourceHandle": "next", "target": "loop-1" },
-    { "id": "e2", "source": "loop-1", "sourceHandle": "next", "target": "end-1" },
-    { "id": "e3", "source": "claude-1", "sourceHandle": "next", "target": "cond-1" }
+    {
+      "id": "e1",
+      "source": "start-1",
+      "sourceHandle": "next",
+      "target": "loop-1"
+    },
+    {
+      "id": "e2",
+      "source": "loop-1",
+      "sourceHandle": "next",
+      "target": "end-1"
+    },
+    {
+      "id": "e3",
+      "source": "claude-1",
+      "sourceHandle": "next",
+      "target": "cond-1"
+    }
   ]
 }

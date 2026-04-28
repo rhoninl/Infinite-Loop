@@ -8,6 +8,7 @@ const VALID_EVENT_TYPES = new Set<WorkflowEvent['type']>([
   'run_started',
   'node_started',
   'node_finished',
+  'stdout_chunk',
   'condition_checked',
   'template_warning',
   'error',

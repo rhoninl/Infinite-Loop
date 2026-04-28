@@ -177,6 +177,14 @@ export interface NodeFinishedEvent {
   durationMs: number;
 }
 
+export interface StdoutChunkEvent {
+  type: 'stdout_chunk';
+  nodeId: string;
+  line: string;
+  /** Optional loop iteration the chunk belongs to. */
+  loopIteration?: number;
+}
+
 export interface ConditionCheckedEvent {
   type: 'condition_checked';
   nodeId: string;
@@ -208,6 +216,7 @@ export type WorkflowEvent =
   | RunStartedEvent
   | NodeStartedEvent
   | NodeFinishedEvent
+  | StdoutChunkEvent
   | ConditionCheckedEvent
   | TemplateWarningEvent
   | ErrorEvent

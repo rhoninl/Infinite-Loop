@@ -322,6 +322,14 @@ export class WorkflowEngine {
       defaultCwd: cwd,
       signal: this.abort!.signal,
       loopIteration: exec.loopIteration,
+      emitStdoutChunk: (line: string) => {
+        eventBus.emit({
+          type: 'stdout_chunk',
+          nodeId: node.id,
+          line,
+          loopIteration: exec.loopIteration,
+        });
+      },
     };
 
     let result;
