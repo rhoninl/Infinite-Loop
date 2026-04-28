@@ -120,7 +120,7 @@ describe('node components', () => {
       />
     );
     expect(
-      screen.getByText(/maxIterations: 5 · while-not-met/)
+      screen.getByText(/×5 · while-not-met/)
     ).toBeInTheDocument();
   });
 

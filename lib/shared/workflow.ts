@@ -3,13 +3,15 @@
  * All node executors, the engine, the canvas, and the API talk through these types.
  */
 
-export type NodeType = 'start' | 'end' | 'claude' | 'condition' | 'loop';
+export type NodeType = 'start' | 'end' | 'claude' | 'condition' | 'loop' | 'branch';
 
 /** Edge handles. Workers MUST emit one of these from a node executor. */
 export type EdgeHandle =
   | 'next'
   | 'met'
   | 'not_met'
+  | 'true'
+  | 'false'
   | 'error'
   | 'continue'
   | 'break';
@@ -60,12 +62,23 @@ export interface LoopConfig {
   mode: 'while-not-met' | 'unbounded';
 }
 
+export type BranchOp = '==' | '!=' | 'contains' | 'matches';
+
+export interface BranchConfig {
+  /** Templating-resolved left-hand side (e.g. `{{shell-1.exitCode}}`). */
+  lhs: string;
+  op: BranchOp;
+  /** Templating-resolved right-hand side. For `matches`, this is a regex source. */
+  rhs: string;
+}
+
 export type NodeConfigByType = {
   start: StartConfig;
   end: EndConfig;
   claude: ClaudeConfig;
   condition: ConditionConfig;
   loop: LoopConfig;
+  branch: BranchConfig;
 };
 
 export interface WorkflowNode<T extends NodeType = NodeType> {

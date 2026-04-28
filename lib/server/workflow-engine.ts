@@ -32,6 +32,7 @@ import { resolve as resolveTemplate } from './templating';
 const TEXT_CONFIG_FIELDS: Partial<Record<string, string[]>> = {
   claude: ['prompt', 'cwd'],
   condition: ['against'],
+  branch: ['lhs', 'rhs'],
   // Phase 2+: shell.cmd, judge.rubric, etc.
 };
 

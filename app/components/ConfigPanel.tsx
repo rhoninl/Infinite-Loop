@@ -10,6 +10,8 @@ import {
 } from 'react';
 import { useWorkflowStore } from '@/lib/client/workflow-store-client';
 import type {
+  BranchConfig,
+  BranchOp,
   ClaudeConfig,
   ConditionConfig,
   ConditionKind,
@@ -423,6 +425,64 @@ function LoopForm({
   );
 }
 
+function BranchForm({
+  config,
+  refs,
+  onPatch,
+}: {
+  config: BranchConfig;
+  refs: string[];
+  onPatch: (next: BranchConfig) => void;
+}) {
+  const [lhs, setLhs] = useDebouncedString(config.lhs ?? '', (next) =>
+    onPatch({ ...config, lhs: next }),
+  );
+  const [rhs, setRhs] = useDebouncedString(config.rhs ?? '', (next) =>
+    onPatch({ ...config, rhs: next }),
+  );
+  const op: BranchOp = config.op ?? '==';
+
+  return (
+    <>
+      <div className="field">
+        <span className="field-label">Left</span>
+        <input
+          aria-label="Left"
+          type="text"
+          value={lhs}
+          onChange={(e) => setLhs(e.target.value)}
+          placeholder="{{claude-1.stdout}}"
+        />
+        <RefChips refs={refs} />
+      </div>
+
+      <Segmented<BranchOp>
+        label="Operator"
+        value={op}
+        options={[
+          { value: '==', label: '==' },
+          { value: '!=', label: '!=' },
+          { value: 'contains', label: 'contains' },
+          { value: 'matches', label: 'matches' },
+        ]}
+        onChange={(next) => onPatch({ ...config, op: next })}
+      />
+
+      <div className="field">
+        <span className="field-label">Right</span>
+        <input
+          aria-label="Right"
+          type="text"
+          value={rhs}
+          onChange={(e) => setRhs(e.target.value)}
+          placeholder={op === 'matches' ? '^DONE' : 'DONE'}
+        />
+        <RefChips refs={refs} />
+      </div>
+    </>
+  );
+}
+
 /* ─── main component ───────────────────────────────────────── */
 
 export default function ConfigPanel() {
@@ -496,6 +556,13 @@ export default function ConfigPanel() {
         {node.type === 'loop' && (
           <LoopForm
             config={node.config as LoopConfig}
+            onPatch={patchConfig}
+          />
+        )}
+        {node.type === 'branch' && (
+          <BranchForm
+            config={node.config as BranchConfig}
+            refs={refs}
             onPatch={patchConfig}
           />
         )}

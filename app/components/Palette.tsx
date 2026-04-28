@@ -23,6 +23,7 @@ const CATEGORIES: PaletteCategory[] = [
       { type: 'start', name: 'Start', glyph: '◇', description: 'begin a workflow' },
       { type: 'end', name: 'End', glyph: '◆', description: 'settle the run' },
       { type: 'loop', name: 'Loop', glyph: '↻', description: 'repeat until met' },
+      { type: 'branch', name: 'If', glyph: '⋔', description: 'if/else on a value' },
     ],
   },
   {

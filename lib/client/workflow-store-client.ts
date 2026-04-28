@@ -37,6 +37,31 @@ export interface WorkflowStoreState {
 
 const bumpUpdated = (w: Workflow): Workflow => ({ ...w, updatedAt: Date.now() });
 
+/** Recursively map every node (top-level and inside `children`). */
+function mapNodes(
+  nodes: WorkflowNode[],
+  fn: (n: WorkflowNode) => WorkflowNode,
+): WorkflowNode[] {
+  return nodes.map((n) => {
+    const next = fn(n);
+    if (next.children && next.children.length > 0) {
+      return { ...next, children: mapNodes(next.children, fn) };
+    }
+    return next;
+  });
+}
+
+/** Recursively filter out a node by id (top-level and inside `children`). */
+function filterNodes(nodes: WorkflowNode[], id: string): WorkflowNode[] {
+  return nodes
+    .filter((n) => n.id !== id)
+    .map((n) =>
+      n.children && n.children.length > 0
+        ? { ...n, children: filterNodes(n.children, id) }
+        : n,
+    );
+}
+
 export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
   currentWorkflow: null,
   isDirty: false,
@@ -84,7 +109,7 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
       return {
         currentWorkflow: bumpUpdated({
           ...wf,
-          nodes: wf.nodes.map((n) =>
+          nodes: mapNodes(wf.nodes, (n) =>
             n.id === id ? ({ ...n, ...patch } as WorkflowNode) : n,
           ),
         }),
@@ -99,7 +124,7 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
       return {
         currentWorkflow: bumpUpdated({
           ...wf,
-          nodes: wf.nodes.filter((n) => n.id !== id),
+          nodes: filterNodes(wf.nodes, id),
           edges: wf.edges.filter((e) => e.source !== id && e.target !== id),
         }),
         isDirty: true,

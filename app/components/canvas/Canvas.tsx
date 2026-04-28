@@ -14,6 +14,7 @@ import '@xyflow/react/dist/style.css';
 import { useCallback, useMemo, type DragEvent } from 'react';
 import { useWorkflowStore } from '../../../lib/client/workflow-store-client';
 import type {
+  BranchConfig,
   ClaudeConfig,
   ConditionConfig,
   EdgeHandle,
@@ -27,6 +28,7 @@ import type {
   WorkflowEvent,
   WorkflowNode,
 } from '../../../lib/shared/workflow';
+import BranchNode from './nodes/BranchNode';
 import ClaudeNode from './nodes/ClaudeNode';
 import ConditionNode from './nodes/ConditionNode';
 import EndNode from './nodes/EndNode';
@@ -59,6 +61,7 @@ const DEFAULT_CONFIG: { [K in NodeType]: () => NodeConfigByType[K] } = {
     sentinel: { pattern: '', isRegex: false },
   }),
   loop: (): LoopConfig => ({ maxIterations: 5, mode: 'while-not-met' }),
+  branch: (): BranchConfig => ({ lhs: '', op: '==', rhs: '' }),
 };
 
 /** Default config object for a fresh node of a given type. */
@@ -130,18 +133,18 @@ export function buildLiveStateMap(
   return out;
 }
 
-/** Map a Workflow + live state into xyflow nodes/edges. Defensive against
- * partial / malformed objects (e.g., a wrapped API response that slipped
- * through unwrap). */
-export function workflowToXyflow(
-  workflow: Workflow | null,
+/** Default visual size for a Loop container if children are present. */
+const LOOP_DEFAULT_W = 460;
+const LOOP_DEFAULT_H = 240;
+
+/** Build an xyflow node from a workflow node, optionally as a child. */
+function buildXyNode(
+  n: WorkflowNode,
   liveMap: Record<string, NodeRunState>,
   selectedNodeId: string | null,
-): { nodes: XyNode[]; edges: XyEdge[] } {
-  if (!workflow) return { nodes: [], edges: [] };
-  const wfNodes = Array.isArray(workflow.nodes) ? workflow.nodes : [];
-  const wfEdges = Array.isArray(workflow.edges) ? workflow.edges : [];
-  const nodes: XyNode[] = wfNodes.map((n) => ({
+  parentId?: string,
+): XyNode {
+  const base: XyNode = {
     id: n.id,
     type: n.type,
     position: n.position ?? { x: 0, y: 0 },
@@ -151,7 +154,40 @@ export function workflowToXyflow(
       config: n.config ?? {},
       _state: liveMap[n.id] ?? 'idle',
     },
-  }));
+  };
+  if (parentId) {
+    base.parentId = parentId;
+    base.extent = 'parent';
+  }
+  // Loop container: reserve canvas space so children render inside it.
+  if (n.type === 'loop') {
+    base.style = { width: LOOP_DEFAULT_W, height: LOOP_DEFAULT_H };
+  }
+  return base;
+}
+
+/** Map a Workflow + live state into xyflow nodes/edges. Recurses into
+ * container `children` (Loop) and emits each child as a flat xyflow node
+ * with `parentId` set so xyflow renders it inside the container. */
+export function workflowToXyflow(
+  workflow: Workflow | null,
+  liveMap: Record<string, NodeRunState>,
+  selectedNodeId: string | null,
+): { nodes: XyNode[]; edges: XyEdge[] } {
+  if (!workflow) return { nodes: [], edges: [] };
+  const wfNodes = Array.isArray(workflow.nodes) ? workflow.nodes : [];
+  const wfEdges = Array.isArray(workflow.edges) ? workflow.edges : [];
+
+  const nodes: XyNode[] = [];
+  for (const n of wfNodes) {
+    nodes.push(buildXyNode(n, liveMap, selectedNodeId));
+    if (Array.isArray(n.children)) {
+      for (const child of n.children) {
+        nodes.push(buildXyNode(child, liveMap, selectedNodeId, n.id));
+      }
+    }
+  }
+
   const edges: XyEdge[] = wfEdges.map((e) => ({
     id: e.id,
     source: e.source,
@@ -170,6 +206,7 @@ const NODE_TYPES = {
   claude: ClaudeNode,
   condition: ConditionNode,
   loop: LoopNode,
+  branch: BranchNode,
 } as const;
 
 function CanvasInner() {
