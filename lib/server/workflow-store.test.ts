@@ -1,0 +1,249 @@
+import { promises as fsp } from 'node:fs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { Workflow } from '../shared/workflow';
+import {
+  deleteWorkflow,
+  getWorkflow,
+  listWorkflows,
+  saveWorkflow,
+} from './workflow-store';
+
+let tmpDir: string;
+let prevEnv: string | undefined;
+
+function makeWorkflow(overrides: Partial<Workflow> = {}): Workflow {
+  return {
+    id: 'wf-1',
+    name: 'Test Workflow',
+    version: 0,
+    createdAt: 0,
+    updatedAt: 0,
+    nodes: [
+      {
+        id: 'start-1',
+        type: 'start',
+        position: { x: 0, y: 0 },
+        config: {},
+      },
+      {
+        id: 'end-1',
+        type: 'end',
+        position: { x: 200, y: 0 },
+        config: { outcome: 'succeeded' },
+      },
+    ],
+    edges: [
+      {
+        id: 'e1',
+        source: 'start-1',
+        sourceHandle: 'next',
+        target: 'end-1',
+      },
+    ],
+    ...overrides,
+  };
+}
+
+beforeEach(() => {
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infloop-wfstore-'));
+  prevEnv = process.env.INFLOOP_WORKFLOWS_DIR;
+  process.env.INFLOOP_WORKFLOWS_DIR = tmpDir;
+});
+
+afterEach(async () => {
+  if (prevEnv === undefined) {
+    delete process.env.INFLOOP_WORKFLOWS_DIR;
+  } else {
+    process.env.INFLOOP_WORKFLOWS_DIR = prevEnv;
+  }
+  await fsp.rm(tmpDir, { recursive: true, force: true });
+});
+
+describe('workflow-store', () => {
+  it('listWorkflows returns [] when the directory is empty (and creates it)', async () => {
+    const fresh = fs.mkdtempSync(path.join(os.tmpdir(), 'infloop-wfstore-empty-'));
+    const nested = path.join(fresh, 'does-not-exist-yet');
+    process.env.INFLOOP_WORKFLOWS_DIR = nested;
+
+    const list = await listWorkflows();
+    expect(list).toEqual([]);
+    expect(fs.existsSync(nested)).toBe(true);
+
+    await fsp.rm(fresh, { recursive: true, force: true });
+  });
+
+  it('saveWorkflow writes the workflow, list returns it, and get returns the saved object with bumped version + updatedAt', async () => {
+    const before = Date.now();
+    const wf = makeWorkflow();
+    const saved = await saveWorkflow(wf);
+
+    expect(saved.version).toBe(1);
+    expect(saved.updatedAt).toBeGreaterThanOrEqual(before);
+
+    const list = await listWorkflows();
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({
+      id: 'wf-1',
+      name: 'Test Workflow',
+      version: 1,
+    });
+
+    const fetched = await getWorkflow('wf-1');
+    expect(fetched).toEqual(saved);
+
+    // Save again -> version bumps.
+    const second = await saveWorkflow(wf);
+    expect(second.version).toBe(2);
+    expect(second.updatedAt).toBeGreaterThanOrEqual(saved.updatedAt);
+
+    const fetchedAgain = await getWorkflow('wf-1');
+    expect(fetchedAgain.version).toBe(2);
+  });
+
+  it('saveWorkflow throws when the workflow has no start node', async () => {
+    const bad = makeWorkflow({
+      nodes: [
+        {
+          id: 'end-1',
+          type: 'end',
+          position: { x: 0, y: 0 },
+          config: { outcome: 'succeeded' },
+        },
+      ],
+      edges: [],
+    });
+
+    await expect(saveWorkflow(bad)).rejects.toThrow(/start/i);
+  });
+
+  it('saveWorkflow throws when an edge references an unknown node id', async () => {
+    const bad = makeWorkflow({
+      edges: [
+        {
+          id: 'e-bad',
+          source: 'start-1',
+          sourceHandle: 'next',
+          target: 'ghost-node',
+        },
+      ],
+    });
+
+    await expect(saveWorkflow(bad)).rejects.toThrow(/ghost-node/);
+  });
+
+  it('saveWorkflow accepts edges that reference container children', async () => {
+    const wf = makeWorkflow({
+      id: 'wf-loop',
+      nodes: [
+        {
+          id: 'start-1',
+          type: 'start',
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: 'loop-1',
+          type: 'loop',
+          position: { x: 100, y: 0 },
+          config: { maxIterations: 3, mode: 'while-not-met' },
+          children: [
+            {
+              id: 'claude-1',
+              type: 'claude',
+              position: { x: 0, y: 0 },
+              config: { prompt: 'p', cwd: '/tmp', timeoutMs: 1000 },
+            },
+            {
+              id: 'cond-1',
+              type: 'condition',
+              position: { x: 100, y: 0 },
+              config: {
+                kind: 'sentinel',
+                sentinel: { pattern: 'X', isRegex: false },
+              },
+            },
+          ],
+        },
+        {
+          id: 'end-1',
+          type: 'end',
+          position: { x: 300, y: 0 },
+          config: { outcome: 'succeeded' },
+        },
+      ],
+      edges: [
+        { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'loop-1' },
+        { id: 'e2', source: 'loop-1', sourceHandle: 'next', target: 'end-1' },
+        { id: 'e3', source: 'claude-1', sourceHandle: 'next', target: 'cond-1' },
+      ],
+    });
+
+    const saved = await saveWorkflow(wf);
+    expect(saved.id).toBe('wf-loop');
+    const fetched = await getWorkflow('wf-loop');
+    expect(fetched.nodes.find((n) => n.id === 'loop-1')?.children).toHaveLength(2);
+  });
+
+  it('getWorkflow throws a descriptive error when the id is missing', async () => {
+    await expect(getWorkflow('nope')).rejects.toThrow(/workflow not found: nope/);
+  });
+
+  it('deleteWorkflow removes the file and subsequent get throws', async () => {
+    const wf = makeWorkflow();
+    await saveWorkflow(wf);
+
+    await deleteWorkflow('wf-1');
+
+    await expect(getWorkflow('wf-1')).rejects.toThrow(/workflow not found: wf-1/);
+    await expect(deleteWorkflow('wf-1')).rejects.toThrow(/workflow not found: wf-1/);
+  });
+
+  it('two consecutive saves both produce a consistent on-disk file (atomic write)', async () => {
+    const wf = makeWorkflow();
+    const a = await saveWorkflow(wf);
+    const b = await saveWorkflow(wf);
+
+    expect(a.version).toBe(1);
+    expect(b.version).toBe(2);
+
+    // No leftover .tmp files.
+    const entries = await fsp.readdir(tmpDir);
+    expect(entries.some((e) => e.endsWith('.tmp'))).toBe(false);
+
+    const fetched = await getWorkflow('wf-1');
+    expect(fetched.version).toBe(2);
+    // On-disk JSON parses cleanly.
+    const raw = await fsp.readFile(path.join(tmpDir, 'wf-1.json'), 'utf8');
+    expect(() => JSON.parse(raw)).not.toThrow();
+  });
+
+  it('listWorkflows ignores malformed *.json files without throwing', async () => {
+    const wf = makeWorkflow();
+    await saveWorkflow(wf);
+
+    // Drop a junk file alongside.
+    fs.writeFileSync(path.join(tmpDir, 'broken.json'), '{not valid json');
+    // Drop a structurally-invalid one (missing required fields).
+    fs.writeFileSync(
+      path.join(tmpDir, 'partial.json'),
+      JSON.stringify({ id: 'partial' }),
+    );
+
+    const list = await listWorkflows();
+    expect(list.map((s) => s.id)).toEqual(['wf-1']);
+  });
+
+  it('listWorkflows sorts by updatedAt descending', async () => {
+    const a = await saveWorkflow(makeWorkflow({ id: 'a', name: 'A' }));
+    // Force distinct timestamps.
+    await new Promise((r) => setTimeout(r, 5));
+    const b = await saveWorkflow(makeWorkflow({ id: 'b', name: 'B' }));
+
+    const list = await listWorkflows();
+    expect(list.map((s) => s.id)).toEqual(['b', 'a']);
+    expect(b.updatedAt).toBeGreaterThanOrEqual(a.updatedAt);
+  });
+});
