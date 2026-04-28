@@ -23,9 +23,7 @@ describe('TaskForm', () => {
   it('switching to command hides sentinel inputs and shows cmd input', () => {
     render(<TaskForm onSubmit={() => {}} />);
 
-    fireEvent.change(screen.getByLabelText(/Exit condition/i), {
-      target: { value: 'command' },
-    });
+    fireEvent.click(screen.getByRole('radio', { name: /command/i }));
 
     expect(screen.queryByLabelText(/^Pattern$/i)).not.toBeInTheDocument();
     expect(
@@ -37,9 +35,7 @@ describe('TaskForm', () => {
   it('switching to judge shows rubric and model inputs', () => {
     render(<TaskForm onSubmit={() => {}} />);
 
-    fireEvent.change(screen.getByLabelText(/Exit condition/i), {
-      target: { value: 'judge' },
-    });
+    fireEvent.click(screen.getByRole('radio', { name: /judge/i }));
 
     expect(screen.queryByLabelText(/^Pattern$/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/Rubric/i)).toBeInTheDocument();

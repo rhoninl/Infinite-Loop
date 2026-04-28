@@ -18,6 +18,16 @@ const CONDITION_HINT: Record<ConditionType, string> = {
   judge: 'a second claude call decides',
 };
 
+const CONDITION_OPTIONS: Array<{
+  value: ConditionType;
+  label: string;
+  sub: string;
+}> = [
+  { value: 'sentinel', label: 'sentinel', sub: 'text match' },
+  { value: 'command', label: 'command', sub: 'shell exit' },
+  { value: 'judge', label: 'judge', sub: 'llm verdict' },
+];
+
 export default function TaskForm(props: TaskFormProps) {
   const { disabled = false, onSubmit } = props;
 
@@ -108,21 +118,35 @@ export default function TaskForm(props: TaskFormProps) {
 
       <div className="field">
         <div className="field-head">
-          <label className="field-label" htmlFor="tf-condition-type">
+          <span className="field-label" id="tf-condition-type-label">
             Exit condition
-          </label>
+          </span>
           <span className="field-hint">{CONDITION_HINT[conditionType]}</span>
         </div>
-        <select
-          id="tf-condition-type"
-          value={conditionType}
-          onChange={(e) => setConditionType(e.target.value as ConditionType)}
-          disabled={disabled}
+        <div
+          className="segmented"
+          role="radiogroup"
+          aria-label="Exit condition"
         >
-          <option value="sentinel">sentinel · text match</option>
-          <option value="command">command · shell exit</option>
-          <option value="judge">judge · llm verdict</option>
-        </select>
+          {CONDITION_OPTIONS.map((opt) => {
+            const active = opt.value === conditionType;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                data-active={active}
+                data-value={opt.value}
+                onClick={() => setConditionType(opt.value)}
+                disabled={disabled}
+              >
+                <span className="seg-label">{opt.label}</span>
+                <span className="seg-sub">{opt.sub}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {conditionType === 'sentinel' && (
@@ -200,7 +224,9 @@ export default function TaskForm(props: TaskFormProps) {
               <label className="field-label" htmlFor="tf-model">
                 Model
               </label>
-              <span className="field-hint">optional</span>
+              <span className="field-hint">
+                optional · blank = claude code default
+              </span>
             </div>
             <input
               id="tf-model"
@@ -208,7 +234,7 @@ export default function TaskForm(props: TaskFormProps) {
               value={model}
               onChange={(e) => setModel(e.target.value)}
               disabled={disabled}
-              placeholder="claude-sonnet-4-6"
+              placeholder="(claude code default)"
             />
           </div>
         </>
