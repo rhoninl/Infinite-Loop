@@ -27,4 +27,19 @@ class EventBus {
   }
 }
 
-export const eventBus = new EventBus();
+// Pin the singleton to `globalThis` so Next.js dev mode (which can recompile
+// route modules on demand and produce more than one copy of this module
+// graph) cannot end up with separate buses for the producer (engine) and the
+// consumer (SSE route).
+declare global {
+  // eslint-disable-next-line no-var
+  var __infloopEventBus: EventBus | undefined;
+}
+
+export const eventBus: EventBus =
+  globalThis.__infloopEventBus ?? new EventBus();
+if (!globalThis.__infloopEventBus) {
+  globalThis.__infloopEventBus = eventBus;
+}
+
+export { EventBus };

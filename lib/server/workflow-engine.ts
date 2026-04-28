@@ -379,4 +379,14 @@ export class WorkflowEngine {
   }
 }
 
-export const workflowEngine = new WorkflowEngine();
+// Pin the singleton across Next.js dev module reloads (see event-bus.ts).
+declare global {
+  // eslint-disable-next-line no-var
+  var __infloopWorkflowEngine: WorkflowEngine | undefined;
+}
+
+export const workflowEngine: WorkflowEngine =
+  globalThis.__infloopWorkflowEngine ?? new WorkflowEngine();
+if (!globalThis.__infloopWorkflowEngine) {
+  globalThis.__infloopWorkflowEngine = workflowEngine;
+}

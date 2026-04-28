@@ -20,59 +20,41 @@ function isWorkflowEvent(v: unknown): v is WorkflowEvent {
   return typeof t === 'string' && VALID_EVENT_TYPES.has(t as WorkflowEvent['type']);
 }
 
+/**
+ * Subscribe to the engine's Server-Sent Events stream and dispatch parsed
+ * `WorkflowEvent`s into the Zustand store. Reconnects automatically on drop
+ * (the browser's EventSource handles backoff itself; we surface the status).
+ */
 export function useEngineWebSocket(): void {
   const setConnectionStatus = useWorkflowStore((s) => s.setConnectionStatus);
   const appendRunEvent = useWorkflowStore((s) => s.appendRunEvent);
 
   useEffect(() => {
-    let mounted = true;
-    let socket: WebSocket | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    if (typeof window === 'undefined') return;
 
-    const connect = () => {
-      if (!mounted) return;
-      const url = new URL('/ws', window.location.origin);
-      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(url);
-      socket = ws;
-      setConnectionStatus('connecting');
+    const es = new EventSource('/api/events');
+    setConnectionStatus('connecting');
 
-      ws.onopen = () => {
-        if (mounted) setConnectionStatus('open');
-      };
+    es.onopen = () => setConnectionStatus('open');
 
-      ws.onmessage = (e) => {
-        if (!mounted) return;
-        if (typeof e.data !== 'string') return;
-        try {
-          const data = JSON.parse(e.data);
-          if (isWorkflowEvent(data)) appendRunEvent(data);
-        } catch {
-          // ignore non-JSON
-        }
-      };
-
-      const handleDrop = () => {
-        if (!mounted) return;
-        setConnectionStatus('closed');
-        if (reconnectTimer) return;
-        reconnectTimer = setTimeout(() => {
-          reconnectTimer = null;
-          connect();
-        }, 1000);
-      };
-      ws.onclose = handleDrop;
-      ws.onerror = handleDrop;
+    es.onmessage = (e) => {
+      if (typeof e.data !== 'string' || e.data.length === 0) return;
+      try {
+        const data = JSON.parse(e.data);
+        if (isWorkflowEvent(data)) appendRunEvent(data);
+        // non-RunEvent messages (e.g. initial state_snapshot) are ignored
+      } catch {
+        // ignore malformed frames
+      }
     };
 
-    connect();
+    es.onerror = () => {
+      // EventSource auto-reconnects; just reflect the transient state.
+      setConnectionStatus('closed');
+    };
+
     return () => {
-      mounted = false;
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-        reconnectTimer = null;
-      }
-      socket?.close();
+      es.close();
     };
   }, [setConnectionStatus, appendRunEvent]);
 }

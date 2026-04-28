@@ -1,62 +1,66 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
-class FakeSocket {
-  static instances: FakeSocket[] = [];
-  onopen: ((e: Event) => void) | null = null;
-  onclose: ((e: Event) => void) | null = null;
-  onerror: ((e: Event) => void) | null = null;
-  onmessage: ((e: MessageEvent) => void) | null = null;
-  readyState = 0;
+class FakeEventSource {
+  static instances: FakeEventSource[] = [];
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSED = 2;
+
   url: string;
+  readyState = FakeEventSource.CONNECTING;
+  onopen: ((e: Event) => void) | null = null;
+  onmessage: ((e: MessageEvent) => void) | null = null;
+  onerror: ((e: Event) => void) | null = null;
   closed = false;
 
   constructor(url: string | URL) {
     this.url = String(url);
-    FakeSocket.instances.push(this);
+    FakeEventSource.instances.push(this);
   }
 
   triggerOpen() {
-    this.readyState = 1;
+    this.readyState = FakeEventSource.OPEN;
     this.onopen?.(new Event('open'));
   }
   triggerMessage(data: string) {
     this.onmessage?.({ data } as MessageEvent);
   }
-  triggerClose() {
-    this.readyState = 3;
-    this.onclose?.(new Event('close'));
+  triggerError() {
+    this.onerror?.(new Event('error'));
   }
   close() {
     this.closed = true;
+    this.readyState = FakeEventSource.CLOSED;
   }
 }
 
-describe('useEngineWebSocket', () => {
+describe('useEngineWebSocket (SSE)', () => {
   beforeEach(() => {
-    FakeSocket.instances = [];
-    (globalThis as unknown as { WebSocket: unknown }).WebSocket = FakeSocket as unknown;
-    vi.useFakeTimers();
+    FakeEventSource.instances = [];
+    (globalThis as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource as unknown;
   });
   afterEach(() => {
-    vi.useRealTimers();
+    delete (globalThis as unknown as { EventSource?: unknown }).EventSource;
   });
 
-  it('opens a socket on mount and dispatches valid events into the store', async () => {
+  it('opens an EventSource on mount and dispatches valid events into the store', async () => {
     const { useWorkflowStore } = await import('./workflow-store-client');
     const { useEngineWebSocket } = await import('./ws-client');
 
     useWorkflowStore.getState().resetRun();
 
     const { unmount } = renderHook(() => useEngineWebSocket());
-    expect(FakeSocket.instances.length).toBe(1);
-    const sock = FakeSocket.instances[0];
+    expect(FakeEventSource.instances.length).toBe(1);
+    const es = FakeEventSource.instances[0];
+    expect(es.url).toContain('/api/events');
 
-    act(() => sock.triggerOpen());
+    act(() => es.triggerOpen());
     expect(useWorkflowStore.getState().connectionStatus).toBe('open');
 
     act(() =>
-      sock.triggerMessage(
+      es.triggerMessage(
         JSON.stringify({ type: 'run_started', workflowId: 'w', workflowName: 'W' }),
       ),
     );
@@ -65,22 +69,20 @@ describe('useEngineWebSocket', () => {
     ).toBe(true);
 
     const before = useWorkflowStore.getState().runEvents.length;
-    act(() => sock.triggerMessage(JSON.stringify({ type: 'state_snapshot' })));
+    act(() => es.triggerMessage(JSON.stringify({ type: 'state_snapshot' })));
     expect(useWorkflowStore.getState().runEvents.length).toBe(before);
 
     unmount();
-    expect(sock.closed).toBe(true);
+    expect(es.closed).toBe(true);
   });
 
-  it('reconnects roughly 1s after a drop', async () => {
+  it('marks connection closed on transient error (EventSource auto-reconnects)', async () => {
+    const { useWorkflowStore } = await import('./workflow-store-client');
     const { useEngineWebSocket } = await import('./ws-client');
     renderHook(() => useEngineWebSocket());
-    const first = FakeSocket.instances[0];
-    act(() => first.triggerOpen());
-    act(() => first.triggerClose());
-    act(() => {
-      vi.advanceTimersByTime(1100);
-    });
-    expect(FakeSocket.instances.length).toBe(2);
+    const es = FakeEventSource.instances[0];
+    act(() => es.triggerOpen());
+    act(() => es.triggerError());
+    expect(useWorkflowStore.getState().connectionStatus).toBe('closed');
   });
 });
