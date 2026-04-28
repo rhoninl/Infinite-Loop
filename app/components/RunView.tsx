@@ -31,8 +31,6 @@ function formatPayload(ev: WorkflowEvent): string {
       return ev.nodeId;
     case 'node_finished':
       return `${ev.nodeId} → ${ev.branch}`;
-    case 'stdout_chunk':
-      return `${ev.nodeId} │ ${ev.line}`;
     case 'condition_checked':
       return `${ev.nodeId} met:${ev.met ? 'Y' : 'N'} ${ev.detail}`;
     case 'template_warning':
@@ -116,12 +114,22 @@ export default function RunView() {
       ) : null}
 
       <div ref={logRef} className="run-view-log" aria-label="event log">
-        {runEvents.map((ev, idx) => (
-          <div key={idx} className="run-view-log-row">
-            <span className="run-view-log-type">{ev.type}</span>
-            <span className="run-view-log-payload">{formatPayload(ev)}</span>
-          </div>
-        ))}
+        {runEvents.map((ev, idx) => {
+          if (ev.type === 'stdout_chunk') {
+            return (
+              <div key={idx} className="run-view-log-row is-stdout">
+                <span className="stdout-prefix">{ev.nodeId} │</span>
+                <span className="stdout-line">{ev.line}</span>
+              </div>
+            );
+          }
+          return (
+            <div key={idx} className="run-view-log-row">
+              <span className="run-view-log-type">{ev.type}</span>
+              <span className="run-view-log-payload">{formatPayload(ev)}</span>
+            </div>
+          );
+        })}
       </div>
     </aside>
   );
