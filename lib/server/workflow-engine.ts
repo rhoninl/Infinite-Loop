@@ -416,7 +416,13 @@ export class WorkflowEngine {
 // HMR will pick up the new file but the cached instance under
 // `globalThis.__infloopWorkflowEngine` was constructed with the old class
 // definition and behaves the old way for the rest of the dev server's life.
-const ENGINE_VERSION = 4; // v4: claude-runner emits raw chunks (no line buffering)
+// IMPORTANT: only bump this when the engine class itself changes shape.
+// The runner is a separate module that HMR re-evaluates independently — it
+// does NOT need an engine bump. Bumping the engine while a run is in
+// flight strands the running task: route handlers (Stop, GET state) start
+// resolving to a fresh idle engine, while the in-flight claude child
+// process is still owned by the cached older instance.
+const ENGINE_VERSION = 3; // v3: recentEvents buffer for refresh hydration
 
 declare global {
   // eslint-disable-next-line no-var
