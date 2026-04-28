@@ -1,6 +1,12 @@
 'use client';
 
-import { useEffect } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import Canvas from './components/canvas/Canvas';
 import Palette from './components/Palette';
 import ConfigPanel from './components/ConfigPanel';
@@ -10,6 +16,10 @@ import { useEngineWebSocket } from '../lib/client/ws-client';
 import { useWorkflowStore } from '../lib/client/workflow-store-client';
 
 const DEFAULT_WORKFLOW_ID = 'loop-claude-until-condition';
+const RIGHT_WIDTH_STORAGE_KEY = 'infloop:right-width';
+const RIGHT_WIDTH_DEFAULT = 440;
+const RIGHT_WIDTH_MIN = 280;
+const CANVAS_MIN_WIDTH = 360;
 
 export default function Page() {
   useEngineWebSocket();
@@ -19,6 +29,22 @@ export default function Page() {
   const wsStatus = useWorkflowStore((s) => s.connectionStatus);
   const loadWorkflow = useWorkflowStore((s) => s.loadWorkflow);
   const isRunning = runStatus === 'running';
+
+  const [rightWidth, setRightWidth] = useState<number>(RIGHT_WIDTH_DEFAULT);
+  const dragStateRef = useRef<{ active: boolean }>({ active: false });
+
+  // Hydrate the persisted width on mount (avoids SSR mismatch).
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(RIGHT_WIDTH_STORAGE_KEY);
+      if (saved) {
+        const n = Number(saved);
+        if (Number.isFinite(n)) setRightWidth(clampRightWidth(n));
+      }
+    } catch {
+      // localStorage may be unavailable; fall back to default
+    }
+  }, []);
 
   useEffect(() => {
     if (currentWorkflow) return;
@@ -31,14 +57,55 @@ export default function Page() {
         const wf = data?.workflow;
         if (!cancelled && wf) loadWorkflow(wf);
       } catch {
-        // network or parse error — leave canvas empty so the user can still
-        // create a fresh workflow from the menu
+        // leave canvas empty so the user can still create a fresh workflow
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [currentWorkflow, loadWorkflow]);
+
+  const onResizeStart = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    dragStateRef.current.active = true;
+
+    const onMove = (m: MouseEvent) => {
+      if (!dragStateRef.current.active) return;
+      const next = clampRightWidth(window.innerWidth - m.clientX);
+      setRightWidth(next);
+    };
+    const onUp = () => {
+      dragStateRef.current.active = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      try {
+        // setRightWidth is async; read from the closure where setRightWidth's
+        // newest value lives — the simplest reliable approach is to query the
+        // grid element's computed width, but a microtask after the last move
+        // event the React state has settled too. We just persist whatever
+        // state currently is — schedule on the next tick.
+        setTimeout(() => {
+          try {
+            window.localStorage.setItem(
+              RIGHT_WIDTH_STORAGE_KEY,
+              String(getCurrentRightWidth()),
+            );
+          } catch {
+            // ignore
+          }
+        }, 0);
+      } catch {
+        // ignore
+      }
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
 
   async function handleRun() {
     if (!currentWorkflow) return;
@@ -68,7 +135,10 @@ export default function Page() {
         </div>
 
         <div className="actions">
-          <span className="pill" data-status={wsStatus === 'open' ? 'running' : 'idle'}>
+          <span
+            className="pill"
+            data-status={wsStatus === 'open' ? 'running' : 'idle'}
+          >
             <span className="dot" /> Link · {wsStatus}
           </span>
           <span className="pill" data-status={runStatus}>
@@ -97,11 +167,42 @@ export default function Page() {
         </div>
       </header>
 
-      <div className="workspace workspace-tri">
+      <div
+        className="workspace workspace-tri"
+        style={{ '--right-w': `${rightWidth}px` } as CSSProperties}
+      >
         <Palette />
         <Canvas />
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="resize right panel"
+          tabIndex={0}
+          className="resize-gutter"
+          onMouseDown={onResizeStart}
+        />
         {isRunning ? <RunView /> : <ConfigPanel />}
       </div>
     </>
   );
+}
+
+function clampRightWidth(n: number): number {
+  const max = Math.max(
+    RIGHT_WIDTH_MIN,
+    (typeof window !== 'undefined' ? window.innerWidth : 1600) -
+      CANVAS_MIN_WIDTH -
+      220, // palette width
+  );
+  return Math.min(max, Math.max(RIGHT_WIDTH_MIN, Math.floor(n)));
+}
+
+/** Read the live rendered right-panel width from the CSS custom property. */
+function getCurrentRightWidth(): number {
+  if (typeof document === 'undefined') return RIGHT_WIDTH_DEFAULT;
+  const el = document.querySelector('.workspace-tri') as HTMLElement | null;
+  if (!el) return RIGHT_WIDTH_DEFAULT;
+  const v = el.style.getPropertyValue('--right-w');
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : RIGHT_WIDTH_DEFAULT;
 }

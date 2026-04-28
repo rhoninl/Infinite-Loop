@@ -232,11 +232,24 @@ body {
 }
 
 .workspace-tri {
-  grid-template-columns: var(--palette-w) 1fr var(--right-w);
+  /* palette · canvas · drag-gutter · right-panel */
+  grid-template-columns: var(--palette-w) minmax(360px, 1fr) 5px var(--right-w);
   /* The canvas needs a *concrete* height so ReactFlow (which fills 100% of its
    * parent) can mount at non-zero size and accept drops from the palette. */
   height: calc(100vh - var(--top-bar-h));
   min-height: calc(100vh - var(--top-bar-h));
+}
+
+.resize-gutter {
+  background: var(--border);
+  cursor: col-resize;
+  transition: background 120ms ease;
+  user-select: none;
+}
+.resize-gutter:hover,
+.resize-gutter:focus-visible {
+  background: var(--accent-live);
+  outline: none;
 }
 
 .canvas-stub,
