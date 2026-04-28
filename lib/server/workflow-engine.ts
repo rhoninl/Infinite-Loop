@@ -389,13 +389,35 @@ export class WorkflowEngine {
 }
 
 // Pin the singleton across Next.js dev module reloads (see event-bus.ts).
+//
+// IMPORTANT: bump ENGINE_VERSION whenever behavior of WorkflowEngine changes
+// in a way that requires recreating the live instance. Without this, Next.js
+// HMR will pick up the new file but the cached instance under
+// `globalThis.__infloopWorkflowEngine` was constructed with the old class
+// definition and behaves the old way for the rest of the dev server's life.
+const ENGINE_VERSION = 2; // v2: stdout_chunk streaming (emitStdoutChunk in ctx)
+
 declare global {
   // eslint-disable-next-line no-var
-  var __infloopWorkflowEngine: WorkflowEngine | undefined;
+  var __infloopWorkflowEngine:
+    | { instance: WorkflowEngine; version: number }
+    | undefined;
 }
 
-export const workflowEngine: WorkflowEngine =
-  globalThis.__infloopWorkflowEngine ?? new WorkflowEngine();
-if (!globalThis.__infloopWorkflowEngine) {
-  globalThis.__infloopWorkflowEngine = workflowEngine;
+const cached = globalThis.__infloopWorkflowEngine;
+const engineInstance =
+  cached && cached.version === ENGINE_VERSION
+    ? cached.instance
+    : new WorkflowEngine();
+
+if (
+  !globalThis.__infloopWorkflowEngine ||
+  globalThis.__infloopWorkflowEngine.version !== ENGINE_VERSION
+) {
+  globalThis.__infloopWorkflowEngine = {
+    instance: engineInstance,
+    version: ENGINE_VERSION,
+  };
 }
+
+export const workflowEngine: WorkflowEngine = engineInstance;
