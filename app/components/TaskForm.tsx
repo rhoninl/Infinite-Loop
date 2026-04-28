@@ -12,16 +12,10 @@ export interface TaskFormProps {
   onSubmit: (cfg: RunConfig) => void;
 }
 
-const fieldStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 4,
-  marginBottom: 12,
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: 6,
-  fontSize: 14,
+const CONDITION_HINT: Record<ConditionType, string> = {
+  sentinel: 'matches text in stdout',
+  command: 'shell exits 0',
+  judge: 'a second claude call decides',
 };
 
 export default function TaskForm(props: TaskFormProps) {
@@ -60,38 +54,46 @@ export default function TaskForm(props: TaskFormProps) {
       };
     }
 
-    const cfg: RunConfig = {
+    onSubmit({
       prompt,
       cwd,
       condition,
       maxIterations,
       iterationTimeoutMs,
-    };
-
-    onSubmit(cfg);
+    });
   }
 
   return (
     <form
       onSubmit={handleSubmit}
       aria-label="task form"
-      style={{ maxWidth: 560 }}
+      className="task-form crosshair"
     >
-      <div style={fieldStyle}>
-        <label htmlFor="tf-prompt">Prompt</label>
+      <div className="field">
+        <div className="field-head">
+          <label className="field-label" htmlFor="tf-prompt">
+            Prompt
+          </label>
+          <span className="field-hint">what claude should do</span>
+        </div>
         <textarea
           id="tf-prompt"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           required
-          rows={4}
+          rows={5}
           disabled={disabled}
-          style={inputStyle}
+          placeholder="write hello.txt with contents 'hi'"
         />
       </div>
 
-      <div style={fieldStyle}>
-        <label htmlFor="tf-cwd">Working directory (absolute path)</label>
+      <div className="field">
+        <div className="field-head">
+          <label className="field-label" htmlFor="tf-cwd">
+            Working directory
+          </label>
+          <span className="field-hint">absolute path</span>
+        </div>
         <input
           id="tf-cwd"
           type="text"
@@ -99,33 +101,38 @@ export default function TaskForm(props: TaskFormProps) {
           onChange={(e) => setCwd(e.target.value)}
           required
           pattern="^/.*"
-          placeholder="/absolute/path"
+          placeholder="/Users/you/project"
           disabled={disabled}
-          style={inputStyle}
         />
       </div>
 
-      <div style={fieldStyle}>
-        <label htmlFor="tf-condition-type">Exit condition</label>
+      <div className="field">
+        <div className="field-head">
+          <label className="field-label" htmlFor="tf-condition-type">
+            Exit condition
+          </label>
+          <span className="field-hint">{CONDITION_HINT[conditionType]}</span>
+        </div>
         <select
           id="tf-condition-type"
           value={conditionType}
-          onChange={(e) =>
-            setConditionType(e.target.value as ConditionType)
-          }
+          onChange={(e) => setConditionType(e.target.value as ConditionType)}
           disabled={disabled}
-          style={inputStyle}
         >
-          <option value="sentinel">sentinel</option>
-          <option value="command">command</option>
-          <option value="judge">judge</option>
+          <option value="sentinel">sentinel · text match</option>
+          <option value="command">command · shell exit</option>
+          <option value="judge">judge · llm verdict</option>
         </select>
       </div>
 
       {conditionType === 'sentinel' && (
         <>
-          <div style={fieldStyle}>
-            <label htmlFor="tf-pattern">Pattern</label>
+          <div className="field">
+            <div className="field-head">
+              <label className="field-label" htmlFor="tf-pattern">
+                Pattern
+              </label>
+            </div>
             <input
               id="tf-pattern"
               type="text"
@@ -133,27 +140,30 @@ export default function TaskForm(props: TaskFormProps) {
               onChange={(e) => setPattern(e.target.value)}
               required
               disabled={disabled}
-              style={inputStyle}
+              placeholder="DONE"
             />
           </div>
-          <div style={fieldStyle}>
-            <label htmlFor="tf-isregex">
-              <input
-                id="tf-isregex"
-                type="checkbox"
-                checked={isRegex}
-                onChange={(e) => setIsRegex(e.target.checked)}
-                disabled={disabled}
-              />{' '}
-              Treat pattern as regex
-            </label>
-          </div>
+          <label className="checkbox-row" htmlFor="tf-isregex">
+            <input
+              id="tf-isregex"
+              type="checkbox"
+              checked={isRegex}
+              onChange={(e) => setIsRegex(e.target.checked)}
+              disabled={disabled}
+            />
+            <span>Treat pattern as regex</span>
+          </label>
         </>
       )}
 
       {conditionType === 'command' && (
-        <div style={fieldStyle}>
-          <label htmlFor="tf-cmd">Command</label>
+        <div className="field">
+          <div className="field-head">
+            <label className="field-label" htmlFor="tf-cmd">
+              Command
+            </label>
+            <span className="field-hint">runs in cwd</span>
+          </div>
           <input
             id="tf-cmd"
             type="text"
@@ -161,15 +171,20 @@ export default function TaskForm(props: TaskFormProps) {
             onChange={(e) => setCmd(e.target.value)}
             required
             disabled={disabled}
-            style={inputStyle}
+            placeholder="test -f hello.txt"
           />
         </div>
       )}
 
       {conditionType === 'judge' && (
         <>
-          <div style={fieldStyle}>
-            <label htmlFor="tf-rubric">Rubric</label>
+          <div className="field">
+            <div className="field-head">
+              <label className="field-label" htmlFor="tf-rubric">
+                Rubric
+              </label>
+              <span className="field-hint">judge prompt</span>
+            </div>
             <textarea
               id="tf-rubric"
               value={rubric}
@@ -177,53 +192,65 @@ export default function TaskForm(props: TaskFormProps) {
               required
               rows={3}
               disabled={disabled}
-              style={inputStyle}
+              placeholder="Did the assistant create the file?"
             />
           </div>
-          <div style={fieldStyle}>
-            <label htmlFor="tf-model">Model (optional)</label>
+          <div className="field">
+            <div className="field-head">
+              <label className="field-label" htmlFor="tf-model">
+                Model
+              </label>
+              <span className="field-hint">optional</span>
+            </div>
             <input
               id="tf-model"
               type="text"
               value={model}
               onChange={(e) => setModel(e.target.value)}
               disabled={disabled}
-              style={inputStyle}
+              placeholder="claude-sonnet-4-6"
             />
           </div>
         </>
       )}
 
-      <div style={fieldStyle}>
-        <label htmlFor="tf-max-iter">Max iterations</label>
-        <input
-          id="tf-max-iter"
-          type="number"
-          min={1}
-          max={100}
-          value={maxIterations}
-          onChange={(e) => setMaxIterations(Number(e.target.value))}
-          required
-          disabled={disabled}
-          style={inputStyle}
-        />
+      <div className="field-row">
+        <div className="field">
+          <div className="field-head">
+            <label className="field-label" htmlFor="tf-max-iter">
+              Max iterations
+            </label>
+          </div>
+          <input
+            id="tf-max-iter"
+            type="number"
+            min={1}
+            max={100}
+            value={maxIterations}
+            onChange={(e) => setMaxIterations(Number(e.target.value))}
+            required
+            disabled={disabled}
+          />
+        </div>
+        <div className="field">
+          <div className="field-head">
+            <label className="field-label" htmlFor="tf-iter-timeout">
+              Iteration timeout (ms)
+            </label>
+          </div>
+          <input
+            id="tf-iter-timeout"
+            type="number"
+            min={1000}
+            value={iterationTimeoutMs}
+            onChange={(e) => setIterationTimeoutMs(Number(e.target.value))}
+            required
+            disabled={disabled}
+          />
+        </div>
       </div>
 
-      <div style={fieldStyle}>
-        <label htmlFor="tf-iter-timeout">Iteration timeout (ms)</label>
-        <input
-          id="tf-iter-timeout"
-          type="number"
-          min={1000}
-          value={iterationTimeoutMs}
-          onChange={(e) => setIterationTimeoutMs(Number(e.target.value))}
-          required
-          disabled={disabled}
-          style={inputStyle}
-        />
-      </div>
-
-      <button type="submit" disabled={disabled} style={{ padding: '6px 12px' }}>
+      <button type="submit" disabled={disabled} className="btn">
         Start run
       </button>
     </form>
