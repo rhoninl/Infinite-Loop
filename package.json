@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "bun server.ts",
     "build": "next build",
-    "start": "NODE_ENV=production tsx server.ts",
+    "start": "NODE_ENV=production bun server.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
@@ -26,7 +26,6 @@
     "@types/ws": "8.5.13",
     "@vitejs/plugin-react": "4.3.4",
     "jsdom": "25.0.1",
-    "tsx": "4.19.2",
     "typescript": "5.7.2",
     "vitest": "2.1.8"
   }
