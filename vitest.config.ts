@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   test: {
+    exclude: ['**/node_modules/**', '**/.claude/**', '**/.next/**', '**/dist/**'],
     environmentMatchGlobs: [
       ['**/*.test.tsx', 'jsdom'],
       ['lib/client/**/*.test.ts', 'jsdom'],
