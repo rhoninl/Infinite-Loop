@@ -1,15 +1,16 @@
 import type { NodeExecutor } from '../../shared/workflow';
 
 /**
- * The Loop container's body-walking semantics live in the engine
- * (lib/server/workflow-engine.ts walkLoop). This executor is a marker so the
- * registry has all five node types — the engine recognises `type === 'loop'`
- * and never invokes execute() on it.
+ * Loop container — body-walking semantics live in the engine. The engine
+ * recognises `type === 'loop'` and walks children directly without calling
+ * execute(). This throw is a safety net: if the engine ever forgets and
+ * dispatches a loop node through the normal executor path, we fail loudly
+ * instead of silently no-op'ing past the container.
  */
 export const loopExecutor: NodeExecutor = {
   async execute() {
     throw new Error(
-      'loop node: engine should not call execute() on a loop container; this is a marker (Phase B unit 5)',
+      'loop is a container; engine should not invoke execute() on it',
     );
   },
 };
