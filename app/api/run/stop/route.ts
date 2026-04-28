@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
+import { workflowEngine } from '@/lib/server/workflow-engine';
 
 export async function POST() {
-  return NextResponse.json(
-    { error: 'POST /api/run/stop: not yet implemented (Phase B unit 7)' },
-    { status: 501 },
-  );
+  workflowEngine.stop();
+  return NextResponse.json({ state: workflowEngine.getState() }, { status: 200 });
 }
