@@ -49,12 +49,19 @@ export default function RunView() {
   const runEvents = useWorkflowStore((s) => s.runEvents);
   const connectionStatus = useWorkflowStore((s) => s.connectionStatus);
 
-  // Tick while running so the elapsed-time readout updates without new events.
+  // Re-render on every animation frame while running so the elapsed-time
+  // counter steps smoothly instead of jumping by 0.2-0.3s every interval
+  // tick. rAF naturally pauses when the tab is backgrounded.
   const [, setTick] = useState(0);
   useEffect(() => {
     if (runStatus !== 'running') return;
-    const id = setInterval(() => setTick((n) => n + 1), 250);
-    return () => clearInterval(id);
+    let raf = 0;
+    const loop = () => {
+      setTick((n) => (n + 1) & 0xffff);
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
   }, [runStatus]);
 
   const logRef = useRef<HTMLDivElement | null>(null);
