@@ -422,7 +422,7 @@ export class WorkflowEngine {
 // flight strands the running task: route handlers (Stop, GET state) start
 // resolving to a fresh idle engine, while the in-flight claude child
 // process is still owned by the cached older instance.
-const ENGINE_VERSION = 3; // v3: recentEvents buffer for refresh hydration
+const ENGINE_VERSION = 5; // v5: claude-runner uses stream-json + parses text deltas
 
 declare global {
   // eslint-disable-next-line no-var
