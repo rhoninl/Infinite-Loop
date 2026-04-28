@@ -256,6 +256,97 @@ body {
   border-right: none;
 }
 
+/* ─── RunView (live execution panel) ─────────────────────── */
+.run-view {
+  border-left: 1px solid var(--border);
+  padding: 24px 22px;
+  height: calc(100vh - var(--top-bar-h));
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.run-view-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.run-view-ws {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+.run-view-current {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  padding: 12px 14px;
+}
+
+.run-view-current-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--fg);
+}
+
+.run-view-current-id {
+  font-family: var(--mono);
+  color: var(--fg-soft);
+}
+
+.run-view-current-elapsed {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent-live);
+  letter-spacing: 0.04em;
+}
+
+.run-view-log {
+  border: 1px solid var(--border);
+  background: var(--bg-deep);
+  max-height: 50vh;
+  overflow: auto;
+  padding: 8px 0;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.run-view-log-row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 12px;
+  padding: 4px 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg-soft);
+  border-bottom: 1px solid rgba(160, 145, 115, 0.06);
+}
+
+.run-view-log-row:last-child {
+  border-bottom: 0;
+}
+
+.run-view-log-type {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--fg-dim);
+}
+
+.run-view-log-payload {
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
 .node-stub {
   font-family: var(--mono);
   font-size: 12px;
