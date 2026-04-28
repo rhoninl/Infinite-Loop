@@ -5,9 +5,9 @@ Local web app that drives the Claude Code CLI in a loop until a user-defined exi
 ## Quickstart
 
 ```bash
-npm install
-npm run dev          # http://localhost:3000
-npm test             # unit tests
+bun install
+bun run dev          # http://localhost:3000
+bun run test         # unit tests (vitest, NOT bun's built-in runner)
 ```
 
 The custom server (`server.ts`) hosts both Next.js and a WebSocket endpoint at `/ws` for live iteration streaming.
