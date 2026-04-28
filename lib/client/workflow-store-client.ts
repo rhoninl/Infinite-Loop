@@ -32,6 +32,9 @@ export interface WorkflowStoreState {
   appendRunEvent: (ev: WorkflowEvent) => void;
   setRunStatus: (status: RunStatus) => void;
   resetRun: () => void;
+  /** Replace the run state in one shot — used when the SSE state_snapshot
+   * arrives and we want to rehydrate the log + status after a refresh. */
+  hydrateRun: (input: { status: RunStatus; events: WorkflowEvent[] }) => void;
   setConnectionStatus: (s: WsStatus) => void;
 }
 
@@ -182,6 +185,9 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
   setRunStatus: (runStatus) => set({ runStatus }),
 
   resetRun: () => set({ runEvents: [], runStatus: 'idle' }),
+
+  hydrateRun: ({ status, events }) =>
+    set({ runStatus: status, runEvents: [...events] }),
 
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
 }));

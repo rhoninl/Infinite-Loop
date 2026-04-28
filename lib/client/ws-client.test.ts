@@ -68,9 +68,27 @@ describe('useEngineWebSocket (SSE)', () => {
       useWorkflowStore.getState().runEvents.some((e) => e.type === 'run_started'),
     ).toBe(true);
 
-    const before = useWorkflowStore.getState().runEvents.length;
-    act(() => es.triggerMessage(JSON.stringify({ type: 'state_snapshot' })));
-    expect(useWorkflowStore.getState().runEvents.length).toBe(before);
+    // state_snapshot now hydrates: replaces runStatus + runEvents with the
+    // engine's recent buffer so a refresh restores the live view.
+    act(() =>
+      es.triggerMessage(
+        JSON.stringify({
+          type: 'state_snapshot',
+          state: {
+            status: 'running',
+            iterationByLoopId: {},
+            scope: {},
+            events: [
+              { type: 'node_started', nodeId: 'claude-1', nodeType: 'claude', resolvedConfig: {} },
+            ],
+          },
+        }),
+      ),
+    );
+    const after = useWorkflowStore.getState();
+    expect(after.runStatus).toBe('running');
+    expect(after.runEvents).toHaveLength(1);
+    expect(after.runEvents[0].type).toBe('node_started');
 
     unmount();
     expect(es.closed).toBe(true);

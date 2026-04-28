@@ -147,6 +147,12 @@ export interface RunSnapshot {
   startedAt?: number;
   finishedAt?: number;
   errorMessage?: string;
+  /**
+   * Recent events emitted during the current/last run, capped to a sliding
+   * window. Returned by getState() so a refreshing client can rehydrate the
+   * event log and the canvas's live-node highlight.
+   */
+  events?: WorkflowEvent[];
 }
 
 /* ─── events on the WS bus ────────────────────────────────────────────────── */

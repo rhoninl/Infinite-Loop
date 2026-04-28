@@ -23,6 +23,7 @@ import type {
   Scope,
   Workflow,
   WorkflowEdge,
+  WorkflowEvent,
   WorkflowNode,
 } from '../shared/workflow';
 import { eventBus } from './event-bus';
@@ -42,6 +43,10 @@ interface ExecutionScope {
   loopIteration?: number;
 }
 
+/** Sliding-window cap so a chatty Claude run can't grow the buffer
+ * unboundedly. Most events are tiny; 2k entries ≈ a few hundred kB. */
+const EVENT_HISTORY_CAP = 2000;
+
 export class WorkflowEngine {
   private snapshot: RunSnapshot = {
     status: 'idle',
@@ -51,6 +56,7 @@ export class WorkflowEngine {
   private workflow?: Workflow;
   private abort?: AbortController;
   private edgesBySource = new Map<string, WorkflowEdge[]>();
+  private recentEvents: WorkflowEvent[] = [];
 
   private executors: Record<string, NodeExecutor>;
 
@@ -59,7 +65,7 @@ export class WorkflowEngine {
   }
 
   getState(): RunSnapshot {
-    return this.snapshot;
+    return { ...this.snapshot, events: this.recentEvents };
   }
 
   async start(workflow: Workflow): Promise<void> {
@@ -77,6 +83,17 @@ export class WorkflowEngine {
       scope: {},
       startedAt: Date.now(),
     };
+
+    // Reset history at the start of a new run so a refresh doesn't surface
+    // events from a previous run.
+    this.recentEvents = [];
+    const captureUnsub = eventBus.subscribe((ev) => {
+      this.recentEvents.push(ev);
+      if (this.recentEvents.length > EVENT_HISTORY_CAP) {
+        this.recentEvents.shift();
+      }
+    });
+
     eventBus.emit({
       type: 'run_started',
       workflowId: workflow.id,
@@ -114,6 +131,10 @@ export class WorkflowEngine {
       status: finalStatus,
       scope: this.snapshot.scope,
     });
+
+    // Stop capturing now that the run is over; the buffer keeps the recorded
+    // events around for refresh hydration until the next run starts.
+    captureUnsub();
   }
 
   stop(): void {
@@ -395,7 +416,7 @@ export class WorkflowEngine {
 // HMR will pick up the new file but the cached instance under
 // `globalThis.__infloopWorkflowEngine` was constructed with the old class
 // definition and behaves the old way for the rest of the dev server's life.
-const ENGINE_VERSION = 2; // v2: stdout_chunk streaming (emitStdoutChunk in ctx)
+const ENGINE_VERSION = 3; // v3: recentEvents buffer for refresh hydration
 
 declare global {
   // eslint-disable-next-line no-var

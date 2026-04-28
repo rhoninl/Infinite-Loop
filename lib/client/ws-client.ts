@@ -37,7 +37,7 @@ function isStateSnapshot(
 export function useEngineWebSocket(): void {
   const setConnectionStatus = useWorkflowStore((s) => s.setConnectionStatus);
   const appendRunEvent = useWorkflowStore((s) => s.appendRunEvent);
-  const setRunStatus = useWorkflowStore((s) => s.setRunStatus);
+  const hydrateRun = useWorkflowStore((s) => s.hydrateRun);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -54,13 +54,15 @@ export function useEngineWebSocket(): void {
         if (isWorkflowEvent(data)) {
           appendRunEvent(data);
         } else if (isStateSnapshot(data)) {
-          // Initial frame on connect: hydrate run status so a page refresh
-          // mid-run shows RUNNING instead of idle. We can't rebuild the
-          // historical event log (the engine doesn't keep one), but live
-          // events from this point onward populate the log normally.
-          if (data.state && typeof data.state.status === 'string') {
-            setRunStatus(data.state.status);
-          }
+          // Initial frame on connect: hydrate run status AND the recent event
+          // log so a page refresh mid-run brings back the live-node highlight
+          // on the canvas plus the streaming-stdout history in the right
+          // panel. Live events from this point onward append normally.
+          const status = data.state?.status ?? 'idle';
+          const events = Array.isArray(data.state?.events)
+            ? data.state.events
+            : [];
+          hydrateRun({ status, events });
         }
       } catch {
         // ignore malformed frames
