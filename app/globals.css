@@ -233,6 +233,10 @@ body {
 
 .workspace-tri {
   grid-template-columns: var(--palette-w) 1fr var(--right-w);
+  /* The canvas needs a *concrete* height so ReactFlow (which fills 100% of its
+   * parent) can mount at non-zero size and accept drops from the palette. */
+  height: calc(100vh - var(--top-bar-h));
+  min-height: calc(100vh - var(--top-bar-h));
 }
 
 .canvas-stub,
