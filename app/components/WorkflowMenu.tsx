@@ -30,6 +30,8 @@ const NEW_WORKFLOW_DEFAULTS = () => {
 export default function WorkflowMenu() {
   const currentWorkflow = useWorkflowStore((s) => s.currentWorkflow);
   const loadWorkflow = useWorkflowStore((s) => s.loadWorkflow);
+  const isDirty = useWorkflowStore((s) => s.isDirty);
+  const saveCurrentWorkflow = useWorkflowStore((s) => s.saveCurrentWorkflow);
 
   const [open, setOpen] = useState(false);
   const [summaries, setSummaries] = useState<WorkflowSummary[]>([]);
@@ -72,8 +74,9 @@ export default function WorkflowMenu() {
     try {
       const res = await fetch(`/api/workflows/${encodeURIComponent(id)}`);
       if (!res.ok) throw new Error(`load failed: ${res.status}`);
-      const wf = (await res.json()) as Workflow;
-      loadWorkflow(wf);
+      const data = (await res.json()) as { workflow?: Workflow };
+      if (!data.workflow) throw new Error('malformed workflow response');
+      loadWorkflow(data.workflow);
       setOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to load workflow');
@@ -89,8 +92,9 @@ export default function WorkflowMenu() {
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(`create failed: ${res.status}`);
-      const wf = (await res.json()) as Workflow;
-      loadWorkflow(wf);
+      const data = (await res.json()) as { workflow?: Workflow };
+      if (!data.workflow) throw new Error('malformed create response');
+      loadWorkflow(data.workflow);
       await refreshList();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to create');
@@ -115,8 +119,9 @@ export default function WorkflowMenu() {
         body: JSON.stringify(copy),
       });
       if (!res.ok) throw new Error(`duplicate failed: ${res.status}`);
-      const wf = (await res.json()) as Workflow;
-      loadWorkflow(wf);
+      const data = (await res.json()) as { workflow?: Workflow };
+      if (!data.workflow) throw new Error('malformed duplicate response');
+      loadWorkflow(data.workflow);
       await refreshList();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to duplicate');
@@ -142,7 +147,19 @@ export default function WorkflowMenu() {
     }
   };
 
-  const triggerLabel = currentWorkflow ? currentWorkflow.name : '(no workflow)';
+  const onSave = async () => {
+    if (!currentWorkflow) return;
+    try {
+      await saveCurrentWorkflow();
+      await refreshList();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to save');
+    }
+  };
+
+  const triggerLabel = currentWorkflow
+    ? `${currentWorkflow.name}${isDirty ? ' •' : ''}`
+    : '(no workflow)';
 
   return (
     <div ref={rootRef} className="wf-menu">
@@ -199,6 +216,15 @@ export default function WorkflowMenu() {
           </div>
 
           <div className="wf-menu-actions">
+            <button
+              type="button"
+              aria-label="save workflow"
+              className="wf-menu-action"
+              disabled={!currentWorkflow || !isDirty}
+              onClick={() => void onSave()}
+            >
+              save
+            </button>
             <button
               type="button"
               aria-label="new workflow"

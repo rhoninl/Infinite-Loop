@@ -130,25 +130,29 @@ export function buildLiveStateMap(
   return out;
 }
 
-/** Map a Workflow + live state into xyflow nodes/edges. */
+/** Map a Workflow + live state into xyflow nodes/edges. Defensive against
+ * partial / malformed objects (e.g., a wrapped API response that slipped
+ * through unwrap). */
 export function workflowToXyflow(
   workflow: Workflow | null,
   liveMap: Record<string, NodeRunState>,
   selectedNodeId: string | null,
 ): { nodes: XyNode[]; edges: XyEdge[] } {
   if (!workflow) return { nodes: [], edges: [] };
-  const nodes: XyNode[] = workflow.nodes.map((n) => ({
+  const wfNodes = Array.isArray(workflow.nodes) ? workflow.nodes : [];
+  const wfEdges = Array.isArray(workflow.edges) ? workflow.edges : [];
+  const nodes: XyNode[] = wfNodes.map((n) => ({
     id: n.id,
     type: n.type,
-    position: n.position,
+    position: n.position ?? { x: 0, y: 0 },
     selected: n.id === selectedNodeId,
     data: {
       label: n.label ?? n.id,
-      config: n.config,
+      config: n.config ?? {},
       _state: liveMap[n.id] ?? 'idle',
     },
   }));
-  const edges: XyEdge[] = workflow.edges.map((e) => ({
+  const edges: XyEdge[] = wfEdges.map((e) => ({
     id: e.id,
     source: e.source,
     target: e.target,

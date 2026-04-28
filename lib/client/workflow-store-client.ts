@@ -45,8 +45,13 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
   runEvents: [],
   connectionStatus: 'connecting',
 
-  loadWorkflow: (w) =>
-    set({ currentWorkflow: w, isDirty: false, selectedNodeId: null }),
+  loadWorkflow: (w) => {
+    if (!w || !Array.isArray(w.nodes) || !Array.isArray(w.edges)) {
+      console.warn('[workflow-store] loadWorkflow rejected malformed input', w);
+      return;
+    }
+    set({ currentWorkflow: w, isDirty: false, selectedNodeId: null });
+  },
 
   setNodes: (nodes) =>
     set((s) =>

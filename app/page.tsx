@@ -27,10 +27,12 @@ export default function Page() {
       try {
         const res = await fetch(`/api/workflows/${DEFAULT_WORKFLOW_ID}`);
         if (!res.ok) return;
-        const wf = await res.json();
-        if (!cancelled) loadWorkflow(wf);
+        const data = await res.json();
+        const wf = data?.workflow;
+        if (!cancelled && wf) loadWorkflow(wf);
       } catch {
-        // workflow store API not implemented yet (Phase B U6) — leave canvas empty
+        // network or parse error — leave canvas empty so the user can still
+        // create a fresh workflow from the menu
       }
     })();
     return () => {

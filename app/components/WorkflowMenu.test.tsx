@@ -112,7 +112,7 @@ describe('WorkflowMenu', () => {
         return jsonResponse({ workflows: [SUMMARY_A] });
       }
       if (u === '/api/workflows/wf-a') {
-        return jsonResponse(FULL_A);
+        return jsonResponse({ workflow: FULL_A });
       }
       throw new Error(`unexpected fetch ${u}`);
     });
@@ -142,7 +142,7 @@ describe('WorkflowMenu', () => {
       }
       if (u === '/api/workflows' && init?.method === 'POST') {
         const body = JSON.parse(String(init.body)) as Workflow;
-        return jsonResponse(body);
+        return jsonResponse({ workflow: body });
       }
       throw new Error(`unexpected fetch ${u} ${init?.method}`);
     });
