@@ -24,8 +24,19 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${newsreader.variable} ${jetbrains.variable}`}>
-      <body>
+    <html
+      lang="en"
+      className={`${newsreader.variable} ${jetbrains.variable}`}
+      suppressHydrationWarning
+    >
+      {/*
+       * Browser extensions like ColorZilla inject attributes such as
+       * `cz-shortcut-listen="true"` onto <body> before React hydrates,
+       * which causes a benign-but-noisy hydration warning. We don't
+       * render any attribute-sensitive content on these elements, so
+       * suppressing the warning here is the canonical React fix.
+       */}
+      <body suppressHydrationWarning>
         <div className="grain" aria-hidden="true" />
         {children}
       </body>
