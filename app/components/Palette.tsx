@@ -41,6 +41,9 @@ function handleDragStart(
 ): void {
   e.dataTransfer.setData(DRAG_MIME, JSON.stringify({ type }));
   e.dataTransfer.effectAllowed = 'copy';
+  if (process.env.NODE_ENV !== 'production') {
+    console.debug('[palette] dragstart', type);
+  }
 }
 
 export default function Palette() {

@@ -282,24 +282,52 @@ function CanvasInner() {
     [addEdge],
   );
 
+  const onDragEnter = useCallback((e: DragEvent<HTMLDivElement>) => {
+    // Browsers default to "drop forbidden" unless dragenter AND dragover both
+    // call preventDefault().
+    if (e.dataTransfer.types.includes(DROP_MIME)) {
+      e.preventDefault();
+    }
+  }, []);
+
   const onDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer.types.includes(DROP_MIME)) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    // Must match the palette's `effectAllowed = 'copy'`. If we say 'move' here
+    // and the source said 'copy', the browser shows the no-drop cursor and
+    // refuses the drop entirely.
+    e.dataTransfer.dropEffect = 'copy';
   }, []);
 
   const onDrop = useCallback(
     (e: DragEvent<HTMLDivElement>) => {
       e.preventDefault();
-      if (!currentWorkflow) return;
+      e.stopPropagation();
+      if (!currentWorkflow) {
+        console.warn('[canvas] drop ignored: no current workflow');
+        return;
+      }
       const raw = e.dataTransfer.getData(DROP_MIME);
-      if (!raw) return;
+      if (!raw) {
+        console.warn(
+          '[canvas] drop ignored: no payload at MIME',
+          DROP_MIME,
+          'available types:',
+          Array.from(e.dataTransfer.types),
+        );
+        return;
+      }
       let payload: DropPayload;
       try {
         payload = JSON.parse(raw) as DropPayload;
-      } catch {
+      } catch (err) {
+        console.warn('[canvas] drop payload not JSON:', err);
         return;
       }
-      if (!payload?.type) return;
+      if (!payload?.type) {
+        console.warn('[canvas] drop payload missing type', payload);
+        return;
+      }
       const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
       const node = buildDroppedNode(payload, position, currentWorkflow.nodes);
       addNode(node);
@@ -310,8 +338,9 @@ function CanvasInner() {
   return (
     <div
       aria-label="canvas"
-      style={{ width: '100%', height: '100%' }}
+      style={{ width: '100%', height: '100%', position: 'relative' }}
       onDrop={onDrop}
+      onDragEnter={onDragEnter}
       onDragOver={onDragOver}
     >
       <ReactFlow
