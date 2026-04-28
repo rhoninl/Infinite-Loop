@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
+import { loopManager } from '@/lib/server/loop-manager';
 
 export async function POST() {
-  return NextResponse.json(
-    { error: 'POST /api/run/stop: not yet implemented (Phase B unit 5)' },
-    { status: 501 },
-  );
+  loopManager.stop();
+  return NextResponse.json({ state: loopManager.getState() }, { status: 200 });
 }
