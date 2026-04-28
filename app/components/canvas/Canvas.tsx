@@ -198,7 +198,13 @@ function CanvasInner() {
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       for (const ch of changes) {
-        if (ch.type === 'position' && ch.position && !ch.dragging) {
+        if (ch.type === 'position' && ch.position) {
+          // Persist EVERY position change, including intermediate ones during
+          // a drag — xyflow renders nodes from the controlled `nodes` prop, so
+          // dropping mid-drag updates makes the card visually freeze and snap
+          // to the release point. ~60 updates/sec is fine for workflow sizes
+          // we expect (≤ a few dozen nodes); zustand selectors keep re-render
+          // scope tight.
           updateNode(ch.id, { position: ch.position });
         } else if (ch.type === 'select') {
           selectNode(ch.selected ? ch.id : null);
