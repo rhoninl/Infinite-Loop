@@ -1,8 +1,15 @@
 'use client';
 
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import {
+  Handle,
+  NodeResizer,
+  Position,
+  type NodeProps,
+} from '@xyflow/react';
 
 const NODE_TYPE = 'loop';
+const MIN_W = 240;
+const MIN_H = 140;
 
 interface LoopData {
   _state?: string;
@@ -26,6 +33,13 @@ export default function LoopNode({ data, selected }: NodeProps) {
       data-selected={selected ? 'true' : 'false'}
       aria-label="loop node"
     >
+      <NodeResizer
+        minWidth={MIN_W}
+        minHeight={MIN_H}
+        isVisible={!!selected}
+        lineClassName="wf-resize-line"
+        handleClassName="wf-resize-handle"
+      />
       <Handle type="target" position={Position.Left} id="in" />
       <div className="wf-node-group-head">
         <span className="wf-node-title">LOOP</span>

@@ -1276,3 +1276,16 @@ body {
   color: var(--fg-dim);
   font-size: 11px;
 }
+
+/* ─── NodeResizer (Loop) ─────────────────────────────────── */
+.wf-resize-line {
+  border-color: var(--accent-live) !important;
+  border-width: 1px !important;
+}
+.wf-resize-handle {
+  width: 8px !important;
+  height: 8px !important;
+  background: var(--accent-live) !important;
+  border: 1px solid var(--bg) !important;
+  border-radius: 0 !important;
+}

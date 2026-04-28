@@ -159,8 +159,11 @@ function buildXyNode(
     base.parentId = parentId;
     base.extent = 'parent';
   }
-  // Loop container: reserve canvas space so children render inside it.
-  if (n.type === 'loop') {
+  // Persisted size (Loop containers, mostly). Falls back to a default for Loop
+  // so a freshly-created Loop has somewhere to put children.
+  if (n.size) {
+    base.style = { width: n.size.width, height: n.size.height };
+  } else if (n.type === 'loop') {
     base.style = { width: LOOP_DEFAULT_W, height: LOOP_DEFAULT_H };
   }
   return base;
@@ -239,10 +242,17 @@ function CanvasInner() {
           // Persist EVERY position change, including intermediate ones during
           // a drag — xyflow renders nodes from the controlled `nodes` prop, so
           // dropping mid-drag updates makes the card visually freeze and snap
-          // to the release point. ~60 updates/sec is fine for workflow sizes
-          // we expect (≤ a few dozen nodes); zustand selectors keep re-render
-          // scope tight.
+          // to the release point.
           updateNode(ch.id, { position: ch.position });
+        } else if (ch.type === 'dimensions' && ch.resizing && ch.dimensions) {
+          // Only persist when the user is actively resizing (NodeResizer
+          // sets `resizing: true`). xyflow also emits dimensions changes on
+          // first measure of every node — those have `resizing` undefined
+          // and we ignore them so we don't pollute the store with values
+          // that aren't really the user's intent.
+          updateNode(ch.id, {
+            size: { width: ch.dimensions.width, height: ch.dimensions.height },
+          });
         } else if (ch.type === 'select') {
           selectNode(ch.selected ? ch.id : null);
         } else if (ch.type === 'remove') {

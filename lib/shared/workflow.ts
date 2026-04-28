@@ -95,6 +95,9 @@ export interface WorkflowNode<T extends NodeType = NodeType> {
   children?: WorkflowNode[];
   /** Optional human-readable label override for the canvas. */
   label?: string;
+  /** Optional persisted canvas size (currently used by Loop containers so
+   * the user can resize them; xyflow's NodeResizer writes here). */
+  size?: { width: number; height: number };
 }
 
 export interface WorkflowEdge {
