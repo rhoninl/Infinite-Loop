@@ -14,6 +14,7 @@ import Canvas, {
   buildEdge,
   buildLiveStateMap,
   defaultConfigFor,
+  findContainingLoop,
   nextNodeId,
   pushOutsideLoops,
   workflowToXyflow,
@@ -145,6 +146,39 @@ describe('buildDroppedNode', () => {
     ];
     const node = buildDroppedNode({ type: 'loop' }, { x: 0, y: 0 }, existing);
     expect(node.id).toBe('loop-2');
+  });
+});
+
+describe('findContainingLoop', () => {
+  const loop: WorkflowNode = {
+    id: 'loop-1',
+    type: 'loop',
+    position: { x: 100, y: 100 },
+    config: { maxIterations: 5, mode: 'while-not-met' },
+    size: { width: 400, height: 200 },
+  };
+
+  it('returns null when the position is outside every Loop bbox', () => {
+    expect(findContainingLoop({ x: 50, y: 50 }, [loop])).toBeNull();
+  });
+
+  it('returns the Loop whose bbox contains the position', () => {
+    expect(findContainingLoop({ x: 200, y: 200 }, [loop])?.id).toBe('loop-1');
+  });
+
+  it('treats edge points as inside (inclusive bounds)', () => {
+    expect(findContainingLoop({ x: 100, y: 100 }, [loop])).toBeTruthy();
+    expect(findContainingLoop({ x: 500, y: 300 }, [loop])).toBeTruthy();
+  });
+
+  it('skips non-Loop nodes', () => {
+    const sibling: WorkflowNode = {
+      id: 'agent-1',
+      type: 'agent',
+      position: { x: 100, y: 100 },
+      config: { providerId: 'claude', prompt: '', cwd: '', timeoutMs: 60000 },
+    };
+    expect(findContainingLoop({ x: 110, y: 110 }, [sibling])).toBeNull();
   });
 });
 

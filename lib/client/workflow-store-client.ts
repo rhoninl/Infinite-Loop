@@ -22,6 +22,9 @@ export interface WorkflowStoreState {
   setNodes: (nodes: WorkflowNode[]) => void;
   setEdges: (edges: WorkflowEdge[]) => void;
   addNode: (node: WorkflowNode) => void;
+  /** Insert `child` into the `children` array of the top-level container
+   * with id `parentId`. No-ops if the parent is missing or isn't a container. */
+  addChildNode: (parentId: string, child: WorkflowNode) => void;
   updateNode: (id: string, patch: Partial<Omit<WorkflowNode, 'id'>>) => void;
   removeNode: (id: string) => void;
   addEdge: (edge: WorkflowEdge) => void;
@@ -101,6 +104,21 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
       if (!wf) return {};
       return {
         currentWorkflow: bumpUpdated({ ...wf, nodes: [...wf.nodes, node] }),
+        isDirty: true,
+      };
+    }),
+
+  addChildNode: (parentId, child) =>
+    set((s) => {
+      const wf = s.currentWorkflow;
+      if (!wf) return {};
+      const nextNodes = wf.nodes.map((n) => {
+        if (n.id !== parentId) return n;
+        const existing = Array.isArray(n.children) ? n.children : [];
+        return { ...n, children: [...existing, child] };
+      });
+      return {
+        currentWorkflow: bumpUpdated({ ...wf, nodes: nextNodes }),
         isDirty: true,
       };
     }),

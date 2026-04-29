@@ -162,6 +162,36 @@ interface CandidateNode {
 }
 
 /**
+ * If `position` falls inside any top-level Loop container's bbox, return that
+ * Loop. Otherwise return null. Used by the drop handler to decide whether a
+ * fresh node should be added as a child of a Loop or as a top-level sibling.
+ */
+export function findContainingLoop(
+  position: { x: number; y: number },
+  topLevelNodes: WorkflowNode[],
+): WorkflowNode | null {
+  // Last-match wins so that if Loops were ever stacked, the topmost (= last
+  // in render order) catches the drop.
+  let hit: WorkflowNode | null = null;
+  for (const n of topLevelNodes) {
+    if (n.type !== 'loop') continue;
+    const lx = n.position.x;
+    const ly = n.position.y;
+    const lw = n.size?.width ?? LOOP_DEFAULT_W;
+    const lh = n.size?.height ?? LOOP_DEFAULT_H;
+    if (
+      position.x >= lx &&
+      position.x <= lx + lw &&
+      position.y >= ly &&
+      position.y <= ly + lh
+    ) {
+      hit = n;
+    }
+  }
+  return hit;
+}
+
+/**
  * Snap a top-level node's position so it doesn't overlap any Loop container
  * bbox in `topLevelNodes`. Returns the candidate's original position when
  * there's no overlap. On overlap, pushes along the single axis with the
@@ -301,6 +331,7 @@ function CanvasInner() {
   const removeEdge = useWorkflowStore((s) => s.removeEdge);
   const addEdge = useWorkflowStore((s) => s.addEdge);
   const addNode = useWorkflowStore((s) => s.addNode);
+  const addChildNode = useWorkflowStore((s) => s.addChildNode);
   const selectNode = useWorkflowStore((s) => s.selectNode);
 
   const { screenToFlowPosition } = useReactFlow();
@@ -424,8 +455,31 @@ function CanvasInner() {
         return;
       }
       const rawPosition = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-      // Loops own their interior; freshly-dropped top-level nodes get pushed
-      // out so they can't visually overlap a Loop container's bbox.
+
+      // Loops themselves never become children of another Loop today.
+      if (payload.type !== 'loop') {
+        const containing = findContainingLoop(rawPosition, currentWorkflow.nodes);
+        if (containing) {
+          // Drop fell inside a Loop's bbox → adopt as a child. xyflow renders
+          // child positions relative to their parent, so subtract the Loop's
+          // origin. We don't push-out here: dropping inside a Loop is the
+          // explicit gesture for "add to this loop's body".
+          const local = {
+            x: rawPosition.x - containing.position.x,
+            y: rawPosition.y - containing.position.y,
+          };
+          const child = buildDroppedNode(
+            payload,
+            local,
+            containing.children ?? [],
+          );
+          addChildNode(containing.id, child);
+          return;
+        }
+      }
+
+      // Outside any Loop (or Loop-on-Loop): top-level placement, with
+      // overlap-prevention pushing the new card to the nearest outside edge.
       const position =
         payload.type === 'loop'
           ? rawPosition
@@ -436,7 +490,7 @@ function CanvasInner() {
       const node = buildDroppedNode(payload, position, currentWorkflow.nodes);
       addNode(node);
     },
-    [addNode, currentWorkflow, screenToFlowPosition],
+    [addNode, addChildNode, currentWorkflow, screenToFlowPosition],
   );
 
   return (
