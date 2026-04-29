@@ -29,7 +29,33 @@ export default function Page() {
   const runStatus = useWorkflowStore((s) => s.runStatus);
   const wsStatus = useWorkflowStore((s) => s.connectionStatus);
   const loadWorkflow = useWorkflowStore((s) => s.loadWorkflow);
+  const undo = useWorkflowStore((s) => s.undo);
+  const redo = useWorkflowStore((s) => s.redo);
   const isRunning = runStatus === 'running';
+
+  // Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z = redo. Skip when focus is in an
+  // editable field — let the browser's native field-level undo win there so
+  // typing in the prompt textarea isn't blown away by a workflow rollback.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.key !== 'z' && e.key !== 'Z') return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
 
   const [rightWidth, setRightWidth] = useState<number>(RIGHT_WIDTH_DEFAULT);
   const dragStateRef = useRef<{ active: boolean }>({ active: false });
