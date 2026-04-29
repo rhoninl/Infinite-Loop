@@ -5,11 +5,20 @@
 
 @import '@xyflow/react/dist/style.css';
 
-:root {
+:root,
+[data-theme='dark'] {
   --bg: #0a0a0c;
   --bg-elevated: #111118;
   --bg-input: #0e0e14;
   --bg-deep: #050507;
+  /* Focus-state tint: warm brown-black for the dark theme. Used by inputs
+   * when focused. Light theme overrides below. */
+  --bg-input-focus: #14140e;
+  /* Surface overlay applied via theme-aware mix-blend-mode (see .grain
+   * and .wf-node-group-head). */
+  --surface-overlay: rgba(10, 10, 12, 0.55);
+  --grain-blend: overlay;
+  --grain-opacity: 0.05;
 
   --border: rgba(160, 145, 115, 0.14);
   --border-strong: rgba(160, 145, 115, 0.28);
@@ -23,10 +32,16 @@
 
   --accent-live: #ffb84d;
   --accent-live-glow: rgba(255, 184, 77, 0.35);
+  --accent-on-live: #0a0a0c;
+  --accent-on-live-soft: rgba(10, 10, 12, 0.65);
   --accent-ok: #5fb787;
   --accent-err: #d76a5b;
   --accent-info: #7c8aa8;
   --accent-warn: #e6c068;
+
+  /* Subtle wash used for hovers / row accents. Distinct token so it can
+   * shift hue per theme without changing the underlying accents. */
+  --hover-tint: rgba(255, 239, 200, 0.03);
 
   --serif: var(--font-serif), 'Newsreader', 'Source Serif', Georgia, serif;
   --mono: var(--font-mono), 'JetBrains Mono', 'Berkeley Mono', ui-monospace, monospace;
@@ -35,6 +50,39 @@
   --rail-w: 380px;
   --palette-w: 220px;
   --right-w: 440px;
+}
+
+[data-theme='light'] {
+  --bg: #f5efe1;
+  --bg-elevated: #ece5d3;
+  --bg-input: #ffffff;
+  --bg-deep: #e0d8c2;
+  --bg-input-focus: #fffbef;
+  --surface-overlay: rgba(245, 239, 225, 0.65);
+  --grain-blend: multiply;
+  --grain-opacity: 0.04;
+
+  --border: rgba(60, 50, 30, 0.14);
+  --border-strong: rgba(60, 50, 30, 0.32);
+  --border-bright: rgba(30, 22, 8, 0.4);
+
+  --fg: #1a1612;
+  --fg-soft: #3e362a;
+  --fg-dim: #6c6356;
+  --fg-muted: #8e8676;
+  --fg-faint: #b6ad9b;
+
+  /* Slightly darker amber so it has contrast against cream paper. */
+  --accent-live: #c87a1a;
+  --accent-live-glow: rgba(200, 122, 26, 0.3);
+  --accent-on-live: #fffbef;
+  --accent-on-live-soft: rgba(255, 251, 239, 0.75);
+  --accent-ok: #2e7a4d;
+  --accent-err: #b04030;
+  --accent-info: #4a5c80;
+  --accent-warn: #a87a20;
+
+  --hover-tint: rgba(60, 50, 30, 0.04);
 }
 
 * {
@@ -69,8 +117,8 @@ body {
   inset: 0;
   pointer-events: none;
   z-index: 1;
-  opacity: 0.05;
-  mix-blend-mode: overlay;
+  opacity: var(--grain-opacity);
+  mix-blend-mode: var(--grain-blend);
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
 }
 
@@ -95,7 +143,7 @@ body {
   display: grid;
   grid-template-columns: var(--rail-w) 1fr auto;
   align-items: center;
-  background: linear-gradient(180deg, var(--bg) 0%, rgba(10, 10, 12, 0.92) 100%);
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
   border-bottom: 1px solid var(--border-strong);
   backdrop-filter: blur(10px);
 }
@@ -157,6 +205,47 @@ body {
   display: flex;
   align-items: center;
   gap: 14px;
+}
+
+/* ─── theme toggle ──────────────────────────────────────── */
+.theme-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  padding-inline: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--fg-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.theme-toggle:hover {
+  color: var(--accent-live);
+  border-color: var(--accent-live);
+}
+.theme-toggle:focus-visible {
+  outline: 1px solid var(--accent-live);
+  outline-offset: 2px;
+}
+.theme-toggle-glyph {
+  font-family: var(--serif);
+  font-size: 14px;
+  line-height: 1;
+  color: var(--fg);
+}
+.theme-toggle:hover .theme-toggle-glyph {
+  color: var(--accent-live);
+}
+.theme-toggle-label {
+  font-size: 10px;
 }
 
 /* ─── status pill (top bar + RunPanel header) ──────────── */
@@ -432,10 +521,10 @@ body {
   box-shadow: 0 0 16px var(--accent-live-glow);
 }
 .wf-node[data-state='succeeded'] {
-  border-color: rgba(95, 183, 135, 0.45);
+  border-color: color-mix(in srgb, var(--accent-ok) 55%, transparent);
 }
 .wf-node[data-state='failed'] {
-  border-color: rgba(215, 106, 91, 0.45);
+  border-color: color-mix(in srgb, var(--accent-err) 55%, transparent);
 }
 
 .wf-node-head {
@@ -766,7 +855,7 @@ body {
 .field textarea:focus,
 .field select:focus {
   border-color: var(--accent-live);
-  background: #14140e;
+  background: var(--bg-input-focus);
   box-shadow: 0 0 0 1px var(--accent-live-glow);
 }
 
@@ -813,7 +902,7 @@ body {
 }
 
 .segmented button[data-active='true'] {
-  color: var(--bg);
+  color: var(--accent-on-live);
   background: var(--accent-live);
 }
 
@@ -847,7 +936,7 @@ body {
 }
 
 .segmented button[data-active='true'] .seg-sub {
-  color: rgba(10, 10, 12, 0.65);
+  color: var(--accent-on-live-soft);
 }
 
 .checkbox-row {
@@ -917,7 +1006,7 @@ body {
 }
 .btn:hover:not(:disabled) {
   background: var(--accent-live);
-  color: var(--bg);
+  color: var(--accent-on-live);
   border-color: var(--accent-live);
 }
 .btn:active:not(:disabled) {
@@ -946,7 +1035,7 @@ body {
 }
 .btn-stop:hover:not(:disabled) {
   background: var(--accent-err);
-  color: var(--bg);
+  color: var(--accent-on-live);
   border-color: var(--accent-err);
 }
 
@@ -1073,15 +1162,15 @@ body {
 }
 .tag[data-kind='ok'] {
   color: var(--accent-ok);
-  border-color: rgba(95, 183, 135, 0.45);
+  border-color: color-mix(in srgb, var(--accent-ok) 55%, transparent);
 }
 .tag[data-kind='err'] {
   color: var(--accent-err);
-  border-color: rgba(215, 106, 91, 0.45);
+  border-color: color-mix(in srgb, var(--accent-err) 55%, transparent);
 }
 .tag[data-kind='live'] {
   color: var(--accent-live);
-  border-color: rgba(255, 184, 77, 0.5);
+  border-color: color-mix(in srgb, var(--accent-live) 55%, transparent);
 }
 .tag .dot {
   width: 5px;
@@ -1176,7 +1265,7 @@ body {
   margin-top: 12px;
   padding: 10px 14px;
   border-left: 2px solid var(--border-strong);
-  background: rgba(255, 255, 255, 0.015);
+  background: var(--bg-elevated);
   font-size: 12px;
 }
 .condition-line[data-met='true'] {
@@ -1323,7 +1412,7 @@ body {
   gap: 12px;
   padding: 8px 12px;
   border-bottom: 1px dashed var(--border);
-  background: rgba(10, 10, 12, 0.55);
+  background: var(--surface-overlay);
   pointer-events: none; /* let drags through to xyflow's container handle */
 }
 .wf-node-group-head .wf-node-title {

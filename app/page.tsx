@@ -12,6 +12,7 @@ import Palette from './components/Palette';
 import ConfigPanel from './components/ConfigPanel';
 import RunView from './components/RunView';
 import WorkflowMenu from './components/WorkflowMenu';
+import ThemeToggle from './components/ThemeToggle';
 import { useEngineWebSocket } from '../lib/client/ws-client';
 import { useWorkflowStore } from '../lib/client/workflow-store-client';
 
@@ -135,6 +136,7 @@ export default function Page() {
         </div>
 
         <div className="actions">
+          <ThemeToggle />
           <span
             className="pill"
             data-status={wsStatus === 'open' ? 'running' : 'idle'}

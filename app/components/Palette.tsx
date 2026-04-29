@@ -183,7 +183,7 @@ const paletteCss = `
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 .palette-item:hover {
-  background: rgba(255, 239, 200, 0.03);
+  background: var(--hover-tint);
   border-color: var(--border);
   color: var(--fg);
 }

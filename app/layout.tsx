@@ -29,6 +29,18 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       className={`${newsreader.variable} ${jetbrains.variable}`}
       suppressHydrationWarning
     >
+      <head>
+        {/*
+         * Pre-paint theme application — must run before <body> renders to
+         * avoid a flash of the wrong theme. Reads the user's saved choice
+         * (`infloop:theme`), falling back to OS preference.
+         */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=localStorage.getItem('infloop:theme');var t=s||(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t;}catch(e){document.documentElement.dataset.theme='dark';}})();`,
+          }}
+        />
+      </head>
       {/*
        * Browser extensions like ColorZilla inject attributes such as
        * `cz-shortcut-listen="true"` onto <body> before React hydrates,
