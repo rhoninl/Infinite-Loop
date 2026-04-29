@@ -1,0 +1,92 @@
+{
+  "id": "branch-test",
+  "name": "Branch test",
+  "version": 1,
+  "createdAt": 1777365000000,
+  "updatedAt": 1777365540806,
+  "nodes": [
+    {
+      "id": "start-1",
+      "type": "start",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {}
+    },
+    {
+      "id": "claude-1",
+      "type": "claude",
+      "position": {
+        "x": 200,
+        "y": 0
+      },
+      "config": {
+        "prompt": "emit DONE",
+        "cwd": "/tmp",
+        "timeoutMs": 10000
+      }
+    },
+    {
+      "id": "branch-1",
+      "type": "branch",
+      "position": {
+        "x": 400,
+        "y": 0
+      },
+      "config": {
+        "lhs": "{{claude-1.stdout}}",
+        "op": "contains",
+        "rhs": "DONE"
+      }
+    },
+    {
+      "id": "end-ok",
+      "type": "end",
+      "position": {
+        "x": 600,
+        "y": -50
+      },
+      "config": {
+        "outcome": "succeeded"
+      }
+    },
+    {
+      "id": "end-no",
+      "type": "end",
+      "position": {
+        "x": 600,
+        "y": 50
+      },
+      "config": {
+        "outcome": "failed"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "start-1",
+      "sourceHandle": "next",
+      "target": "claude-1"
+    },
+    {
+      "id": "e2",
+      "source": "claude-1",
+      "sourceHandle": "next",
+      "target": "branch-1"
+    },
+    {
+      "id": "e3",
+      "source": "branch-1",
+      "sourceHandle": "true",
+      "target": "end-ok"
+    },
+    {
+      "id": "e4",
+      "source": "branch-1",
+      "sourceHandle": "false",
+      "target": "end-no"
+    }
+  ]
+}
