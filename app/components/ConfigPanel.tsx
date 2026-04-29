@@ -10,9 +10,9 @@ import {
 } from 'react';
 import { useWorkflowStore } from '@/lib/client/workflow-store-client';
 import type {
+  AgentConfig,
   BranchConfig,
   BranchOp,
-  ClaudeConfig,
   ConditionConfig,
   ConditionKind,
   EndConfig,
@@ -173,14 +173,14 @@ function EndForm({
   );
 }
 
-function ClaudeForm({
+function AgentForm({
   config,
   refs,
   onPatch,
 }: {
-  config: ClaudeConfig;
+  config: AgentConfig;
   refs: string[];
-  onPatch: (next: ClaudeConfig) => void;
+  onPatch: (next: AgentConfig) => void;
 }) {
   const [prompt, setPrompt] = useDebouncedString(
     config.prompt ?? '',
@@ -191,6 +191,7 @@ function ClaudeForm({
   );
 
   const cwdInvalid = cwd.length > 0 && !cwd.startsWith('/');
+  const providerId = config.providerId ?? 'claude';
 
   const onTimeoutChange = (e: ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
@@ -203,6 +204,17 @@ function ClaudeForm({
 
   return (
     <>
+      <div className="field">
+        <span className="field-label">Provider</span>
+        <span
+          className="field-hint"
+          aria-label="Provider"
+          style={{ fontFamily: 'var(--mono)', color: 'var(--fg-soft)' }}
+        >
+          {providerId}
+        </span>
+      </div>
+
       <div className="field">
         <span className="field-label">Prompt</span>
         <textarea
@@ -539,9 +551,9 @@ export default function ConfigPanel() {
             onPatch={patchConfig}
           />
         )}
-        {node.type === 'claude' && (
-          <ClaudeForm
-            config={node.config as ClaudeConfig}
+        {node.type === 'agent' && (
+          <AgentForm
+            config={node.config as AgentConfig}
             refs={refs}
             onPatch={patchConfig}
           />

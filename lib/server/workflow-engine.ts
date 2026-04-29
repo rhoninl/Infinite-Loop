@@ -31,7 +31,7 @@ import { nodeExecutors } from './nodes/index';
 import { resolve as resolveTemplate } from './templating';
 
 const TEXT_CONFIG_FIELDS: Partial<Record<string, string[]>> = {
-  claude: ['prompt', 'cwd'],
+  agent: ['prompt', 'cwd'],
   condition: ['against'],
   branch: ['lhs', 'rhs'],
   // Phase 2+: shell.cmd, judge.rubric, etc.
@@ -422,7 +422,7 @@ export class WorkflowEngine {
 // flight strands the running task: route handlers (Stop, GET state) start
 // resolving to a fresh idle engine, while the in-flight claude child
 // process is still owned by the cached older instance.
-const ENGINE_VERSION = 5; // v5: claude-runner uses stream-json + parses text deltas
+const ENGINE_VERSION = 6; // v6: provider-driven agent node (claude → agent)
 
 declare global {
   // eslint-disable-next-line no-var

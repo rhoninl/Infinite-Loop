@@ -23,11 +23,11 @@ const startNode: WorkflowNode = {
   config: {},
 };
 
-const claudeNode: WorkflowNode = {
-  id: 'claude-1',
-  type: 'claude',
+const agentNode: WorkflowNode = {
+  id: 'agent-1',
+  type: 'agent',
   position: { x: 0, y: 0 },
-  config: { prompt: 'hello', cwd: '/tmp', timeoutMs: 60000 },
+  config: { providerId: 'claude', prompt: 'hello', cwd: '/tmp', timeoutMs: 60000 },
 };
 
 const conditionNode: WorkflowNode = {
@@ -72,11 +72,11 @@ describe('ConfigPanel', () => {
     expect(screen.getByText('Select a node to configure')).toBeInTheDocument();
   });
 
-  it('renders Claude config fields when a Claude node is selected', () => {
-    const wf = makeWorkflow([startNode, claudeNode]);
+  it('renders Agent config fields when an Agent node is selected', () => {
+    const wf = makeWorkflow([startNode, agentNode]);
     act(() => {
       useWorkflowStore.getState().loadWorkflow(wf);
-      useWorkflowStore.getState().selectNode('claude-1');
+      useWorkflowStore.getState().selectNode('agent-1');
     });
 
     render(<ConfigPanel />);
@@ -84,17 +84,18 @@ describe('ConfigPanel', () => {
     expect(screen.getByLabelText('Prompt')).toBeInTheDocument();
     expect(screen.getByLabelText('Working directory')).toBeInTheDocument();
     expect(screen.getByLabelText('Iteration timeout (ms)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Provider')).toHaveTextContent('claude');
     // header shows id + type
-    expect(screen.getByText(/claude-1/)).toBeInTheDocument();
-    expect(screen.getByText(/claude/)).toBeInTheDocument();
+    expect(screen.getByText(/agent-1/)).toBeInTheDocument();
+    expect(screen.getByText(/agent/)).toBeInTheDocument();
   });
 
-  it('debounces edits to the Claude prompt and dispatches updateNode', () => {
+  it('debounces edits to the Agent prompt and dispatches updateNode', () => {
     vi.useFakeTimers();
-    const wf = makeWorkflow([startNode, claudeNode]);
+    const wf = makeWorkflow([startNode, agentNode]);
     act(() => {
       useWorkflowStore.getState().loadWorkflow(wf);
-      useWorkflowStore.getState().selectNode('claude-1');
+      useWorkflowStore.getState().selectNode('agent-1');
     });
 
     render(<ConfigPanel />);
@@ -106,7 +107,7 @@ describe('ConfigPanel', () => {
 
     // Before the debounce timer fires, the store has not been updated.
     let stored = useWorkflowStore.getState().currentWorkflow!.nodes.find(
-      (n) => n.id === 'claude-1',
+      (n) => n.id === 'agent-1',
     )!.config as { prompt: string };
     expect(stored.prompt).toBe('hello');
 
@@ -115,7 +116,7 @@ describe('ConfigPanel', () => {
     });
 
     stored = useWorkflowStore.getState().currentWorkflow!.nodes.find(
-      (n) => n.id === 'claude-1',
+      (n) => n.id === 'agent-1',
     )!.config as { prompt: string };
     expect(stored.prompt).toBe('updated prompt');
   });
@@ -179,19 +180,19 @@ describe('ConfigPanel', () => {
   });
 
   it('finds nodes inside Loop containers (children)', () => {
-    const childClaude: WorkflowNode = {
-      id: 'claude-inside-loop',
-      type: 'claude',
+    const childAgent: WorkflowNode = {
+      id: 'agent-inside-loop',
+      type: 'agent',
       position: { x: 0, y: 0 },
-      config: { prompt: 'inner', cwd: '/work', timeoutMs: 30000 },
+      config: { providerId: 'claude', prompt: 'inner', cwd: '/work', timeoutMs: 30000 },
     };
     const wf = makeWorkflow([
       startNode,
-      { ...loopNode, children: [childClaude] },
+      { ...loopNode, children: [childAgent] },
     ]);
     act(() => {
       useWorkflowStore.getState().loadWorkflow(wf);
-      useWorkflowStore.getState().selectNode('claude-inside-loop');
+      useWorkflowStore.getState().selectNode('agent-inside-loop');
     });
 
     render(<ConfigPanel />);

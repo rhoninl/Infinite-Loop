@@ -54,9 +54,9 @@ describe('WorkflowEngine', () => {
   });
 
   it('runs a linear Start → Claude → End and settles succeeded', async () => {
-    const claude: WorkflowNode = {
-      id: 'claude-1',
-      type: 'claude',
+    const agent: WorkflowNode = {
+      id: 'agent-1',
+      type: 'agent',
       position: { x: 0, y: 0 },
       config: { prompt: 'p', cwd: '/tmp', timeoutMs: 1000 },
     };
@@ -66,16 +66,16 @@ describe('WorkflowEngine', () => {
       version: 1,
       createdAt: 0,
       updatedAt: 0,
-      nodes: [startNode, claude, endNode],
+      nodes: [startNode, agent, endNode],
       edges: [
-        { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'claude-1' },
-        { id: 'e2', source: 'claude-1', sourceHandle: 'next', target: 'end-1' },
+        { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'agent-1' },
+        { id: 'e2', source: 'agent-1', sourceHandle: 'next', target: 'end-1' },
       ],
     };
     const eng = new WorkflowEngine({
       start: exec(['next']),
       end: exec(['next']),
-      claude: exec(['next'], { stdout: 'hello', exitCode: 0 }),
+      agent: exec(['next'], { stdout: 'hello', exitCode: 0 }),
       condition: exec(['next']),
       loop: exec(['next']),
     });
@@ -84,15 +84,15 @@ describe('WorkflowEngine', () => {
     await eng.start(wf);
 
     expect(eng.getState().status).toBe('succeeded');
-    expect(eng.getState().scope['claude-1']).toEqual({ stdout: 'hello', exitCode: 0 });
+    expect(eng.getState().scope['agent-1']).toEqual({ stdout: 'hello', exitCode: 0 });
     expect(events.find((e) => e.type === 'run_started')).toBeTruthy();
     expect(events.find((e) => e.type === 'run_finished' && (e as { status: string }).status === 'succeeded')).toBeTruthy();
   });
 
   it('routes a Condition met branch to End and not_met branch back', async () => {
-    const claude: WorkflowNode = {
-      id: 'claude-1',
-      type: 'claude',
+    const agent: WorkflowNode = {
+      id: 'agent-1',
+      type: 'agent',
       position: { x: 0, y: 0 },
       config: { prompt: 'p', cwd: '/tmp', timeoutMs: 1000 },
     };
@@ -108,17 +108,17 @@ describe('WorkflowEngine', () => {
       version: 1,
       createdAt: 0,
       updatedAt: 0,
-      nodes: [startNode, claude, cond, endNode],
+      nodes: [startNode, agent, cond, endNode],
       edges: [
-        { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'claude-1' },
-        { id: 'e2', source: 'claude-1', sourceHandle: 'next', target: 'cond-1' },
+        { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'agent-1' },
+        { id: 'e2', source: 'agent-1', sourceHandle: 'next', target: 'cond-1' },
         { id: 'e3', source: 'cond-1', sourceHandle: 'met', target: 'end-1' },
       ],
     };
     const eng = new WorkflowEngine({
       start: exec(['next']),
       end: exec(['next']),
-      claude: exec(['next']),
+      agent: exec(['next']),
       condition: exec(['met'], { met: true, detail: 'matched' }),
       loop: exec(['next']),
     });
@@ -128,9 +128,9 @@ describe('WorkflowEngine', () => {
   });
 
   it('walks a Loop body until the condition fires break (met)', async () => {
-    const claude: WorkflowNode = {
-      id: 'claude-1',
-      type: 'claude',
+    const agent: WorkflowNode = {
+      id: 'agent-1',
+      type: 'agent',
       position: { x: 0, y: 0 },
       config: { prompt: 'p', cwd: '/tmp', timeoutMs: 1000 },
     };
@@ -145,7 +145,7 @@ describe('WorkflowEngine', () => {
       type: 'loop',
       position: { x: 0, y: 0 },
       config: { maxIterations: 5, mode: 'while-not-met' },
-      children: [claude, cond],
+      children: [agent, cond],
     };
     const wf: Workflow = {
       id: 'w3',
@@ -157,7 +157,7 @@ describe('WorkflowEngine', () => {
       edges: [
         { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'loop-1' },
         { id: 'e2', source: 'loop-1', sourceHandle: 'next', target: 'end-1' },
-        { id: 'e3', source: 'claude-1', sourceHandle: 'next', target: 'cond-1' },
+        { id: 'e3', source: 'agent-1', sourceHandle: 'next', target: 'cond-1' },
         // Condition has no edges: met → fall back to break, not_met → continue.
       ],
     };
@@ -165,7 +165,7 @@ describe('WorkflowEngine', () => {
     const eng = new WorkflowEngine({
       start: exec(['next']),
       end: exec(['next']),
-      claude: exec(['next', 'next', 'next']),
+      agent: exec(['next', 'next', 'next']),
       condition: exec(['not_met', 'not_met', 'met']),
       loop: exec(['next']),
     });
@@ -175,9 +175,9 @@ describe('WorkflowEngine', () => {
   });
 
   it('caps iterations at maxIterations and falls through past the loop', async () => {
-    const claude: WorkflowNode = {
-      id: 'claude-1',
-      type: 'claude',
+    const agent: WorkflowNode = {
+      id: 'agent-1',
+      type: 'agent',
       position: { x: 0, y: 0 },
       config: { prompt: 'p', cwd: '/tmp', timeoutMs: 1000 },
     };
@@ -192,7 +192,7 @@ describe('WorkflowEngine', () => {
       type: 'loop',
       position: { x: 0, y: 0 },
       config: { maxIterations: 2, mode: 'while-not-met' },
-      children: [claude, cond],
+      children: [agent, cond],
     };
     const wf: Workflow = {
       id: 'w4',
@@ -204,13 +204,13 @@ describe('WorkflowEngine', () => {
       edges: [
         { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'loop-1' },
         { id: 'e2', source: 'loop-1', sourceHandle: 'next', target: 'end-1' },
-        { id: 'e3', source: 'claude-1', sourceHandle: 'next', target: 'cond-1' },
+        { id: 'e3', source: 'agent-1', sourceHandle: 'next', target: 'cond-1' },
       ],
     };
     const eng = new WorkflowEngine({
       start: exec(['next']),
       end: exec(['next']),
-      claude: exec(['next', 'next', 'next']),
+      agent: exec(['next', 'next', 'next']),
       condition: exec(['not_met', 'not_met', 'not_met']),
       loop: exec(['next']),
     });
@@ -220,9 +220,9 @@ describe('WorkflowEngine', () => {
   });
 
   it('settles failed when an executor returns the error branch with no handler', async () => {
-    const claude: WorkflowNode = {
-      id: 'claude-1',
-      type: 'claude',
+    const agent: WorkflowNode = {
+      id: 'agent-1',
+      type: 'agent',
       position: { x: 0, y: 0 },
       config: { prompt: 'p', cwd: '/tmp', timeoutMs: 1000 },
     };
@@ -232,16 +232,16 @@ describe('WorkflowEngine', () => {
       version: 1,
       createdAt: 0,
       updatedAt: 0,
-      nodes: [startNode, claude, endNode],
+      nodes: [startNode, agent, endNode],
       edges: [
-        { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'claude-1' },
-        { id: 'e2', source: 'claude-1', sourceHandle: 'next', target: 'end-1' },
+        { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'agent-1' },
+        { id: 'e2', source: 'agent-1', sourceHandle: 'next', target: 'end-1' },
       ],
     };
     const eng = new WorkflowEngine({
       start: exec(['next']),
       end: exec(['next']),
-      claude: exec(['error'], { errorMessage: 'boom' }),
+      agent: exec(['error'], { errorMessage: 'boom' }),
       condition: exec(['next']),
       loop: exec(['next']),
     });
@@ -250,9 +250,9 @@ describe('WorkflowEngine', () => {
   });
 
   it('cancels mid-run when stop() is called', async () => {
-    const claude: WorkflowNode = {
-      id: 'claude-1',
-      type: 'claude',
+    const agent: WorkflowNode = {
+      id: 'agent-1',
+      type: 'agent',
       position: { x: 0, y: 0 },
       config: { prompt: 'p', cwd: '/tmp', timeoutMs: 1000 },
     };
@@ -262,17 +262,17 @@ describe('WorkflowEngine', () => {
       version: 1,
       createdAt: 0,
       updatedAt: 0,
-      nodes: [startNode, claude, endNode],
+      nodes: [startNode, agent, endNode],
       edges: [
-        { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'claude-1' },
-        { id: 'e2', source: 'claude-1', sourceHandle: 'next', target: 'end-1' },
+        { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'agent-1' },
+        { id: 'e2', source: 'agent-1', sourceHandle: 'next', target: 'end-1' },
       ],
     };
     let resolveExec: ((value: { branch: EdgeHandle; outputs: Record<string, unknown> }) => void) | null = null;
     const eng = new WorkflowEngine({
       start: exec(['next']),
       end: exec(['next']),
-      claude: {
+      agent: {
         execute: () =>
           new Promise<{ branch: EdgeHandle; outputs: Record<string, unknown> }>((resolve) => {
             resolveExec = resolve;
@@ -310,7 +310,7 @@ describe('WorkflowEngine', () => {
           }),
       },
       end: exec(['next']),
-      claude: exec(['next']),
+      agent: exec(['next']),
       condition: exec(['next']),
       loop: exec(['next']),
     });

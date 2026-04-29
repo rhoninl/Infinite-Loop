@@ -5,7 +5,7 @@ import type { ReactElement } from 'react';
 
 import StartNode from './StartNode';
 import EndNode from './EndNode';
-import ClaudeNode from './ClaudeNode';
+import AgentNode from './AgentNode';
 import ConditionNode from './ConditionNode';
 import LoopNode from './LoopNode';
 
@@ -74,23 +74,49 @@ describe('node components', () => {
     expect(screen.getByText(/→ failed/)).toBeInTheDocument();
   });
 
-  it('ClaudeNode renders prompt preview truncated to 40 chars', () => {
+  it('AgentNode renders prompt preview truncated to 40 chars', () => {
     const longPrompt = 'a'.repeat(80);
     renderWithFlow(
-      <ClaudeNode
+      <AgentNode
         {...makeProps(
-          { config: { prompt: longPrompt, cwd: '/tmp', timeoutMs: 60000 } },
-          { type: 'claude' }
+          {
+            config: {
+              providerId: 'claude',
+              prompt: longPrompt,
+              cwd: '/tmp',
+              timeoutMs: 60000,
+            },
+          },
+          { type: 'agent' }
         )}
       />
     );
-    const card = screen.getByLabelText('claude node');
+    const card = screen.getByLabelText('agent node');
     expect(card).toBeInTheDocument();
     const body = card.querySelector('.wf-node-body');
     expect(body).not.toBeNull();
     // truncated -> 39 chars + ellipsis = 40 chars total.
     expect(body!.textContent!.length).toBeLessThanOrEqual(40);
     expect(body!.textContent).toContain('a');
+  });
+
+  it('AgentNode shows the providerId in the header', () => {
+    renderWithFlow(
+      <AgentNode
+        {...makeProps(
+          {
+            config: {
+              providerId: 'codex',
+              prompt: 'hi',
+              cwd: '/tmp',
+              timeoutMs: 60000,
+            },
+          },
+          { type: 'agent' }
+        )}
+      />
+    );
+    expect(screen.getByText('CODEX')).toBeInTheDocument();
   });
 
   it('ConditionNode renders kind brief', () => {
@@ -126,17 +152,17 @@ describe('node components', () => {
 
   it('propagates _state via data-state attribute (live)', () => {
     renderWithFlow(
-      <ClaudeNode
+      <AgentNode
         {...makeProps(
           {
             _state: 'live',
-            config: { prompt: 'p', cwd: '/tmp', timeoutMs: 60000 },
+            config: { providerId: 'claude', prompt: 'p', cwd: '/tmp', timeoutMs: 60000 },
           },
-          { type: 'claude' }
+          { type: 'agent' }
         )}
       />
     );
-    const card = screen.getByLabelText('claude node');
+    const card = screen.getByLabelText('agent node');
     expect(card.getAttribute('data-state')).toBe('live');
     // also queryable by attribute selector
     expect(document.querySelector('[data-state="live"]')).not.toBeNull();

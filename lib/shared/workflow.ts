@@ -3,7 +3,7 @@
  * All node executors, the engine, the canvas, and the API talk through these types.
  */
 
-export type NodeType = 'start' | 'end' | 'claude' | 'condition' | 'loop' | 'branch';
+export type NodeType = 'start' | 'end' | 'agent' | 'condition' | 'loop' | 'branch';
 
 /** Edge handles. Workers MUST emit one of these from a node executor. */
 export type EdgeHandle =
@@ -38,7 +38,9 @@ export interface EndConfig {
   outcome?: 'succeeded' | 'failed';
 }
 
-export interface ClaudeConfig {
+export interface AgentConfig {
+  /** Provider id resolved against `providers/*.json`, e.g. "claude" or "codex". */
+  providerId: string;
   prompt: string;
   cwd: string;
   timeoutMs: number;
@@ -75,7 +77,7 @@ export interface BranchConfig {
 export type NodeConfigByType = {
   start: StartConfig;
   end: EndConfig;
-  claude: ClaudeConfig;
+  agent: AgentConfig;
   condition: ConditionConfig;
   loop: LoopConfig;
   branch: BranchConfig;

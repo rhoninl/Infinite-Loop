@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Fake claude binary for judge condition tests.
+# Fake CLI backing the "claude" provider in judge condition tests
+# (lib/server/conditions/judge.ts → runProvider).
 # - Prints FAKE_JUDGE_OUTPUT (default "MET").
 # - Sleeps FAKE_JUDGE_SLEEP_MS milliseconds before exiting (default 0).
 # - Exits with FAKE_JUDGE_EXIT (default 0).

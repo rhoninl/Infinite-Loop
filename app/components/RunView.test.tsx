@@ -42,8 +42,8 @@ describe('RunView', () => {
         { type: 'run_started', workflowId: 'w1', workflowName: 'Demo' },
         {
           type: 'node_started',
-          nodeId: 'claude-1',
-          nodeType: 'claude',
+          nodeId: 'agent-1',
+          nodeType: 'agent',
           resolvedConfig: {},
         },
       ],
@@ -52,8 +52,8 @@ describe('RunView', () => {
     render(<RunView />);
     expect(screen.getByLabelText('run status')).toHaveTextContent(/running/i);
     const current = screen.getByLabelText('currently running');
-    expect(current).toHaveTextContent('claude-1');
-    expect(current).toHaveTextContent(/claude/);
+    expect(current).toHaveTextContent('agent-1');
+    expect(current).toHaveTextContent(/agent/);
   });
 
   it('removes the currently running line when node_finished arrives', () => {
@@ -62,8 +62,8 @@ describe('RunView', () => {
         { type: 'run_started', workflowId: 'w1', workflowName: 'Demo' },
         {
           type: 'node_started',
-          nodeId: 'claude-1',
-          nodeType: 'claude',
+          nodeId: 'agent-1',
+          nodeType: 'agent',
           resolvedConfig: {},
         },
       ],
@@ -71,14 +71,14 @@ describe('RunView', () => {
     );
     render(<RunView />);
     expect(screen.getByLabelText('currently running')).toHaveTextContent(
-      'claude-1',
+      'agent-1',
     );
 
     act(() => {
       useWorkflowStore.getState().appendRunEvent({
         type: 'node_finished',
-        nodeId: 'claude-1',
-        nodeType: 'claude',
+        nodeId: 'agent-1',
+        nodeType: 'agent',
         branch: 'next',
         outputs: {},
         durationMs: 100,
@@ -94,14 +94,14 @@ describe('RunView', () => {
         { type: 'run_started', workflowId: 'w1', workflowName: 'Demo' },
         {
           type: 'node_started',
-          nodeId: 'claude-1',
-          nodeType: 'claude',
+          nodeId: 'agent-1',
+          nodeType: 'agent',
           resolvedConfig: {},
         },
         {
           type: 'node_finished',
-          nodeId: 'claude-1',
-          nodeType: 'claude',
+          nodeId: 'agent-1',
+          nodeType: 'agent',
           branch: 'next',
           outputs: {},
           durationMs: 50,
@@ -114,7 +114,7 @@ describe('RunView', () => {
         },
         {
           type: 'template_warning',
-          nodeId: 'claude-1',
+          nodeId: 'agent-1',
           field: 'prompt',
           missingKey: 'foo.bar',
         },
@@ -127,7 +127,7 @@ describe('RunView', () => {
     expect(log).toHaveTextContent('run_started');
     expect(log).toHaveTextContent('node_started');
     expect(log).toHaveTextContent('node_finished');
-    expect(log).toHaveTextContent('claude-1');
+    expect(log).toHaveTextContent('agent-1');
     expect(log).toHaveTextContent('next');
     expect(log).toHaveTextContent('condition_checked');
     expect(log).toHaveTextContent(/met:Y/);

@@ -1,7 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { promises as fsp } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { judgeStrategy } from './judge';
+import { _resetProviderCache } from '../providers/loader';
 import type { IterationRecord } from '../../shared/types';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -18,12 +23,41 @@ function makeIter(stdout = ''): IterationRecord {
   };
 }
 
+let providersDir: string;
+let prevProvidersDir: string | undefined;
+
 describe('judgeStrategy', () => {
   beforeEach(() => {
+    // Seed an isolated providers/ dir so the test doesn't depend on cwd.
+    providersDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infloop-judge-test-'));
+    prevProvidersDir = process.env.INFLOOP_PROVIDERS_DIR;
+    process.env.INFLOOP_PROVIDERS_DIR = providersDir;
+    fs.writeFileSync(
+      path.join(providersDir, 'claude.json'),
+      JSON.stringify({
+        id: 'claude',
+        label: 'Claude',
+        description: 'fake',
+        bin: 'claude',
+        args: ['{prompt}'],
+        outputFormat: 'plain',
+      }),
+    );
+    _resetProviderCache();
     process.env.INFLOOP_CLAUDE_BIN = FAKE_BIN;
     delete process.env.FAKE_JUDGE_OUTPUT;
     delete process.env.FAKE_JUDGE_EXIT;
     delete process.env.FAKE_JUDGE_SLEEP_MS;
+  });
+
+  afterEach(async () => {
+    if (prevProvidersDir === undefined) {
+      delete process.env.INFLOOP_PROVIDERS_DIR;
+    } else {
+      process.env.INFLOOP_PROVIDERS_DIR = prevProvidersDir;
+    }
+    await fsp.rm(providersDir, { recursive: true, force: true });
+    _resetProviderCache();
   });
 
   it('returns met:true when judge outputs MET', async () => {

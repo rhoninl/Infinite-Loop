@@ -1,0 +1,17 @@
+{
+  "id": "claude",
+  "label": "Claude",
+  "description": "spawn claude --print",
+  "glyph": "⟳",
+  "bin": "claude",
+  "args": [
+    "--print",
+    "--output-format",
+    "stream-json",
+    "--include-partial-messages",
+    "--verbose",
+    "{prompt}"
+  ],
+  "outputFormat": "claude-stream-json",
+  "promptVia": "arg"
+}

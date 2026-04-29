@@ -1,7 +1,7 @@
 /*
  * Compat shim. The new contract lives in `lib/shared/workflow.ts`. This file
  * re-exports the few legacy types still consumed by reused modules
- * (claude-runner, conditions/*) so they don't have to be rewritten.
+ * (provider runner, conditions/*) so they don't have to be rewritten.
  */
 
 export type {

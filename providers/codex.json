@@ -1,0 +1,10 @@
+{
+  "id": "codex",
+  "label": "Codex",
+  "description": "spawn codex exec",
+  "glyph": "◈",
+  "bin": "codex",
+  "args": ["exec", "{prompt}"],
+  "outputFormat": "plain",
+  "promptVia": "arg"
+}

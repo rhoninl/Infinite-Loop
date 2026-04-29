@@ -7,6 +7,30 @@ import type {
   WorkflowSummary,
 } from '../shared/workflow';
 
+/**
+ * v5→v6 migration: rewrite `type: "claude"` nodes to `type: "agent"` with
+ * `providerId: "claude"`. Pure function; called on every load so old files on
+ * disk keep working. Disk is only rewritten on the next `saveWorkflow`.
+ */
+function migrateNode(n: unknown): WorkflowNode {
+  if (!n || typeof n !== 'object') return n as WorkflowNode;
+  const node = { ...(n as Record<string, unknown>) };
+  if (node.type === 'claude') {
+    const oldCfg = (node.config as Record<string, unknown> | undefined) ?? {};
+    node.type = 'agent';
+    node.config = { providerId: 'claude', ...oldCfg };
+  }
+  if (Array.isArray(node.children)) {
+    node.children = node.children.map(migrateNode);
+  }
+  return node as unknown as WorkflowNode;
+}
+
+function migrateWorkflow(wf: Workflow): Workflow {
+  if (!Array.isArray(wf.nodes)) return wf;
+  return { ...wf, nodes: wf.nodes.map(migrateNode) };
+}
+
 function storageDir(): string {
   return (
     process.env.INFLOOP_WORKFLOWS_DIR ||
@@ -96,7 +120,7 @@ async function readWorkflowFile(id: string): Promise<Workflow> {
       `workflow file for "${id}" has mismatched id (got "${wf.id}")`,
     );
   }
-  return wf;
+  return migrateWorkflow(wf);
 }
 
 export async function listWorkflows(): Promise<WorkflowSummary[]> {

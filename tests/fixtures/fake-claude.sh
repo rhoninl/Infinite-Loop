@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Fake claude CLI for testing claude-runner.
+# Fake CLI for testing the provider runner (lib/server/providers/runner.ts).
+# Backs both the "claude-stream-json" and "plain" output-format paths.
 #
 # Configurable via env vars:
 #   FAKE_STDOUT_LINES           Newline-delimited stdout payload (default: two lines).

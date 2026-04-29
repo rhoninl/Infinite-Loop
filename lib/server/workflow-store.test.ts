@@ -151,10 +151,10 @@ describe('workflow-store', () => {
           config: { maxIterations: 3, mode: 'while-not-met' },
           children: [
             {
-              id: 'claude-1',
-              type: 'claude',
+              id: 'agent-1',
+              type: 'agent',
               position: { x: 0, y: 0 },
-              config: { prompt: 'p', cwd: '/tmp', timeoutMs: 1000 },
+              config: { providerId: 'claude', prompt: 'p', cwd: '/tmp', timeoutMs: 1000 },
             },
             {
               id: 'cond-1',
@@ -177,7 +177,7 @@ describe('workflow-store', () => {
       edges: [
         { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'loop-1' },
         { id: 'e2', source: 'loop-1', sourceHandle: 'next', target: 'end-1' },
-        { id: 'e3', source: 'claude-1', sourceHandle: 'next', target: 'cond-1' },
+        { id: 'e3', source: 'agent-1', sourceHandle: 'next', target: 'cond-1' },
       ],
     });
 
@@ -218,6 +218,42 @@ describe('workflow-store', () => {
     // On-disk JSON parses cleanly.
     const raw = await fsp.readFile(path.join(tmpDir, 'wf-1.json'), 'utf8');
     expect(() => JSON.parse(raw)).not.toThrow();
+  });
+
+  it('migrates legacy `type: "claude"` nodes to `agent` with providerId on load', async () => {
+    // Drop a legacy file directly to disk (skipping the validating writer).
+    const legacy = {
+      id: 'wf-legacy',
+      name: 'Legacy',
+      version: 5,
+      createdAt: 1,
+      updatedAt: 2,
+      nodes: [
+        { id: 'start-1', type: 'start', position: { x: 0, y: 0 }, config: {} },
+        {
+          id: 'claude-1',
+          type: 'claude',
+          position: { x: 0, y: 0 },
+          config: { prompt: 'p', cwd: '/tmp', timeoutMs: 1000 },
+        },
+        { id: 'end-1', type: 'end', position: { x: 0, y: 0 }, config: {} },
+      ],
+      edges: [],
+    };
+    fs.writeFileSync(
+      path.join(tmpDir, 'wf-legacy.json'),
+      JSON.stringify(legacy),
+    );
+
+    const fetched = await getWorkflow('wf-legacy');
+    const migrated = fetched.nodes.find((n) => n.id === 'claude-1');
+    expect(migrated?.type).toBe('agent');
+    expect(migrated?.config).toMatchObject({
+      providerId: 'claude',
+      prompt: 'p',
+      cwd: '/tmp',
+      timeoutMs: 1000,
+    });
   });
 
   it('listWorkflows ignores malformed *.json files without throwing', async () => {

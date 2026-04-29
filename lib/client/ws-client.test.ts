@@ -79,7 +79,7 @@ describe('useEngineWebSocket (SSE)', () => {
             iterationByLoopId: {},
             scope: {},
             events: [
-              { type: 'node_started', nodeId: 'claude-1', nodeType: 'claude', resolvedConfig: {} },
+              { type: 'node_started', nodeId: 'agent-1', nodeType: 'agent', resolvedConfig: {} },
             ],
           },
         }),

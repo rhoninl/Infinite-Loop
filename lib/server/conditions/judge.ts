@@ -1,8 +1,10 @@
-import { spawn } from 'node:child_process';
 import type { ConditionStrategy, JudgeConfig } from '../../shared/types';
+import { getProvider } from '../providers/loader';
+import { runProvider } from '../providers/runner';
 
 const STDOUT_TRUNCATE_CHARS = 8000;
 const JUDGE_TIMEOUT_MS = 60000;
+const JUDGE_PROVIDER_ID = 'claude';
 
 function isValidJudgeConfig(cfg: unknown): cfg is JudgeConfig {
   if (cfg === null || typeof cfg !== 'object') return false;
@@ -42,81 +44,52 @@ export const judgeStrategy: ConditionStrategy = {
       return { met: false, detail: 'invalid judge config' };
     }
 
+    const provider = await getProvider(JUDGE_PROVIDER_ID);
+    if (!provider) {
+      return {
+        met: false,
+        detail: `judge error: provider "${JUDGE_PROVIDER_ID}" not found in providers/`,
+      };
+    }
+
     const { rubric, model } = cfg;
     const prompt = buildPrompt(rubric, iter.stdout);
-    const bin = process.env.INFLOOP_CLAUDE_BIN || 'claude';
-    const args = ['--print', ...(model ? ['--model', model] : []), prompt];
 
-    return new Promise((resolve) => {
-      let resolved = false;
-      const finish = (result: { met: boolean; detail: string }) => {
-        if (resolved) return;
-        resolved = true;
-        clearTimeout(timer);
-        resolve(result);
-      };
+    // The judge needs claude in plain `--print` mode (no stream-json), so we
+    // synthesize a one-shot manifest derived from the registered claude
+    // provider — same `bin` resolution (env override etc.), but stripped argv.
+    const judgeManifest = {
+      ...provider,
+      args: ['--print', ...(model ? ['--model', model] : []), '{prompt}'],
+      outputFormat: 'plain',
+      promptVia: 'arg' as const,
+    };
 
-      let child: ReturnType<typeof spawn>;
-      try {
-        child = spawn(bin, args, { cwd });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        finish({ met: false, detail: `judge error: ${message}` });
-        return;
-      }
-
-      let stdout = '';
-
-      child.stdout?.on('data', (chunk: Buffer) => {
-        stdout += chunk.toString('utf8');
-      });
-
-      child.on('error', (err) => {
-        finish({ met: false, detail: `judge error: ${err.message}` });
-      });
-
-      child.on('close', (code) => {
-        if (code !== 0) {
-          const tail = stdout.trim().slice(-200);
-          const suffix = tail ? `: ${tail}` : '';
-          finish({
-            met: false,
-            detail: `judge error: exit code ${code}${suffix}`,
-          });
-          return;
-        }
-
-        const line = firstNonEmptyLine(stdout);
-        if (line === null) {
-          finish({ met: false, detail: 'judge error: no stdout' });
-          return;
-        }
-
-        const verdict = line.toUpperCase();
-        if (verdict === 'MET') {
-          finish({ met: true, detail: line });
-        } else if (verdict === 'NOT_MET') {
-          finish({ met: false, detail: line });
-        } else {
-          const truncated = line.slice(0, 200);
-          finish({
-            met: false,
-            detail: `judge output unparseable: ${truncated}`,
-          });
-        }
-      });
-
-      const timer = setTimeout(() => {
-        try {
-          child.kill('SIGKILL');
-        } catch {
-          // ignore kill errors
-        }
-        finish({
-          met: false,
-          detail: `judge timed out after ${JUDGE_TIMEOUT_MS}ms`,
-        });
-      }, JUDGE_TIMEOUT_MS);
+    const ctrl = new AbortController();
+    const result = await runProvider(judgeManifest, {
+      prompt,
+      cwd,
+      timeoutMs: JUDGE_TIMEOUT_MS,
+      signal: ctrl.signal,
     });
+
+    if (result.timedOut) {
+      return { met: false, detail: `judge timed out after ${JUDGE_TIMEOUT_MS}ms` };
+    }
+    if (result.exitCode !== 0) {
+      const errTail = result.stderr.trim().slice(-200);
+      const outTail = errTail ? '' : result.stdout.trim().slice(-200);
+      const suffix = errTail ? `: ${errTail}` : outTail ? `: ${outTail}` : '';
+      return { met: false, detail: `judge error: exit code ${result.exitCode}${suffix}` };
+    }
+
+    const line = firstNonEmptyLine(result.stdout);
+    if (line === null) {
+      return { met: false, detail: 'judge error: no stdout' };
+    }
+    const verdict = line.toUpperCase();
+    if (verdict === 'MET') return { met: true, detail: line };
+    if (verdict === 'NOT_MET') return { met: false, detail: line };
+    return { met: false, detail: `judge output unparseable: ${line.slice(0, 200)}` };
   },
 };

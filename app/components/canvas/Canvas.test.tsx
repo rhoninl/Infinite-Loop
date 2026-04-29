@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { render, cleanup } from '@testing-library/react';
 import type {
-  ClaudeConfig,
+  AgentConfig,
   ConditionConfig,
   LoopConfig,
   Workflow,
@@ -55,10 +55,10 @@ function makeWorkflow(): Workflow {
       config: {},
     },
     {
-      id: 'claude-1',
-      type: 'claude',
+      id: 'agent-1',
+      type: 'agent',
       position: { x: 200, y: 0 },
-      config: { prompt: 'do thing', cwd: '/tmp', timeoutMs: 60000 },
+      config: { providerId: 'claude', prompt: 'do thing', cwd: '/tmp', timeoutMs: 60000 },
     },
     {
       id: 'end-1',
@@ -73,8 +73,8 @@ function makeWorkflow(): Workflow {
     version: 1,
     nodes,
     edges: [
-      { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'claude-1' },
-      { id: 'e2', source: 'claude-1', sourceHandle: 'next', target: 'end-1' },
+      { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'agent-1' },
+      { id: 'e2', source: 'agent-1', sourceHandle: 'next', target: 'end-1' },
     ],
     createdAt: 0,
     updatedAt: 0,
@@ -87,8 +87,8 @@ describe('defaultConfigFor', () => {
   it('returns sensible defaults per node type', () => {
     expect(defaultConfigFor('start')).toEqual({});
     expect(defaultConfigFor('end')).toEqual({});
-    const claude = defaultConfigFor('claude') as ClaudeConfig;
-    expect(claude).toEqual({ prompt: '', cwd: '', timeoutMs: 60000 });
+    const agent = defaultConfigFor('agent') as AgentConfig;
+    expect(agent).toEqual({ providerId: 'claude', prompt: '', cwd: '', timeoutMs: 60000 });
     const condition = defaultConfigFor('condition') as ConditionConfig;
     expect(condition.kind).toBe('sentinel');
     expect(condition.sentinel).toEqual({ pattern: '', isRegex: false });
@@ -99,16 +99,16 @@ describe('defaultConfigFor', () => {
 
 describe('nextNodeId', () => {
   it('starts at 1 when no nodes of that type exist', () => {
-    expect(nextNodeId('claude', [])).toBe('claude-1');
+    expect(nextNodeId('agent', [])).toBe('agent-1');
   });
 
   it('picks max+1 across existing same-type ids', () => {
     const existing: WorkflowNode[] = [
-      { id: 'claude-1', type: 'claude', position: { x: 0, y: 0 }, config: {} as ClaudeConfig },
-      { id: 'claude-3', type: 'claude', position: { x: 0, y: 0 }, config: {} as ClaudeConfig },
+      { id: 'agent-1', type: 'agent', position: { x: 0, y: 0 }, config: {} as AgentConfig },
+      { id: 'agent-3', type: 'agent', position: { x: 0, y: 0 }, config: {} as AgentConfig },
       { id: 'start-1', type: 'start', position: { x: 0, y: 0 }, config: {} },
     ];
-    expect(nextNodeId('claude', existing)).toBe('claude-4');
+    expect(nextNodeId('agent', existing)).toBe('agent-4');
     expect(nextNodeId('start', existing)).toBe('start-2');
     expect(nextNodeId('end', existing)).toBe('end-1');
   });
@@ -117,15 +117,25 @@ describe('nextNodeId', () => {
 describe('buildDroppedNode', () => {
   it('builds a node with default config and a unique id', () => {
     const node = buildDroppedNode(
-      { type: 'claude', label: 'Step' },
+      { type: 'agent', label: 'Step', providerId: 'claude' },
       { x: 50, y: 75 },
       [],
     );
-    expect(node.id).toBe('claude-1');
-    expect(node.type).toBe('claude');
+    expect(node.id).toBe('agent-1');
+    expect(node.type).toBe('agent');
     expect(node.position).toEqual({ x: 50, y: 75 });
     expect(node.label).toBe('Step');
-    expect((node.config as ClaudeConfig).timeoutMs).toBe(60000);
+    expect((node.config as AgentConfig).providerId).toBe('claude');
+    expect((node.config as AgentConfig).timeoutMs).toBe(60000);
+  });
+
+  it('honors the dropped providerId on agent nodes', () => {
+    const node = buildDroppedNode(
+      { type: 'agent', providerId: 'codex' },
+      { x: 0, y: 0 },
+      [],
+    );
+    expect((node.config as AgentConfig).providerId).toBe('codex');
   });
 
   it('avoids id collisions by reading existing nodes', () => {
@@ -146,13 +156,13 @@ describe('buildEdge', () => {
   it('builds a WorkflowEdge with an e_-prefixed id', () => {
     const e = buildEdge({
       source: 'start-1',
-      target: 'claude-1',
+      target: 'agent-1',
       sourceHandle: 'next',
       targetHandle: null,
     });
     expect(e).not.toBeNull();
     expect(e!.source).toBe('start-1');
-    expect(e!.target).toBe('claude-1');
+    expect(e!.target).toBe('agent-1');
     expect(e!.sourceHandle).toBe('next');
     expect(e!.id.startsWith('e_')).toBe(true);
     expect('targetHandle' in e!).toBe(false);
@@ -178,26 +188,26 @@ describe('buildLiveStateMap', () => {
     const events: WorkflowEvent[] = [
       {
         type: 'node_started',
-        nodeId: 'claude-1',
-        nodeType: 'claude',
+        nodeId: 'agent-1',
+        nodeType: 'agent',
         resolvedConfig: {},
       },
     ];
-    expect(buildLiveStateMap(events)).toEqual({ 'claude-1': 'live' });
+    expect(buildLiveStateMap(events)).toEqual({ 'agent-1': 'live' });
   });
 
   it("marks finished as 'succeeded' or 'failed' based on branch", () => {
     const events: WorkflowEvent[] = [
-      { type: 'node_started', nodeId: 'claude-1', nodeType: 'claude', resolvedConfig: {} },
-      { type: 'node_finished', nodeId: 'claude-1', nodeType: 'claude', branch: 'next', outputs: {}, durationMs: 1 },
-      { type: 'node_started', nodeId: 'claude-2', nodeType: 'claude', resolvedConfig: {} },
-      { type: 'node_finished', nodeId: 'claude-2', nodeType: 'claude', branch: 'error', outputs: {}, durationMs: 1 },
-      { type: 'node_started', nodeId: 'claude-3', nodeType: 'claude', resolvedConfig: {} },
+      { type: 'node_started', nodeId: 'agent-1', nodeType: 'agent', resolvedConfig: {} },
+      { type: 'node_finished', nodeId: 'agent-1', nodeType: 'agent', branch: 'next', outputs: {}, durationMs: 1 },
+      { type: 'node_started', nodeId: 'agent-2', nodeType: 'agent', resolvedConfig: {} },
+      { type: 'node_finished', nodeId: 'agent-2', nodeType: 'agent', branch: 'error', outputs: {}, durationMs: 1 },
+      { type: 'node_started', nodeId: 'agent-3', nodeType: 'agent', resolvedConfig: {} },
     ];
     expect(buildLiveStateMap(events)).toEqual({
-      'claude-1': 'succeeded',
-      'claude-2': 'failed',
-      'claude-3': 'live',
+      'agent-1': 'succeeded',
+      'agent-2': 'failed',
+      'agent-3': 'live',
     });
   });
 });
@@ -209,14 +219,14 @@ describe('workflowToXyflow', () => {
 
   it('maps nodes preserving id/type/position and packs data + state', () => {
     const wf = makeWorkflow();
-    const out = workflowToXyflow(wf, { 'claude-1': 'live' }, 'claude-1');
+    const out = workflowToXyflow(wf, { 'agent-1': 'live' }, 'agent-1');
     expect(out.nodes).toHaveLength(3);
-    const claudeOut = out.nodes.find((n) => n.id === 'claude-1');
-    expect(claudeOut?.type).toBe('claude');
-    expect(claudeOut?.selected).toBe(true);
-    expect(claudeOut?.data._state).toBe('live');
-    expect(claudeOut?.data.label).toBe('claude-1');
-    expect(claudeOut?.data.config).toEqual({ prompt: 'do thing', cwd: '/tmp', timeoutMs: 60000 });
+    const agentOut = out.nodes.find((n) => n.id === 'agent-1');
+    expect(agentOut?.type).toBe('agent');
+    expect(agentOut?.selected).toBe(true);
+    expect(agentOut?.data._state).toBe('live');
+    expect(agentOut?.data.label).toBe('agent-1');
+    expect(agentOut?.data.config).toEqual({ providerId: 'claude', prompt: 'do thing', cwd: '/tmp', timeoutMs: 60000 });
 
     const startOut = out.nodes.find((n) => n.id === 'start-1');
     expect(startOut?.data._state).toBe('idle');
@@ -230,7 +240,7 @@ describe('workflowToXyflow', () => {
     expect(out.edges[0]).toMatchObject({
       id: 'e1',
       source: 'start-1',
-      target: 'claude-1',
+      target: 'agent-1',
       sourceHandle: 'next',
     });
   });
@@ -251,7 +261,7 @@ describe('<Canvas />', () => {
     const { container } = render(<Canvas />);
     // xyflow renders each node with data-id="<nodeId>".
     expect(container.querySelector('[data-id="start-1"]')).not.toBeNull();
-    expect(container.querySelector('[data-id="claude-1"]')).not.toBeNull();
+    expect(container.querySelector('[data-id="agent-1"]')).not.toBeNull();
     expect(container.querySelector('[data-id="end-1"]')).not.toBeNull();
   });
 });

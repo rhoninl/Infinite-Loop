@@ -1,27 +1,42 @@
 import type {
-  ClaudeConfig,
+  AgentConfig,
   NodeExecutor,
   NodeExecutorContext,
   NodeExecutorResult,
 } from '../../shared/workflow';
-import { runClaude } from '../claude-runner';
+import { getProvider } from '../providers/loader';
+import { runProvider } from '../providers/runner';
 
 function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.length > 0;
 }
 
-export const claudeExecutor: NodeExecutor = {
+export const agentExecutor: NodeExecutor = {
   async execute(ctx: NodeExecutorContext): Promise<NodeExecutorResult> {
-    const cfg = ctx.config as ClaudeConfig;
+    const cfg = ctx.config as AgentConfig;
 
-    if (!isNonEmptyString(cfg?.prompt) || !isNonEmptyString(cfg?.cwd)) {
+    if (
+      !isNonEmptyString(cfg?.providerId) ||
+      !isNonEmptyString(cfg?.prompt) ||
+      !isNonEmptyString(cfg?.cwd)
+    ) {
       return {
-        outputs: { errorMessage: 'invalid claude config' },
+        outputs: { errorMessage: 'invalid agent config' },
         branch: 'error',
       };
     }
 
-    const result = await runClaude({
+    const provider = await getProvider(cfg.providerId);
+    if (!provider) {
+      return {
+        outputs: {
+          errorMessage: `unknown provider: ${cfg.providerId}`,
+        },
+        branch: 'error',
+      };
+    }
+
+    const result = await runProvider(provider, {
       prompt: cfg.prompt,
       cwd: cfg.cwd,
       timeoutMs: cfg.timeoutMs,

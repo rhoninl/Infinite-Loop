@@ -14,8 +14,8 @@ import '@xyflow/react/dist/style.css';
 import { useCallback, useMemo, type DragEvent } from 'react';
 import { useWorkflowStore } from '../../../lib/client/workflow-store-client';
 import type {
+  AgentConfig,
   BranchConfig,
-  ClaudeConfig,
   ConditionConfig,
   EdgeHandle,
   EndConfig,
@@ -28,8 +28,8 @@ import type {
   WorkflowEvent,
   WorkflowNode,
 } from '../../../lib/shared/workflow';
+import AgentNode from './nodes/AgentNode';
 import BranchNode from './nodes/BranchNode';
-import ClaudeNode from './nodes/ClaudeNode';
 import ConditionNode from './nodes/ConditionNode';
 import EndNode from './nodes/EndNode';
 import LoopNode from './nodes/LoopNode';
@@ -42,6 +42,8 @@ export type NodeRunState = 'idle' | 'live' | 'succeeded' | 'failed';
 export interface DropPayload {
   type: NodeType;
   label?: string;
+  /** Required when `type === 'agent'`; selects the provider for the new node. */
+  providerId?: string;
 }
 
 const DROP_MIME = 'application/x-infloop-node';
@@ -55,7 +57,12 @@ function rid(): string {
 const DEFAULT_CONFIG: { [K in NodeType]: () => NodeConfigByType[K] } = {
   start: (): StartConfig => ({}),
   end: (): EndConfig => ({}),
-  claude: (): ClaudeConfig => ({ prompt: '', cwd: '', timeoutMs: 60000 }),
+  agent: (): AgentConfig => ({
+    providerId: 'claude',
+    prompt: '',
+    cwd: '',
+    timeoutMs: 60000,
+  }),
   condition: (): ConditionConfig => ({
     kind: 'sentinel',
     sentinel: { pattern: '', isRegex: false },
@@ -89,11 +96,15 @@ export function buildDroppedNode(
   existing: WorkflowNode[],
 ): WorkflowNode {
   const id = nextNodeId(payload.type, existing);
+  const config = defaultConfigFor(payload.type) as Record<string, unknown>;
+  if (payload.type === 'agent' && payload.providerId) {
+    (config as unknown as AgentConfig).providerId = payload.providerId;
+  }
   return {
     id,
     type: payload.type,
     position,
-    config: defaultConfigFor(payload.type),
+    config: config as WorkflowNode['config'],
     label: payload.label,
   };
 }
@@ -206,7 +217,7 @@ export function workflowToXyflow(
 const NODE_TYPES = {
   start: StartNode,
   end: EndNode,
-  claude: ClaudeNode,
+  agent: AgentNode,
   condition: ConditionNode,
   loop: LoopNode,
   branch: BranchNode,

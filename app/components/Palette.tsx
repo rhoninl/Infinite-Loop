@@ -1,14 +1,23 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import type { NodeType } from '@/lib/shared/workflow';
+import type { ProviderInfo } from '@/lib/server/providers/types';
 
 const DRAG_MIME = 'application/x-infloop-node';
+
+interface DragPayload {
+  type: NodeType;
+  /** Required when `type === 'agent'`; selects the provider for the new node. */
+  providerId?: string;
+}
 
 interface PaletteItem {
   type: NodeType;
   name: string;
   glyph: string;
   description: string;
+  providerId?: string;
 }
 
 interface PaletteCategory {
@@ -16,7 +25,7 @@ interface PaletteCategory {
   items: PaletteItem[];
 }
 
-const CATEGORIES: PaletteCategory[] = [
+const STATIC_CATEGORIES: PaletteCategory[] = [
   {
     heading: 'Control',
     items: [
@@ -29,50 +38,98 @@ const CATEGORIES: PaletteCategory[] = [
   {
     heading: 'I/O',
     items: [
-      { type: 'claude', name: 'Claude', glyph: '⟳', description: 'spawn claude --print' },
       { type: 'condition', name: 'Condition', glyph: '◷', description: 'evaluate a condition' },
     ],
   },
 ];
 
+function modelRunnerCategory(providers: ProviderInfo[]): PaletteCategory {
+  return {
+    heading: 'Model Runners',
+    items: providers.map((p) => ({
+      type: 'agent' as const,
+      name: p.label,
+      glyph: p.glyph ?? '⟳',
+      description: p.description,
+      providerId: p.id,
+    })),
+  };
+}
+
 function handleDragStart(
   e: React.DragEvent<HTMLButtonElement>,
-  type: NodeType,
+  item: PaletteItem,
 ): void {
-  e.dataTransfer.setData(DRAG_MIME, JSON.stringify({ type }));
+  const payload: DragPayload = { type: item.type };
+  if (item.providerId) payload.providerId = item.providerId;
+  e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload));
   e.dataTransfer.effectAllowed = 'copy';
   if (process.env.NODE_ENV !== 'production') {
-    console.debug('[palette] dragstart', type);
+    console.debug('[palette] dragstart', payload);
   }
 }
 
 export default function Palette() {
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/providers')
+      .then((r) => r.json())
+      .then((data: { providers?: ProviderInfo[] }) => {
+        if (!cancelled && Array.isArray(data.providers)) {
+          setProviders(data.providers);
+        }
+      })
+      .catch((err) => {
+        console.warn('[palette] failed to load providers:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const categories: PaletteCategory[] = [
+    ...STATIC_CATEGORIES,
+    modelRunnerCategory(providers),
+  ];
+
   return (
     <aside aria-label="palette" className="palette">
       <style>{paletteCss}</style>
-      {CATEGORIES.map((category) => (
+      {categories.map((category) => (
         <section key={category.heading} className="palette-section">
           <h3 className="section-eyebrow">{category.heading}</h3>
           <ul className="palette-list">
-            {category.items.map((item) => (
-              <li key={item.type}>
-                <button
-                  type="button"
-                  className="palette-item"
-                  draggable
-                  aria-label={`add ${item.type} node`}
-                  onDragStart={(e) => handleDragStart(e, item.type)}
-                >
-                  <span className="palette-icon" aria-hidden="true">
-                    {item.glyph}
-                  </span>
-                  <span className="palette-text">
-                    <span className="palette-name">{item.name}</span>
-                    <span className="palette-desc">{item.description}</span>
-                  </span>
-                </button>
+            {category.items.length === 0 ? (
+              <li className="palette-empty serif-italic">
+                no providers in /providers
               </li>
-            ))}
+            ) : (
+              category.items.map((item) => (
+                <li key={`${item.type}:${item.providerId ?? ''}:${item.name}`}>
+                  <button
+                    type="button"
+                    className="palette-item"
+                    draggable
+                    aria-label={
+                      item.providerId
+                        ? `add ${item.providerId} agent node`
+                        : `add ${item.type} node`
+                    }
+                    onDragStart={(e) => handleDragStart(e, item)}
+                  >
+                    <span className="palette-icon" aria-hidden="true">
+                      {item.glyph}
+                    </span>
+                    <span className="palette-text">
+                      <span className="palette-name">{item.name}</span>
+                      <span className="palette-desc">{item.description}</span>
+                    </span>
+                  </button>
+                </li>
+              ))
+            )}
           </ul>
         </section>
       ))}
@@ -101,6 +158,12 @@ const paletteCss = `
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+.palette-empty {
+  font-family: var(--serif);
+  font-size: 11px;
+  color: var(--fg-muted);
+  padding: 6px 12px;
 }
 .palette-item {
   appearance: none;
