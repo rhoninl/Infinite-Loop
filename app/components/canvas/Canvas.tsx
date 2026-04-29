@@ -11,7 +11,7 @@ import {
   type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useCallback, useMemo, type DragEvent } from 'react';
+import { useCallback, useMemo, useState, type DragEvent } from 'react';
 import { useWorkflowStore } from '../../../lib/client/workflow-store-client';
 import type {
   AgentConfig,
@@ -326,6 +326,7 @@ export function workflowToXyflow(
   workflow: Workflow | null,
   liveMap: Record<string, NodeRunState>,
   selectedNodeId: string | null,
+  selectedEdgeId: string | null = null,
 ): { nodes: XyNode[]; edges: XyEdge[] } {
   if (!workflow) return { nodes: [], edges: [] };
   const wfNodes = Array.isArray(workflow.nodes) ? workflow.nodes : [];
@@ -347,6 +348,9 @@ export function workflowToXyflow(
     target: e.target,
     sourceHandle: e.sourceHandle,
     targetHandle: e.targetHandle,
+    // Round-trip selection so xyflow's Backspace-to-delete keystroke can
+    // act on the edge the user clicked.
+    selected: e.id === selectedEdgeId,
   }));
   return { nodes, edges };
 }
@@ -374,6 +378,10 @@ function CanvasInner() {
   const addChildNode = useWorkflowStore((s) => s.addChildNode);
   const selectNode = useWorkflowStore((s) => s.selectNode);
 
+  // Edge selection is local-only (not persisted): we just need it long
+  // enough for xyflow to know which edge Backspace targets.
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+
   const { screenToFlowPosition } = useReactFlow();
 
   // Memoize the nodeTypes map so xyflow doesn't warn / re-create internals.
@@ -382,8 +390,8 @@ function CanvasInner() {
   const liveMap = useMemo(() => buildLiveStateMap(runEvents), [runEvents]);
 
   const { nodes, edges } = useMemo(
-    () => workflowToXyflow(currentWorkflow, liveMap, selectedNodeId),
-    [currentWorkflow, liveMap, selectedNodeId],
+    () => workflowToXyflow(currentWorkflow, liveMap, selectedNodeId, selectedEdgeId),
+    [currentWorkflow, liveMap, selectedNodeId, selectedEdgeId],
   );
 
   const onNodesChange = useCallback(
@@ -467,6 +475,16 @@ function CanvasInner() {
       for (const ch of changes) {
         if (ch.type === 'remove') {
           removeEdge(ch.id);
+          // If the removed edge was the selected one, clear the local marker
+          // so xyflow's next render doesn't try to re-mark a missing edge.
+          setSelectedEdgeId((prev) => (prev === ch.id ? null : prev));
+        } else if (ch.type === 'select') {
+          // Round-trip selection through local state so the controlled
+          // `edges` prop carries `selected: true` on the right edge — without
+          // this xyflow's Backspace key has no selected edge to remove.
+          setSelectedEdgeId((prev) =>
+            ch.selected ? ch.id : prev === ch.id ? null : prev,
+          );
         }
       }
     },
