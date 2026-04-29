@@ -161,6 +161,46 @@ interface CandidateNode {
   size?: { width: number; height: number };
 }
 
+interface LoopBbox {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * After a Loop moves or resizes, compute the list of top-level non-Loop
+ * siblings whose positions need to be pushed out of the Loop's NEW bbox.
+ * Returns a list of `{ id, position }` updates; an empty list when no
+ * sibling needs to move. Pure — caller dispatches the updates.
+ */
+export function pushSiblingsAfterLoopChange(
+  newBbox: LoopBbox,
+  topLevelNodes: WorkflowNode[],
+): Array<{ id: string; position: { x: number; y: number } }> {
+  const syntheticLoop: WorkflowNode = {
+    id: newBbox.id,
+    type: 'loop',
+    position: { x: newBbox.x, y: newBbox.y },
+    config: { maxIterations: 1, mode: 'while-not-met' },
+    size: { width: newBbox.width, height: newBbox.height },
+  };
+  const updates: Array<{ id: string; position: { x: number; y: number } }> = [];
+  for (const n of topLevelNodes) {
+    if (n.id === newBbox.id) continue;
+    if (n.type === 'loop') continue;
+    const next = pushOutsideLoops(
+      { id: n.id, position: n.position, size: n.size },
+      [syntheticLoop],
+    );
+    if (next.x !== n.position.x || next.y !== n.position.y) {
+      updates.push({ id: n.id, position: next });
+    }
+  }
+  return updates;
+}
+
 /**
  * If `position` falls inside any top-level Loop container's bbox, return that
  * Loop. Otherwise return null. Used by the drop handler to decide whether a
@@ -357,18 +397,35 @@ function CanvasInner() {
           // dropping mid-drag updates makes the card visually freeze and snap
           // to the release point.
           //
-          // For top-level non-Loop nodes only, snap the proposed position out
-          // of any Loop's bbox so a drag can't end up visually overlapping a
-          // Loop container. Children (parentId set) are already constrained
-          // by xyflow's `extent: 'parent'`.
+          // For top-level non-Loop nodes, snap the proposed position out of
+          // any Loop's bbox. For Loops themselves, after persisting the new
+          // position, push any siblings that the Loop just engulfed back out.
+          // Children (parentId set) are already constrained by xyflow's
+          // `extent: 'parent'`.
           const target = topLevel.find((n) => n.id === ch.id);
-          let nextPos = ch.position;
-          if (target && target.type !== 'loop') {
-            nextPos = pushOutsideLoops(
-              { id: ch.id, position: ch.position, size: target.size },
+          if (!target) {
+            updateNode(ch.id, { position: ch.position });
+            continue;
+          }
+          if (target.type === 'loop') {
+            updateNode(ch.id, { position: ch.position });
+            const updates = pushSiblingsAfterLoopChange(
+              {
+                id: target.id,
+                x: ch.position.x,
+                y: ch.position.y,
+                width: target.size?.width ?? LOOP_DEFAULT_W,
+                height: target.size?.height ?? LOOP_DEFAULT_H,
+              },
               topLevel,
             );
+            for (const u of updates) updateNode(u.id, { position: u.position });
+            continue;
           }
+          const nextPos = pushOutsideLoops(
+            { id: ch.id, position: ch.position, size: target.size },
+            topLevel,
+          );
           updateNode(ch.id, { position: nextPos });
         } else if (ch.type === 'dimensions' && ch.resizing && ch.dimensions) {
           // Only persist when the user is actively resizing (NodeResizer
@@ -379,6 +436,22 @@ function CanvasInner() {
           updateNode(ch.id, {
             size: { width: ch.dimensions.width, height: ch.dimensions.height },
           });
+          // If a Loop just grew, push any sibling it engulfed back out of
+          // its NEW bbox (the just-resized one).
+          const target = topLevel.find((n) => n.id === ch.id);
+          if (target?.type === 'loop') {
+            const updates = pushSiblingsAfterLoopChange(
+              {
+                id: target.id,
+                x: target.position.x,
+                y: target.position.y,
+                width: ch.dimensions.width,
+                height: ch.dimensions.height,
+              },
+              topLevel,
+            );
+            for (const u of updates) updateNode(u.id, { position: u.position });
+          }
         } else if (ch.type === 'select') {
           selectNode(ch.selected ? ch.id : null);
         } else if (ch.type === 'remove') {

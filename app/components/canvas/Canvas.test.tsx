@@ -17,6 +17,7 @@ import Canvas, {
   findContainingLoop,
   nextNodeId,
   pushOutsideLoops,
+  pushSiblingsAfterLoopChange,
   workflowToXyflow,
 } from './Canvas';
 
@@ -281,6 +282,77 @@ describe('pushOutsideLoops', () => {
       [loop],
     );
     expect(out).toEqual({ x: 500, y: 200 });
+  });
+});
+
+describe('pushSiblingsAfterLoopChange', () => {
+  function agentAt(id: string, x: number, y: number): WorkflowNode {
+    return {
+      id,
+      type: 'agent',
+      position: { x, y },
+      config: { providerId: 'claude', prompt: '', cwd: '', timeoutMs: 60000 },
+    };
+  }
+
+  it('returns no updates when no sibling overlaps the new bbox', () => {
+    const updates = pushSiblingsAfterLoopChange(
+      { id: 'loop-1', x: 100, y: 100, width: 400, height: 800 },
+      [agentAt('agent-1', 600, 400)],
+    );
+    expect(updates).toEqual([]);
+  });
+
+  it('returns updates for siblings now inside the Loop’s new bbox', () => {
+    // Loop bbox covers (100..500, 100..900). Default 220×72 candidate at
+    // (200, 400). Exits — left dist 320, right 300, up 372, down 500 — so
+    // right wins, landing at x=500.
+    const updates = pushSiblingsAfterLoopChange(
+      { id: 'loop-1', x: 100, y: 100, width: 400, height: 800 },
+      [agentAt('agent-1', 200, 400)],
+    );
+    expect(updates).toEqual([
+      { id: 'agent-1', position: { x: 500, y: 400 } },
+    ]);
+  });
+
+  it('skips the loop itself and other Loops', () => {
+    const otherLoop: WorkflowNode = {
+      id: 'loop-2',
+      type: 'loop',
+      position: { x: 200, y: 400 },
+      config: { maxIterations: 1, mode: 'while-not-met' },
+    };
+    const self: WorkflowNode = {
+      id: 'loop-1',
+      type: 'loop',
+      position: { x: 100, y: 100 },
+      config: { maxIterations: 1, mode: 'while-not-met' },
+    };
+    const updates = pushSiblingsAfterLoopChange(
+      { id: 'loop-1', x: 100, y: 100, width: 400, height: 800 },
+      [self, otherLoop, agentAt('agent-1', 200, 400)],
+    );
+    expect(updates.map((u) => u.id)).toEqual(['agent-1']);
+  });
+
+  it('respects the candidate sibling’s explicit size', () => {
+    const sized: WorkflowNode = {
+      id: 'agent-1',
+      type: 'agent',
+      position: { x: 480, y: 200 },
+      size: { width: 100, height: 50 },
+      config: { providerId: 'claude', prompt: '', cwd: '', timeoutMs: 60000 },
+    };
+    const updates = pushSiblingsAfterLoopChange(
+      { id: 'loop-1', x: 100, y: 100, width: 400, height: 200 },
+      [sized],
+    );
+    // Right exit = 500 - 480 = 20; up = 100 - 50 - 200 = -150; down = 300 - 200 = 100
+    // → right wins.
+    expect(updates).toEqual([
+      { id: 'agent-1', position: { x: 500, y: 200 } },
+    ]);
   });
 });
 
