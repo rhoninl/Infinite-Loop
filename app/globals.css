@@ -1423,6 +1423,98 @@ body {
   font-size: 11px;
 }
 
+/* ─── handles (xyflow source/target dots) ────────────────── */
+
+/* xyflow ships handles with `pointer-events: none` by default so they don't
+ * intercept canvas drags; that also blocks :hover. We re-enable pointer
+ * events on every handle inside our node cards so hover affordances and
+ * tooltips can fire. */
+.wf-node .react-flow__handle {
+  pointer-events: all;
+  width: 8px;
+  height: 8px;
+  background: var(--fg-muted);
+  border-color: var(--border-bright);
+  transition:
+    box-shadow 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease;
+}
+
+/* Semantic colors keyed off the handle id — covers `next` / `error` on
+ * agent + branch + anywhere else with the same outgoing names. */
+.wf-node .react-flow__handle[data-handleid='next'],
+.wf-node .react-flow__handle[data-handleid='met'],
+.wf-node .react-flow__handle[data-handleid='true'],
+.wf-node .react-flow__handle[data-handleid='continue'] {
+  background: var(--accent-ok);
+  border-color: var(--accent-ok);
+}
+.wf-node .react-flow__handle[data-handleid='error'],
+.wf-node .react-flow__handle[data-handleid='not_met'],
+.wf-node .react-flow__handle[data-handleid='false'],
+.wf-node .react-flow__handle[data-handleid='break'] {
+  background: var(--accent-err);
+  border-color: var(--accent-err);
+}
+
+/* Hover halo — preserves xyflow's translate-based positioning by using
+ * box-shadow rather than scale, so the handle doesn't drift. */
+.wf-node .react-flow__handle:hover {
+  box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 0%, transparent),
+    0 0 0 4px var(--bg);
+  background: var(--accent-live);
+  border-color: var(--accent-live);
+}
+.wf-node .react-flow__handle[data-handleid='next']:hover,
+.wf-node .react-flow__handle[data-handleid='met']:hover,
+.wf-node .react-flow__handle[data-handleid='true']:hover,
+.wf-node .react-flow__handle[data-handleid='continue']:hover {
+  background: var(--accent-ok);
+  border-color: var(--accent-ok);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-ok) 35%, transparent);
+}
+.wf-node .react-flow__handle[data-handleid='error']:hover,
+.wf-node .react-flow__handle[data-handleid='not_met']:hover,
+.wf-node .react-flow__handle[data-handleid='false']:hover,
+.wf-node .react-flow__handle[data-handleid='break']:hover {
+  background: var(--accent-err);
+  border-color: var(--accent-err);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-err) 35%, transparent);
+}
+
+/* Tooltip on hover — content is the handle id itself (`next`, `error`, …).
+ * Right-side handles (the common case) get the tooltip on the right; left
+ * targets get it on the left so it doesn't clip into the card body. */
+.wf-node .react-flow__handle[data-handleid]::after {
+  content: attr(data-handleid);
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  padding: 3px 8px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 100ms ease;
+  z-index: 5;
+}
+.wf-node .react-flow__handle-right[data-handleid]::after {
+  left: calc(100% + 8px);
+}
+.wf-node .react-flow__handle-left[data-handleid]::after {
+  right: calc(100% + 8px);
+}
+.wf-node .react-flow__handle[data-handleid]:hover::after {
+  opacity: 1;
+}
+
 /* ─── NodeResizer (Loop) ─────────────────────────────────── */
 .wf-resize-line {
   border-color: var(--accent-live) !important;
