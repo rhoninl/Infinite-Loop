@@ -164,6 +164,42 @@ describe('ConfigPanel', () => {
     ).toHaveAttribute('data-active', 'true');
   });
 
+  it('Loop infinite toggle hides Max iterations and persists infinite=true', () => {
+    const wf = makeWorkflow([loopNode]);
+    act(() => {
+      useWorkflowStore.getState().loadWorkflow(wf);
+      useWorkflowStore.getState().selectNode('loop-1');
+    });
+
+    render(<ConfigPanel />);
+
+    // Bounded by default → Max iterations input is rendered.
+    expect(screen.getByLabelText('Max iterations')).toBeInTheDocument();
+
+    const infiniteBtn = screen.getByRole('button', { name: 'Infinite ∞' });
+    act(() => {
+      fireEvent.click(infiniteBtn);
+    });
+
+    // Input disappears, store records infinite: true.
+    expect(screen.queryByLabelText('Max iterations')).not.toBeInTheDocument();
+    const stored = useWorkflowStore.getState().currentWorkflow!.nodes.find(
+      (n) => n.id === 'loop-1',
+    )!.config as { infinite?: boolean };
+    expect(stored.infinite).toBe(true);
+
+    // Toggle back to Bounded restores the input and flips the flag.
+    const boundedBtn = screen.getByRole('button', { name: 'Bounded' });
+    act(() => {
+      fireEvent.click(boundedBtn);
+    });
+    expect(screen.getByLabelText('Max iterations')).toBeInTheDocument();
+    const stored2 = useWorkflowStore.getState().currentWorkflow!.nodes.find(
+      (n) => n.id === 'loop-1',
+    )!.config as { infinite?: boolean };
+    expect(stored2.infinite).toBe(false);
+  });
+
   it('Start node shows the descriptor copy and no editable fields', () => {
     const wf = makeWorkflow([startNode]);
     act(() => {

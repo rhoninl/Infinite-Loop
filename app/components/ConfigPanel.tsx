@@ -410,19 +410,33 @@ function LoopForm({
     onPatch({ ...config, maxIterations: clamped });
   };
 
+  const infinite = config.infinite === true;
+
   return (
     <>
-      <div className="field">
-        <span className="field-label">Max iterations</span>
-        <input
-          aria-label="Max iterations"
-          type="number"
-          min={1}
-          max={100}
-          value={config.maxIterations ?? 5}
-          onChange={onMaxChange}
-        />
-      </div>
+      <Segmented<'bounded' | 'infinite'>
+        label="Iteration limit"
+        value={infinite ? 'infinite' : 'bounded'}
+        options={[
+          { value: 'bounded', label: 'Bounded' },
+          { value: 'infinite', label: 'Infinite ∞' },
+        ]}
+        onChange={(next) => onPatch({ ...config, infinite: next === 'infinite' })}
+      />
+
+      {!infinite && (
+        <div className="field">
+          <span className="field-label">Max iterations</span>
+          <input
+            aria-label="Max iterations"
+            type="number"
+            min={1}
+            max={100}
+            value={config.maxIterations ?? 5}
+            onChange={onMaxChange}
+          />
+        </div>
+      )}
 
       <Segmented<LoopConfig['mode']>
         label="Mode"

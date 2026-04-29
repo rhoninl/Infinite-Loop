@@ -16,6 +16,7 @@ interface LoopData {
   config?: {
     maxIterations?: number;
     mode?: 'while-not-met' | 'unbounded';
+    infinite?: boolean;
   };
 }
 
@@ -24,6 +25,8 @@ export default function LoopNode({ data, selected }: NodeProps) {
   const state = d._state ?? 'idle';
   const maxIter = d.config?.maxIterations ?? 0;
   const mode = d.config?.mode ?? 'while-not-met';
+  const infinite = d.config?.infinite === true;
+  const iterLabel = infinite ? '∞' : String(maxIter);
 
   return (
     <div
@@ -44,7 +47,7 @@ export default function LoopNode({ data, selected }: NodeProps) {
       <div className="wf-node-group-head">
         <span className="wf-node-title">LOOP</span>
         <span className="wf-node-group-meta wf-node-body-italic">
-          ×{maxIter} · {mode}
+          ×{iterLabel} · {mode}
         </span>
       </div>
       {/* Children are rendered by xyflow as separate sub-nodes via parentId. */}

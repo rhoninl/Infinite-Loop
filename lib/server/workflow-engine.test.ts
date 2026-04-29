@@ -219,6 +219,147 @@ describe('WorkflowEngine', () => {
     expect(eng.getState().iterationByLoopId['loop-1']).toBe(2);
   });
 
+  it('ignores maxIterations when infinite: true and exits via break', async () => {
+    const agent: WorkflowNode = {
+      id: 'agent-1',
+      type: 'agent',
+      position: { x: 0, y: 0 },
+      config: { prompt: 'p', cwd: '/tmp', timeoutMs: 1000 },
+    };
+    const cond: WorkflowNode = {
+      id: 'cond-1',
+      type: 'condition',
+      position: { x: 0, y: 0 },
+      config: { kind: 'sentinel', sentinel: { pattern: 'X', isRegex: false } },
+    };
+    // Tiny cap, but infinite: true should override it.
+    const loop: WorkflowNode = {
+      id: 'loop-1',
+      type: 'loop',
+      position: { x: 0, y: 0 },
+      config: { maxIterations: 2, mode: 'while-not-met', infinite: true },
+      children: [agent, cond],
+    };
+    const wf: Workflow = {
+      id: 'w-inf',
+      name: 'inf',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [startNode, loop, endNode],
+      edges: [
+        { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'loop-1' },
+        { id: 'e2', source: 'loop-1', sourceHandle: 'next', target: 'end-1' },
+        { id: 'e3', source: 'agent-1', sourceHandle: 'next', target: 'cond-1' },
+      ],
+    };
+    // 7× not_met then met → 8 iterations, well past maxIterations=2.
+    const condBranches: EdgeHandle[] = [
+      'not_met', 'not_met', 'not_met', 'not_met',
+      'not_met', 'not_met', 'not_met', 'met',
+    ];
+    const eng = new WorkflowEngine({
+      start: exec(['next']),
+      end: exec(['next']),
+      agent: exec(['next']),
+      condition: exec(condBranches),
+      loop: exec(['next']),
+    });
+    await eng.start(wf);
+    expect(eng.getState().status).toBe('succeeded');
+    expect(eng.getState().iterationByLoopId['loop-1']).toBe(8);
+  });
+
+  it('infinite Loop blows past maxIterations and cancels via stop()', async () => {
+    const agent: WorkflowNode = {
+      id: 'agent-1',
+      type: 'agent',
+      position: { x: 0, y: 0 },
+      config: { prompt: 'p', cwd: '/tmp', timeoutMs: 1000 },
+    };
+    // maxIterations: 1 — without infinite, would settle after a single iteration.
+    const loop: WorkflowNode = {
+      id: 'loop-1',
+      type: 'loop',
+      position: { x: 0, y: 0 },
+      config: { maxIterations: 1, mode: 'unbounded', infinite: true },
+      children: [agent],
+    };
+    const wf: Workflow = {
+      id: 'w-inf-cancel',
+      name: 'inf-cancel',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [startNode, loop, endNode],
+      edges: [
+        { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'loop-1' },
+        { id: 'e2', source: 'loop-1', sourceHandle: 'next', target: 'end-1' },
+      ],
+    };
+
+    // Agent self-stops the engine on the 5th call. If the cap were honored
+    // we'd never reach the 5th call (only one iteration).
+    let calls = 0;
+    let engRef: { stop: () => void } | null = null;
+    const eng = new WorkflowEngine({
+      start: exec(['next']),
+      end: exec(['next']),
+      agent: {
+        async execute() {
+          calls++;
+          if (calls === 5) engRef!.stop();
+          return { branch: 'next' as EdgeHandle, outputs: {} };
+        },
+      },
+      condition: exec(['next']),
+      loop: exec(['next']),
+    });
+    engRef = eng;
+
+    await eng.start(wf);
+
+    expect(eng.getState().status).toBe('cancelled');
+    expect(eng.getState().iterationByLoopId['loop-1']).toBe(5);
+  });
+
+  it('infinite Loop terminates when its body hits an end node', async () => {
+    const innerEnd: WorkflowNode = {
+      id: 'end-inner',
+      type: 'end',
+      position: { x: 0, y: 0 },
+      config: { outcome: 'succeeded' },
+    };
+    const loop: WorkflowNode = {
+      id: 'loop-1',
+      type: 'loop',
+      position: { x: 0, y: 0 },
+      config: { maxIterations: 1, mode: 'unbounded', infinite: true },
+      children: [innerEnd],
+    };
+    const wf: Workflow = {
+      id: 'w-inf-end',
+      name: 'inf-end',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [startNode, loop, endNode],
+      edges: [
+        { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'loop-1' },
+        { id: 'e2', source: 'loop-1', sourceHandle: 'next', target: 'end-1' },
+      ],
+    };
+    const eng = new WorkflowEngine({
+      start: exec(['next']),
+      end: exec(['next']),
+      agent: exec(['next']),
+      condition: exec(['next']),
+      loop: exec(['next']),
+    });
+    await eng.start(wf);
+    expect(eng.getState().status).toBe('succeeded');
+  });
+
   it('settles failed when an executor returns the error branch with no handler', async () => {
     const agent: WorkflowNode = {
       id: 'agent-1',

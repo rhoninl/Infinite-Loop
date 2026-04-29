@@ -62,6 +62,11 @@ export interface LoopConfig {
   maxIterations: number;
   /** 'while-not-met' is the default common case; 'unbounded' relies on break. */
   mode: 'while-not-met' | 'unbounded';
+  /**
+   * When true, the engine ignores `maxIterations` and iterates without a cap.
+   * The body is expected to exit via `break`, an `end` node, or run cancel.
+   */
+  infinite?: boolean;
 }
 
 export type BranchOp = '==' | '!=' | 'contains' | 'matches';

@@ -150,6 +150,20 @@ describe('node components', () => {
     ).toBeInTheDocument();
   });
 
+  it('LoopNode renders ×∞ when infinite is true', () => {
+    renderWithFlow(
+      <LoopNode
+        {...makeProps(
+          { config: { maxIterations: 5, mode: 'unbounded', infinite: true } },
+          { type: 'loop' }
+        )}
+      />
+    );
+    expect(
+      screen.getByText(/×∞ · unbounded/)
+    ).toBeInTheDocument();
+  });
+
   it('propagates _state via data-state attribute (live)', () => {
     renderWithFlow(
       <AgentNode

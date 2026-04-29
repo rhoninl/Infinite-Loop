@@ -248,6 +248,9 @@ export class WorkflowEngine {
    * reachable from the Loop's `next` edge into the body (i.e. the body's own
    * top-level entry). The body runs until a node fires `break` or `continue`,
    * or until maxIterations is hit, or the run is cancelled.
+   *
+   * When `cfg.infinite` is true the iteration cap is dropped: only `break`,
+   * a terminal `end` node, or run cancellation exits the loop.
    */
   private async walkLoop(
     loopNode: WorkflowNode,
@@ -256,6 +259,7 @@ export class WorkflowEngine {
   ): Promise<{ terminal: boolean; status?: Exclude<RunStatus, 'idle' | 'running'> }> {
     const cfg = loopNode.config as LoopConfig;
     const max = cfg.maxIterations ?? 100;
+    const infinite = cfg.infinite === true;
     const children = loopNode.children ?? [];
     if (children.length === 0) return { terminal: false };
 
@@ -265,7 +269,7 @@ export class WorkflowEngine {
     const bodyEntry = children[0];
     const bodyExec: ExecutionScope = { parentNode: loopNode };
 
-    for (let i = 1; i <= max; i++) {
+    for (let i = 1; infinite || i <= max; i++) {
       if (this.abort?.signal.aborted) return { terminal: true, status: 'cancelled' };
 
       this.snapshot.iterationByLoopId[loopNode.id] = i;
@@ -277,10 +281,11 @@ export class WorkflowEngine {
       // Walk the body. The walkFrom call returns when:
       // - it hits a node that fires `break`/`continue` (signal stored)
       // - it dead-ends with no outgoing edge (treated as `continue`)
-      // - it hits an `end` node (terminal)
-      // - it errors out
+      // - it hits an `end` node (terminal — no signal set)
+      // - it errors out (terminal failure — no signal set)
+      let bodyStatus: Exclude<RunStatus, 'idle' | 'running'>;
       try {
-        await this.walkFrom(bodyEntry, bodyExec);
+        bodyStatus = await this.walkFrom(bodyEntry, bodyExec);
       } catch (err) {
         // bubble up — outer try/catch in start() handles
         throw err;
@@ -288,7 +293,11 @@ export class WorkflowEngine {
 
       const signal = this.readLoopSignal();
       if (signal === 'break') return { terminal: false };
-      if (signal === 'continue' || signal === undefined) continue;
+      if (signal === 'continue') continue;
+      // No loop signal: the body terminated the whole run (end node or
+      // unrecoverable error). Propagate up so the engine settles. Without
+      // this, an infinite loop containing an `end` node would never exit.
+      return { terminal: true, status: bodyStatus };
     }
     // Hit the cap — fall through (no break fired). Treat as "loop exhausted":
     // we still continue past the loop node; outputs reflect maxIterations.
