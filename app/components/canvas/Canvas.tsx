@@ -148,6 +148,75 @@ export function buildLiveStateMap(
 const LOOP_DEFAULT_W = 460;
 const LOOP_DEFAULT_H = 240;
 
+/** Default visual size for a non-container node card. Matches the
+ * `.wf-node` rule in globals.css. Used for Loop-overlap detection when the
+ * candidate doesn't carry an explicit `size`. */
+const NODE_DEFAULT_W = 220;
+const NODE_DEFAULT_H = 72;
+
+interface CandidateNode {
+  /** Node id, or `''` for a not-yet-created node (e.g. fresh drop). */
+  id: string;
+  position: { x: number; y: number };
+  size?: { width: number; height: number };
+}
+
+/**
+ * Snap a top-level node's position so it doesn't overlap any Loop container
+ * bbox in `topLevelNodes`. Returns the candidate's original position when
+ * there's no overlap. On overlap, pushes along the single axis with the
+ * shortest distance to a clear edge — left/right/up/down — so the resulting
+ * node is flush against the Loop's outside.
+ *
+ * Loops can shift around independently and the user can resize them, so this
+ * is purely a placement guard, not a layout system: it doesn't move other
+ * nodes out of the way, it only relocates the candidate.
+ */
+export function pushOutsideLoops(
+  candidate: CandidateNode,
+  topLevelNodes: WorkflowNode[],
+): { x: number; y: number } {
+  const cw = candidate.size?.width ?? NODE_DEFAULT_W;
+  const ch = candidate.size?.height ?? NODE_DEFAULT_H;
+  let { x, y } = candidate.position;
+
+  // Multiple overlapping Loops are rare but possible; cap iterations so a
+  // pathological layout can't loop forever.
+  for (let pass = 0; pass < 4; pass++) {
+    let moved = false;
+    for (const loop of topLevelNodes) {
+      if (loop.type !== 'loop') continue;
+      if (loop.id === candidate.id) continue;
+      const lx = loop.position.x;
+      const ly = loop.position.y;
+      const lw = loop.size?.width ?? LOOP_DEFAULT_W;
+      const lh = loop.size?.height ?? LOOP_DEFAULT_H;
+
+      const overlaps =
+        x < lx + lw && x + cw > lx && y < ly + lh && y + ch > ly;
+      if (!overlaps) continue;
+
+      const pushLeft = lx - cw - x; // ≤ 0
+      const pushRight = lx + lw - x; // ≥ 0
+      const pushUp = ly - ch - y; // ≤ 0
+      const pushDown = ly + lh - y; // ≥ 0
+      const choices = [
+        { dx: pushLeft, dy: 0, dist: Math.abs(pushLeft) },
+        { dx: pushRight, dy: 0, dist: Math.abs(pushRight) },
+        { dx: 0, dy: pushUp, dist: Math.abs(pushUp) },
+        { dx: 0, dy: pushDown, dist: Math.abs(pushDown) },
+      ];
+      choices.sort((a, b) => a.dist - b.dist);
+      x += choices[0].dx;
+      y += choices[0].dy;
+      moved = true;
+    }
+    if (!moved) break;
+  }
+
+  return { x, y };
+}
+
 /** Build an xyflow node from a workflow node, optionally as a child. */
 function buildXyNode(
   n: WorkflowNode,
@@ -248,13 +317,28 @@ function CanvasInner() {
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
+      const wf = currentWorkflow;
+      const topLevel = wf?.nodes ?? [];
       for (const ch of changes) {
         if (ch.type === 'position' && ch.position) {
           // Persist EVERY position change, including intermediate ones during
           // a drag — xyflow renders nodes from the controlled `nodes` prop, so
           // dropping mid-drag updates makes the card visually freeze and snap
           // to the release point.
-          updateNode(ch.id, { position: ch.position });
+          //
+          // For top-level non-Loop nodes only, snap the proposed position out
+          // of any Loop's bbox so a drag can't end up visually overlapping a
+          // Loop container. Children (parentId set) are already constrained
+          // by xyflow's `extent: 'parent'`.
+          const target = topLevel.find((n) => n.id === ch.id);
+          let nextPos = ch.position;
+          if (target && target.type !== 'loop') {
+            nextPos = pushOutsideLoops(
+              { id: ch.id, position: ch.position, size: target.size },
+              topLevel,
+            );
+          }
+          updateNode(ch.id, { position: nextPos });
         } else if (ch.type === 'dimensions' && ch.resizing && ch.dimensions) {
           // Only persist when the user is actively resizing (NodeResizer
           // sets `resizing: true`). xyflow also emits dimensions changes on
@@ -271,7 +355,7 @@ function CanvasInner() {
         }
       }
     },
-    [updateNode, selectNode, removeNode],
+    [updateNode, selectNode, removeNode, currentWorkflow],
   );
 
   const onEdgesChange = useCallback(
@@ -339,7 +423,16 @@ function CanvasInner() {
         console.warn('[canvas] drop payload missing type', payload);
         return;
       }
-      const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      const rawPosition = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      // Loops own their interior; freshly-dropped top-level nodes get pushed
+      // out so they can't visually overlap a Loop container's bbox.
+      const position =
+        payload.type === 'loop'
+          ? rawPosition
+          : pushOutsideLoops(
+              { id: '', position: rawPosition },
+              currentWorkflow.nodes,
+            );
       const node = buildDroppedNode(payload, position, currentWorkflow.nodes);
       addNode(node);
     },

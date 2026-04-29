@@ -15,6 +15,7 @@ import Canvas, {
   buildLiveStateMap,
   defaultConfigFor,
   nextNodeId,
+  pushOutsideLoops,
   workflowToXyflow,
 } from './Canvas';
 
@@ -144,6 +145,108 @@ describe('buildDroppedNode', () => {
     ];
     const node = buildDroppedNode({ type: 'loop' }, { x: 0, y: 0 }, existing);
     expect(node.id).toBe('loop-2');
+  });
+});
+
+describe('pushOutsideLoops', () => {
+  // 400×200 loop: vertical exit (≤100px) is always shorter than horizontal
+  // exit for a 220×72 default card, so this exercises vertical pushes.
+  const loop: WorkflowNode = {
+    id: 'loop-1',
+    type: 'loop',
+    position: { x: 100, y: 100 },
+    config: { maxIterations: 5, mode: 'while-not-met' },
+    size: { width: 400, height: 200 }, // bbox: x=[100..500], y=[100..300]
+  };
+  // Tall loop: horizontal exits become the shortest path for cards in the
+  // middle vertically.
+  const tallLoop: WorkflowNode = {
+    ...loop,
+    id: 'loop-tall',
+    size: { width: 400, height: 800 }, // bbox: y=[100..900]
+  };
+
+  it('returns the original position when there is no overlap', () => {
+    const out = pushOutsideLoops(
+      { id: 'agent-1', position: { x: 600, y: 50 } },
+      [loop],
+    );
+    expect(out).toEqual({ x: 600, y: 50 });
+  });
+
+  it('pushes left when that is the shortest exit (tall loop, near left)', () => {
+    // 220×72 candidate at x=120, y=400 inside tallLoop.
+    // left push: lx - cw - x = 100 - 220 - 120 = -240 (dist 240)
+    // right: 500 - 120 = 380 (dist 380); up: 100-72-400 = -372; down: 900-400 = 500
+    // → left wins
+    const out = pushOutsideLoops(
+      { id: 'agent-1', position: { x: 120, y: 400 } },
+      [tallLoop],
+    );
+    expect(out).toEqual({ x: -120, y: 400 });
+  });
+
+  it('pushes right when that is the shortest exit (tall loop, near right)', () => {
+    // Candidate at x=450, y=400 in tallLoop. right push = 500 - 450 = 50.
+    const out = pushOutsideLoops(
+      { id: 'agent-1', position: { x: 450, y: 400 } },
+      [tallLoop],
+    );
+    expect(out).toEqual({ x: 500, y: 400 });
+  });
+
+  it('pushes up when that is the shortest exit', () => {
+    // Candidate at x=200, y=110 in original loop. up = 100-72-110 = -82 (dist 82);
+    // down = 300-110 = 190; horizontal exits are even longer.
+    const out = pushOutsideLoops(
+      { id: 'agent-1', position: { x: 200, y: 110 } },
+      [loop],
+    );
+    expect(out).toEqual({ x: 200, y: 28 });
+  });
+
+  it('pushes down when that is the shortest exit', () => {
+    // Candidate at x=200, y=250 in original loop. up = -322; down = 300-250 = 50.
+    const out = pushOutsideLoops(
+      { id: 'agent-1', position: { x: 200, y: 250 } },
+      [loop],
+    );
+    expect(out).toEqual({ x: 200, y: 300 });
+  });
+
+  it('skips itself when the candidate id matches a loop id', () => {
+    const out = pushOutsideLoops(
+      { id: 'loop-1', position: { x: 120, y: 200 } },
+      [loop],
+    );
+    expect(out).toEqual({ x: 120, y: 200 });
+  });
+
+  it('ignores non-Loop nodes when checking overlap', () => {
+    const sibling: WorkflowNode = {
+      id: 'agent-2',
+      type: 'agent',
+      position: { x: 100, y: 100 },
+      config: { providerId: 'claude', prompt: '', cwd: '', timeoutMs: 60000 },
+    };
+    const out = pushOutsideLoops(
+      { id: 'agent-1', position: { x: 110, y: 110 } },
+      [sibling],
+    );
+    expect(out).toEqual({ x: 110, y: 110 });
+  });
+
+  it('uses the candidate size when provided', () => {
+    // 100×50 candidate at x=480, y=200 in original loop. right exit = 500 - 480 = 20.
+    const out = pushOutsideLoops(
+      {
+        id: 'agent-1',
+        position: { x: 480, y: 200 },
+        size: { width: 100, height: 50 },
+      },
+      [loop],
+    );
+    expect(out).toEqual({ x: 500, y: 200 });
   });
 });
 
