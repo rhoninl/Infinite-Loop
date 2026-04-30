@@ -11,6 +11,7 @@ import Canvas from './components/canvas/Canvas';
 import Palette from './components/Palette';
 import ConfigPanel from './components/ConfigPanel';
 import RunView from './components/RunView';
+import RunHistory from './components/RunHistory';
 import WorkflowMenu from './components/WorkflowMenu';
 import ThemeToggle from './components/ThemeToggle';
 import { useEngineWebSocket } from '../lib/client/ws-client';
@@ -58,6 +59,7 @@ export default function Page() {
   }, [undo, redo]);
 
   const [rightWidth, setRightWidth] = useState<number>(RIGHT_WIDTH_DEFAULT);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const dragStateRef = useRef<{ active: boolean }>({ active: false });
 
   // Hydrate the persisted width on mount (avoids SSR mismatch).
@@ -163,6 +165,16 @@ export default function Page() {
 
         <div className="actions">
           <ThemeToggle />
+          <button
+            type="button"
+            className="btn"
+            aria-label="toggle run history"
+            aria-pressed={historyOpen}
+            onClick={() => setHistoryOpen((v) => !v)}
+            disabled={isRunning}
+          >
+            History
+          </button>
           <span
             className="pill"
             data-status={wsStatus === 'open' ? 'running' : 'idle'}
@@ -209,7 +221,13 @@ export default function Page() {
           className="resize-gutter"
           onMouseDown={onResizeStart}
         />
-        {isRunning ? <RunView /> : <ConfigPanel />}
+        {isRunning ? (
+          <RunView />
+        ) : historyOpen ? (
+          <RunHistory workflowId={currentWorkflow?.id} />
+        ) : (
+          <ConfigPanel />
+        )}
       </div>
     </>
   );

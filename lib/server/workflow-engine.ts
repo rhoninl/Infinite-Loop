@@ -21,6 +21,7 @@ import type {
   RunSnapshot,
   RunStatus,
   Scope,
+  TerminalRunStatus,
   Workflow,
   WorkflowEdge,
   WorkflowEvent,
@@ -28,6 +29,7 @@ import type {
 } from '../shared/workflow';
 import { eventBus } from './event-bus';
 import { nodeExecutors } from './nodes/index';
+import { saveRun } from './run-store';
 import { resolve as resolveTemplate } from './templating';
 
 const TEXT_CONFIG_FIELDS: Partial<Record<string, string[]>> = {
@@ -43,9 +45,16 @@ interface ExecutionScope {
   loopIteration?: number;
 }
 
-/** Sliding-window cap so a chatty Claude run can't grow the buffer
- * unboundedly. Most events are tiny; 2k entries ≈ a few hundred kB. */
+/** Sliding-window cap so a chatty Claude run can't grow the live-rehydration
+ * buffer unboundedly. Most events are tiny; 2k entries ≈ a few hundred kB. */
 const EVENT_HISTORY_CAP = 2000;
+
+/** Higher cap for the persistence buffer. The persisted log is the full run
+ * history a user reviews after the fact; we want it as complete as possible
+ * without letting an infinite loop with chatty stdout OOM the server. When
+ * exceeded, oldest events are dropped first and `truncated` is set on the
+ * record so the UI can warn that earlier events are missing. */
+const PERSIST_EVENT_CAP = 50_000;
 
 export class WorkflowEngine {
   private snapshot: RunSnapshot = {
@@ -57,6 +66,9 @@ export class WorkflowEngine {
   private abort?: AbortController;
   private edgesBySource = new Map<string, WorkflowEdge[]>();
   private recentEvents: WorkflowEvent[] = [];
+  private runEventLog: WorkflowEvent[] = [];
+  private runEventLogTruncated = false;
+  private currentRunId?: string;
 
   private executors: Record<string, NodeExecutor>;
 
@@ -76,21 +88,35 @@ export class WorkflowEngine {
     this.workflow = workflow;
     this.abort = new AbortController();
     this.indexEdges(workflow.edges);
+    const startedAt = Date.now();
+    // Fresh runId per start(). Note: if the engine instance is replaced mid-run
+    // (Next.js HMR / process restart), the in-flight run is orphaned and never
+    // produces a history record. The live UI loses its run anyway in that
+    // case, so we accept the gap rather than write a "running" placeholder
+    // (which would accumulate as zombies without a reaper).
+    this.currentRunId = crypto.randomUUID();
     this.snapshot = {
       status: 'running',
       workflowId: workflow.id,
       iterationByLoopId: {},
       scope: {},
-      startedAt: Date.now(),
+      startedAt,
     };
 
-    // Reset history at the start of a new run so a refresh doesn't surface
-    // events from a previous run.
+    // Reset both buffers at the start of a new run so a refresh doesn't
+    // surface events from a previous run.
     this.recentEvents = [];
+    this.runEventLog = [];
+    this.runEventLogTruncated = false;
     const captureUnsub = eventBus.subscribe((ev) => {
       this.recentEvents.push(ev);
       if (this.recentEvents.length > EVENT_HISTORY_CAP) {
         this.recentEvents.shift();
+      }
+      this.runEventLog.push(ev);
+      if (this.runEventLog.length > PERSIST_EVENT_CAP) {
+        this.runEventLog.shift();
+        this.runEventLogTruncated = true;
       }
     });
 
@@ -100,7 +126,7 @@ export class WorkflowEngine {
       workflowName: workflow.name,
     });
 
-    let finalStatus: Exclude<RunStatus, 'idle' | 'running'> = 'failed';
+    let finalStatus: TerminalRunStatus = 'failed';
     let errorMessage: string | undefined;
 
     try {
@@ -120,10 +146,11 @@ export class WorkflowEngine {
       }
     }
 
+    const finishedAt = Date.now();
     this.snapshot = {
       ...this.snapshot,
       status: finalStatus,
-      finishedAt: Date.now(),
+      finishedAt,
       errorMessage,
     };
     eventBus.emit({
@@ -135,6 +162,68 @@ export class WorkflowEngine {
     // Stop capturing now that the run is over; the buffer keeps the recorded
     // events around for refresh hydration until the next run starts.
     captureUnsub();
+
+    // Snapshot every value the persist task needs RIGHT NOW. `persistRun` is
+    // fire-and-forget: if a second run starts before this task gets its first
+    // tick, the engine's mutable fields (currentRunId, runEventLog, scope)
+    // will already belong to the new run. Capturing locals decouples the
+    // persisted record from any later state change.
+    const eventsForPersist = this.runEventLog.slice();
+    const truncatedForPersist = this.runEventLogTruncated;
+    const scopeForPersist = this.snapshot.scope;
+    const runIdForPersist = this.currentRunId;
+
+    // Persist the run record. Failures are non-fatal: we surface a single
+    // `error` event so the UI can show "history not saved" without taking
+    // down the engine on a transient disk hiccup.
+    if (runIdForPersist) {
+      void this.persistRun({
+        runId: runIdForPersist,
+        workflow,
+        status: finalStatus,
+        startedAt,
+        finishedAt,
+        errorMessage,
+        events: eventsForPersist,
+        truncated: truncatedForPersist,
+        scope: scopeForPersist,
+      });
+    }
+  }
+
+  private async persistRun(args: {
+    runId: string;
+    workflow: Workflow;
+    status: TerminalRunStatus;
+    startedAt: number;
+    finishedAt: number;
+    errorMessage: string | undefined;
+    events: WorkflowEvent[];
+    truncated: boolean;
+    scope: Scope;
+  }): Promise<void> {
+    try {
+      await saveRun({
+        runId: args.runId,
+        workflowId: args.workflow.id,
+        workflowName: args.workflow.name,
+        status: args.status,
+        startedAt: args.startedAt,
+        finishedAt: args.finishedAt,
+        durationMs: args.finishedAt - args.startedAt,
+        scope: args.scope,
+        errorMessage: args.errorMessage,
+        events: args.events,
+        truncated: args.truncated || undefined,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[engine] saveRun failed:', message);
+      eventBus.emit({
+        type: 'error',
+        message: `history not saved: ${message}`,
+      });
+    }
   }
 
   stop(): void {
@@ -431,7 +520,7 @@ export class WorkflowEngine {
 // flight strands the running task: route handlers (Stop, GET state) start
 // resolving to a fresh idle engine, while the in-flight claude child
 // process is still owned by the cached older instance.
-const ENGINE_VERSION = 6; // v6: provider-driven agent node (claude → agent)
+const ENGINE_VERSION = 7; // v7: persist run history at settle
 
 declare global {
   // eslint-disable-next-line no-var

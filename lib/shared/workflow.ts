@@ -237,6 +237,43 @@ export type WorkflowEvent =
 
 export type WsStatus = 'connecting' | 'open' | 'closed';
 
+/* ─── run history (persisted) ────────────────────────────────────────────── */
+
+/** A finished run's terminal state. Excludes the live transitional values. */
+export type TerminalRunStatus = Exclude<RunStatus, 'idle' | 'running'>;
+
+/** Full record of one completed run, written once at settle. */
+export interface RunRecord {
+  runId: string;
+  workflowId: string;
+  workflowName: string;
+  status: TerminalRunStatus;
+  startedAt: number;
+  finishedAt: number;
+  durationMs: number;
+  scope: Scope;
+  errorMessage?: string;
+  events: WorkflowEvent[];
+  /** True when the event log was truncated mid-run because it exceeded the
+   * persistence cap (e.g. an infinite loop with chatty stdout). The events
+   * array still ends at the cap; older events are dropped first. */
+  truncated?: boolean;
+}
+
+/** Lightweight projection used by list endpoints / UI menus. */
+export interface RunSummary {
+  runId: string;
+  workflowId: string;
+  workflowName: string;
+  status: TerminalRunStatus;
+  startedAt: number;
+  finishedAt: number;
+  durationMs: number;
+  errorMessage?: string;
+  eventCount: number;
+  truncated?: boolean;
+}
+
 /* ─── node executor contract ──────────────────────────────────────────────── */
 
 export interface NodeExecutorContext {

@@ -12,3 +12,7 @@ coverage
 .vscode
 .idea
 *.tsbuildinfo
+
+# User-generated run history (per-workflow JSON records). Anchored to the
+# repo root so it doesn't accidentally swallow `app/api/runs/`.
+/runs/

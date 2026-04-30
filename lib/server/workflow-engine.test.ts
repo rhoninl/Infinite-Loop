@@ -7,22 +7,36 @@ import type {
   WorkflowNode,
 } from '../shared/workflow';
 
-// Capture the real templating module up front; bun's `mock.module` is global
-// to the test process and replaces live ESM bindings, so anything captured
-// AFTER the mock would itself be the mock.
+// Capture the real modules up front; bun's `mock.module` is global to the
+// test process and replaces live ESM bindings, so anything captured AFTER the
+// mock would itself be the mock.
 const realTemplating = { ...(await import('./templating')) };
+const realRunStore = { ...(await import('./run-store')) };
 
 mock.module('./templating', () => ({
   resolve: (text: string) => ({ text, warnings: [] }),
+}));
+
+// Stub run-store so engine tests don't write real run records to the project
+// cwd. The persist call is fire-and-forget inside start(), so tests that
+// don't care can ignore this stub entirely.
+mock.module('./run-store', () => ({
+  saveRun: async () => undefined,
+  historyLimit: () => 100,
+  listRuns: async () => [],
+  getRun: async () => {
+    throw new Error('run not found');
+  },
 }));
 
 const { WorkflowEngine } = await import('./workflow-engine');
 const { eventBus } = await import('./event-bus');
 
 afterAll(() => {
-  // Restore the real module so other test files in the same Bun process see
-  // the genuine implementation.
+  // Restore the real modules so other test files in the same Bun process see
+  // the genuine implementations.
   mock.module('./templating', () => realTemplating);
+  mock.module('./run-store', () => realRunStore);
 });
 
 function exec(branchByCall: EdgeHandle[], outputs: Record<string, unknown> = {}): NodeExecutor {
