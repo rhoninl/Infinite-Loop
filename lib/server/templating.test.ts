@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { resolve } from './templating';
 import type { Scope } from '../shared/workflow';
 

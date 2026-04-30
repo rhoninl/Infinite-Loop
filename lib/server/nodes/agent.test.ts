@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -69,7 +69,9 @@ describe('agentExecutor', () => {
       }),
     );
     expect(out.branch).toBe('error');
-    expect(out.outputs).toMatchObject({ errorMessage: /unknown provider/ });
+    expect(out.outputs).toMatchObject({
+      errorMessage: expect.stringMatching(/unknown provider/),
+    });
   });
 
   it('runs the resolved provider and routes to next on exit 0', async () => {

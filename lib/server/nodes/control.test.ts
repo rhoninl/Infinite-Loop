@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import type { NodeExecutorContext } from '../../shared/workflow';
 import { startExecutor } from './start';
 import { endExecutor } from './end';

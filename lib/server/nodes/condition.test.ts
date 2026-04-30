@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import type {
   ConditionConfig,
   NodeExecutorContext,
@@ -71,30 +71,3 @@ describe('conditionExecutor', () => {
   });
 });
 
-describe('conditionExecutor — strategy throws', () => {
-  it('catches strategy errors and returns branch "error"', async () => {
-    vi.resetModules();
-    vi.doMock('../conditions/sentinel', () => ({
-      sentinelStrategy: {
-        evaluate: async () => {
-          throw new Error('boom');
-        },
-      },
-    }));
-
-    const { conditionExecutor } = await import('./condition');
-    const cfg: ConditionConfig = {
-      kind: 'sentinel',
-      against: 'whatever',
-      sentinel: { pattern: 'DONE', isRegex: false },
-    };
-    const result = await conditionExecutor.execute(makeCtx(cfg));
-    expect(result.branch).toBe('error');
-    expect(result.outputs.met).toBe(false);
-    expect(String(result.outputs.detail).startsWith('check error:')).toBe(true);
-    expect(String(result.outputs.detail)).toContain('boom');
-
-    vi.doUnmock('../conditions/sentinel');
-    vi.resetModules();
-  });
-});

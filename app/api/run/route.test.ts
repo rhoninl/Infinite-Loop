@@ -1,22 +1,35 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, mock, spyOn, type Mock } from 'bun:test';
 import type { RunSnapshot, Workflow } from '@/lib/shared/workflow';
 
-vi.mock('@/lib/server/workflow-engine', () => ({
+// Snapshot the real modules before mocking so afterAll can re-publish them.
+// Bun's mock.module persists for the rest of the test process, and it keys
+// on specifier — so the alias `@/lib/server/workflow-store` mocked here is a
+// distinct registration from a relative `./workflow-store` import elsewhere.
+// Restoring keeps any future cross-file consumer of these aliases honest.
+const realEngine = { ...(await import('@/lib/server/workflow-engine')) };
+const realStore = { ...(await import('@/lib/server/workflow-store')) };
+
+mock.module('@/lib/server/workflow-engine', () => ({
   workflowEngine: {
-    start: vi.fn(),
-    stop: vi.fn(),
-    getState: vi.fn(),
+    start: mock(),
+    stop: mock(),
+    getState: mock(),
   },
 }));
 
-vi.mock('@/lib/server/workflow-store', () => ({
-  getWorkflow: vi.fn(),
+mock.module('@/lib/server/workflow-store', () => ({
+  getWorkflow: mock(),
 }));
 
 const { workflowEngine } = await import('@/lib/server/workflow-engine');
 const { getWorkflow } = await import('@/lib/server/workflow-store');
 const { POST, GET } = await import('./route');
 const { POST: STOP } = await import('./stop/route');
+
+afterAll(() => {
+  mock.module('@/lib/server/workflow-engine', () => realEngine);
+  mock.module('@/lib/server/workflow-store', () => realStore);
+});
 
 const idleState: RunSnapshot = {
   status: 'idle',
@@ -56,10 +69,12 @@ const sampleWorkflow: Workflow = {
   updatedAt: 0,
 };
 
-const startMock = vi.mocked(workflowEngine.start);
-const stopMock = vi.mocked(workflowEngine.stop);
-const getStateMock = vi.mocked(workflowEngine.getState);
-const getWorkflowMock = vi.mocked(getWorkflow);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyMock = Mock<(...args: any[]) => any>;
+const startMock = workflowEngine.start as unknown as AnyMock;
+const stopMock = workflowEngine.stop as unknown as AnyMock;
+const getStateMock = workflowEngine.getState as unknown as AnyMock;
+const getWorkflowMock = getWorkflow as unknown as AnyMock;
 
 function jsonRequest(body: unknown): Request {
   return new Request('http://localhost/api/run', {
@@ -145,7 +160,7 @@ describe('POST /api/run', () => {
   });
 
   it('does not propagate engine.start rejections back to the caller', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleSpy = spyOn(console, 'error').mockImplementation(() => {});
     getWorkflowMock.mockResolvedValue(sampleWorkflow);
     getStateMock.mockReturnValue(idleState);
     startMock.mockRejectedValue(new Error('boom'));

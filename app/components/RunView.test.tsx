@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { render, screen, act, cleanup } from '@testing-library/react';
 import RunView from './RunView';
 import { useWorkflowStore } from '../../lib/client/workflow-store-client';
@@ -26,7 +26,6 @@ describe('RunView', () => {
 
   afterEach(() => {
     cleanup();
-    vi.useRealTimers();
   });
 
   it('shows idle status and no currently running line when empty', () => {

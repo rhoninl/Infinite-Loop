@@ -1,11 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, mock, type Mock } from 'bun:test';
 import type { Workflow, WorkflowSummary } from '@/lib/shared/workflow';
 
-vi.mock('@/lib/server/workflow-store', () => ({
-  listWorkflows: vi.fn(),
-  getWorkflow: vi.fn(),
-  saveWorkflow: vi.fn(),
-  deleteWorkflow: vi.fn(),
+// Snapshot the real exports before mocking so afterAll can re-publish a
+// value-equivalent module (Bun has no true unmock; mock.module is keyed by
+// specifier and persists for the rest of the test process).
+const realStore = { ...(await import('@/lib/server/workflow-store')) };
+
+mock.module('@/lib/server/workflow-store', () => ({
+  listWorkflows: mock(),
+  getWorkflow: mock(),
+  saveWorkflow: mock(),
+  deleteWorkflow: mock(),
 }));
 
 import * as store from '@/lib/server/workflow-store';
@@ -16,11 +21,17 @@ import {
   DELETE as itemDELETE,
 } from './[id]/route';
 
+afterAll(() => {
+  mock.module('@/lib/server/workflow-store', () => realStore);
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyMock = Mock<(...args: any[]) => any>;
 const mocked = store as unknown as {
-  listWorkflows: ReturnType<typeof vi.fn>;
-  getWorkflow: ReturnType<typeof vi.fn>;
-  saveWorkflow: ReturnType<typeof vi.fn>;
-  deleteWorkflow: ReturnType<typeof vi.fn>;
+  listWorkflows: AnyMock;
+  getWorkflow: AnyMock;
+  saveWorkflow: AnyMock;
+  deleteWorkflow: AnyMock;
 };
 
 function makeWorkflow(overrides: Partial<Workflow> = {}): Workflow {
@@ -67,7 +78,7 @@ describe('GET /api/workflows', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ workflows: summaries });
-    expect(mocked.listWorkflows).toHaveBeenCalledOnce();
+    expect(mocked.listWorkflows).toHaveBeenCalledTimes(1);
   });
 
   it('returns 500 on store error', async () => {

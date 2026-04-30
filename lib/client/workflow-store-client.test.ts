@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import FakeTimers, { type InstalledClock } from '@sinonjs/fake-timers';
 import type { Workflow, WorkflowNode } from '../shared/workflow';
 import {
   HISTORY_COALESCE_MS,
@@ -116,11 +117,12 @@ describe('addChildNode', () => {
 
 describe('undo / redo', () => {
   // Fake timers so we can step past the coalesce window deterministically.
+  let clock: InstalledClock;
   beforeEach(() => {
-    vi.useFakeTimers({ now: 1_000_000 });
+    clock = FakeTimers.install({ now: 1_000_000 });
   });
   afterEach(() => {
-    vi.useRealTimers();
+    clock.uninstall();
   });
 
   function loadFresh(): Workflow {
@@ -132,7 +134,7 @@ describe('undo / redo', () => {
   function step() {
     // Push the clock past the coalesce window so the next mutation is treated
     // as a new gesture, not a continuation.
-    vi.advanceTimersByTime(HISTORY_COALESCE_MS + 1);
+    clock.tick(HISTORY_COALESCE_MS + 1);
   }
 
   it('undo restores the prior workflow snapshot', () => {
@@ -181,9 +183,9 @@ describe('undo / redo', () => {
     step();
     // Three position updates inside the same coalesce window — drag-like burst.
     useWorkflowStore.getState().updateNode('start-1', { position: { x: 1, y: 1 } });
-    vi.advanceTimersByTime(50);
+    clock.tick(50);
     useWorkflowStore.getState().updateNode('start-1', { position: { x: 2, y: 2 } });
-    vi.advanceTimersByTime(50);
+    clock.tick(50);
     useWorkflowStore.getState().updateNode('start-1', { position: { x: 3, y: 3 } });
 
     expect(useWorkflowStore.getState().past).toHaveLength(1);
@@ -235,7 +237,7 @@ describe('undo / redo', () => {
     // coalesce into the single original entry.
     useWorkflowStore.getState().updateNode('start-1', { position: { x: 1, y: 1 } });
     for (let i = 2; i <= 10; i++) {
-      vi.advanceTimersByTime(200);
+      clock.tick(200);
       useWorkflowStore.getState().updateNode('start-1', { position: { x: i, y: i } });
     }
     expect(useWorkflowStore.getState().past).toHaveLength(1);

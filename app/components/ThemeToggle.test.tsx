@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import ThemeToggle from './ThemeToggle';
 
@@ -49,7 +49,6 @@ afterEach(() => {
     // global slot is empty for the next test file.
     delete (window as unknown as { localStorage?: Storage }).localStorage;
   }
-  vi.restoreAllMocks();
 });
 
 describe('<ThemeToggle />', () => {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type {
   EdgeHandle,
   NodeExecutor,
@@ -7,12 +7,23 @@ import type {
   WorkflowNode,
 } from '../shared/workflow';
 
-vi.mock('./templating', () => ({
+// Capture the real templating module up front; bun's `mock.module` is global
+// to the test process and replaces live ESM bindings, so anything captured
+// AFTER the mock would itself be the mock.
+const realTemplating = { ...(await import('./templating')) };
+
+mock.module('./templating', () => ({
   resolve: (text: string) => ({ text, warnings: [] }),
 }));
 
 const { WorkflowEngine } = await import('./workflow-engine');
 const { eventBus } = await import('./event-bus');
+
+afterAll(() => {
+  // Restore the real module so other test files in the same Bun process see
+  // the genuine implementation.
+  mock.module('./templating', () => realTemplating);
+});
 
 function exec(branchByCall: EdgeHandle[], outputs: Record<string, unknown> = {}): NodeExecutor {
   let i = 0;

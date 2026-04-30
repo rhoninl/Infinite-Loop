@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Workflow, WorkflowSummary } from '../../lib/shared/workflow';
 import { useWorkflowStore } from '../../lib/client/workflow-store-client';
@@ -63,13 +63,14 @@ const resetStore = () => {
   });
 };
 
+const originalFetch = globalThis.fetch;
+
 describe('WorkflowMenu', () => {
   beforeEach(() => {
     resetStore();
   });
   afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
+    globalThis.fetch = originalFetch;
   });
 
   it('renders the trigger with the current workflow name', () => {
@@ -87,13 +88,13 @@ describe('WorkflowMenu', () => {
   });
 
   it('fetches /api/workflows and lists summaries when opened', async () => {
-    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+    const fetchMock = mock(async (url: RequestInfo | URL) => {
       if (String(url) === '/api/workflows') {
         return jsonResponse({ workflows: [SUMMARY_A, SUMMARY_B] });
       }
       throw new Error(`unexpected fetch ${url}`);
     });
-    vi.stubGlobal('fetch', fetchMock);
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     render(<WorkflowMenu />);
     fireEvent.click(screen.getByRole('button', { name: 'workflow menu' }));
@@ -106,7 +107,7 @@ describe('WorkflowMenu', () => {
   });
 
   it('loads a workflow when its row is clicked', async () => {
-    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+    const fetchMock = mock(async (url: RequestInfo | URL) => {
       const u = String(url);
       if (u === '/api/workflows') {
         return jsonResponse({ workflows: [SUMMARY_A] });
@@ -116,7 +117,7 @@ describe('WorkflowMenu', () => {
       }
       throw new Error(`unexpected fetch ${u}`);
     });
-    vi.stubGlobal('fetch', fetchMock);
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     render(<WorkflowMenu />);
     fireEvent.click(screen.getByRole('button', { name: 'workflow menu' }));
@@ -135,7 +136,7 @@ describe('WorkflowMenu', () => {
   });
 
   it('POSTs to /api/workflows when "New" is clicked and loads the result', async () => {
-    const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = mock(async (url: RequestInfo | URL, init?: RequestInit) => {
       const u = String(url);
       if (u === '/api/workflows' && (!init || !init.method || init.method === 'GET')) {
         return jsonResponse({ workflows: [] });
@@ -146,7 +147,7 @@ describe('WorkflowMenu', () => {
       }
       throw new Error(`unexpected fetch ${u} ${init?.method}`);
     });
-    vi.stubGlobal('fetch', fetchMock);
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     render(<WorkflowMenu />);
     fireEvent.click(screen.getByRole('button', { name: 'workflow menu' }));
@@ -172,8 +173,8 @@ describe('WorkflowMenu', () => {
   });
 
   it('closes the dropdown when clicking outside', async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({ workflows: [] }));
-    vi.stubGlobal('fetch', fetchMock);
+    const fetchMock = mock(async () => jsonResponse({ workflows: [] }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     render(
       <div>

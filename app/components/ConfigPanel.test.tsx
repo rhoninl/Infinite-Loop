@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import FakeTimers, { type InstalledClock } from '@sinonjs/fake-timers';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useWorkflowStore } from '@/lib/client/workflow-store-client';
 import type { Workflow, WorkflowNode } from '@/lib/shared/workflow';
@@ -56,13 +57,18 @@ function reset() {
 }
 
 describe('ConfigPanel', () => {
+  let clock: InstalledClock | null = null;
+
   beforeEach(() => {
     reset();
   });
 
   afterEach(() => {
     cleanup();
-    vi.useRealTimers();
+    if (clock) {
+      clock.uninstall();
+      clock = null;
+    }
     reset();
   });
 
@@ -91,7 +97,7 @@ describe('ConfigPanel', () => {
   });
 
   it('debounces edits to the Agent prompt and dispatches updateNode', () => {
-    vi.useFakeTimers();
+    clock = FakeTimers.install();
     const wf = makeWorkflow([startNode, agentNode]);
     act(() => {
       useWorkflowStore.getState().loadWorkflow(wf);
@@ -112,7 +118,7 @@ describe('ConfigPanel', () => {
     expect(stored.prompt).toBe('hello');
 
     act(() => {
-      vi.advanceTimersByTime(300);
+      clock!.tick(300);
     });
 
     stored = useWorkflowStore.getState().currentWorkflow!.nodes.find(

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
 import { render, cleanup } from '@testing-library/react';
 import type {
   AgentConfig,
