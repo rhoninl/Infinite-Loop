@@ -4,14 +4,18 @@ import type { Workflow, WorkflowNode } from '../shared/workflow';
 import {
   HISTORY_COALESCE_MS,
   HISTORY_LIMIT,
+  normalizeWorkflowGeometry,
   useWorkflowStore,
 } from './workflow-store-client';
 
 function makeWorkflow(): Workflow {
+  // Loop is placed clear of Start so loadWorkflow's geometry normalization
+  // doesn't push Start away from the (0,0) the undo/redo tests assert on.
+  // The Loop's default size is 460×240, so x=600 leaves a comfortable gap.
   const loop: WorkflowNode = {
     id: 'loop-1',
     type: 'loop',
-    position: { x: 0, y: 0 },
+    position: { x: 600, y: 0 },
     config: { maxIterations: 5, mode: 'while-not-met' },
     children: [],
   };
@@ -112,6 +116,195 @@ describe('addChildNode', () => {
     const next = useWorkflowStore.getState().currentWorkflow!;
     const loop = next.nodes.find((n) => n.id === 'loop-1')!;
     expect(loop.children).toHaveLength(0);
+  });
+});
+
+describe('normalizeWorkflowGeometry', () => {
+  it('expands a Loop without `size` to fit its children plus padding', () => {
+    // Reproduces the workflows/loop-claude-until-condition.json layout that
+    // produced the visually-overlapping cards: Loop with no size, child
+    // CONDITION sitting at child-local x=320 with width 220.
+    const wf: Workflow = {
+      id: 'wf',
+      name: 'wf',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      edges: [],
+      nodes: [
+        {
+          id: 'start-1',
+          type: 'start',
+          position: { x: 80, y: 200 },
+          config: {},
+        },
+        {
+          id: 'loop-1',
+          type: 'loop',
+          position: { x: 280, y: 120 },
+          config: { maxIterations: 1, mode: 'while-not-met' },
+          children: [
+            {
+              id: 'agent-1',
+              type: 'agent',
+              position: { x: 40, y: 60 },
+              config: { providerId: 'claude', prompt: '', cwd: '/tmp', timeoutMs: 60000 },
+            },
+            {
+              id: 'cond-1',
+              type: 'condition',
+              position: { x: 320, y: 60 },
+              config: { kind: 'sentinel', sentinel: { pattern: 'OK', isRegex: false } },
+            },
+          ],
+        },
+        {
+          id: 'end-1',
+          type: 'end',
+          position: { x: 760, y: 200 },
+          config: { outcome: 'succeeded' },
+        },
+      ],
+    };
+
+    const out = normalizeWorkflowGeometry(wf);
+    const loop = out.nodes.find((n) => n.id === 'loop-1')!;
+    // Container must accommodate its widest child (cond-1 at child-local
+    // right=540) plus the inner padding on both sides.
+    expect(loop.size?.width ?? 0).toBeGreaterThanOrEqual(540);
+  });
+
+  it('pushes a top-level sibling out of a Loop whose new bbox engulfs it', () => {
+    // Loop expands to ~588 wide; END at x=760 was just clear of the old 460
+    // default but is now inside the new bbox. Must be pushed to the right.
+    const wf: Workflow = {
+      id: 'wf',
+      name: 'wf',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      edges: [],
+      nodes: [
+        {
+          id: 'loop-1',
+          type: 'loop',
+          position: { x: 280, y: 120 },
+          config: { maxIterations: 1, mode: 'while-not-met' },
+          children: [
+            {
+              id: 'cond-1',
+              type: 'condition',
+              position: { x: 320, y: 60 },
+              config: { kind: 'sentinel', sentinel: { pattern: 'OK', isRegex: false } },
+            },
+          ],
+        },
+        {
+          id: 'end-1',
+          type: 'end',
+          position: { x: 760, y: 200 },
+          config: { outcome: 'succeeded' },
+        },
+      ],
+    };
+
+    const out = normalizeWorkflowGeometry(wf);
+    const loop = out.nodes.find((n) => n.id === 'loop-1')!;
+    const end = out.nodes.find((n) => n.id === 'end-1')!;
+    const loopRight = (loop.position?.x ?? 0) + (loop.size?.width ?? 0);
+    // END must end up clear of the loop's right edge.
+    expect((end.position?.x ?? 0)).toBeGreaterThanOrEqual(loopRight);
+  });
+
+  it('preserves a Loop with a persisted size and a non-overlapping sibling', () => {
+    const wf: Workflow = {
+      id: 'wf',
+      name: 'wf',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      edges: [],
+      nodes: [
+        {
+          id: 'loop-1',
+          type: 'loop',
+          position: { x: 0, y: 0 },
+          size: { width: 400, height: 200 },
+          config: { maxIterations: 1, mode: 'while-not-met' },
+        },
+        {
+          id: 'start-1',
+          type: 'start',
+          position: { x: 600, y: 0 },
+          config: {},
+        },
+      ],
+    };
+    const out = normalizeWorkflowGeometry(wf);
+    expect(out).toEqual(wf);
+  });
+});
+
+describe('loadWorkflow + dirty marker', () => {
+  it('marks the workflow dirty when normalize mutated geometry', () => {
+    // Loop missing `size` triggers auto-fit, which mutates the workflow.
+    const wf: Workflow = {
+      id: 'wf',
+      name: 'wf',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      edges: [],
+      nodes: [
+        {
+          id: 'loop-1',
+          type: 'loop',
+          position: { x: 0, y: 0 },
+          config: { maxIterations: 1, mode: 'while-not-met' },
+          children: [
+            {
+              id: 'agent-1',
+              type: 'agent',
+              position: { x: 40, y: 60 },
+              config: { providerId: 'claude', prompt: '', cwd: '/tmp', timeoutMs: 60000 },
+            },
+          ],
+        },
+      ],
+    };
+    useWorkflowStore.getState().loadWorkflow(wf);
+    expect(useWorkflowStore.getState().isDirty).toBe(true);
+    expect(
+      useWorkflowStore.getState().currentWorkflow!.nodes.find((n) => n.id === 'loop-1')!.size,
+    ).toBeDefined();
+  });
+
+  it('keeps the workflow clean when normalize was a no-op', () => {
+    const wf: Workflow = {
+      id: 'wf',
+      name: 'wf',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      edges: [],
+      nodes: [
+        {
+          id: 'loop-1',
+          type: 'loop',
+          position: { x: 0, y: 0 },
+          size: { width: 460, height: 240 },
+          config: { maxIterations: 1, mode: 'while-not-met' },
+        },
+        {
+          id: 'start-1',
+          type: 'start',
+          position: { x: 600, y: 0 },
+          config: {},
+        },
+      ],
+    };
+    useWorkflowStore.getState().loadWorkflow(wf);
+    expect(useWorkflowStore.getState().isDirty).toBe(false);
   });
 });
 

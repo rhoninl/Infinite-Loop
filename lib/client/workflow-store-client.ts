@@ -96,6 +96,122 @@ function filterNodes(nodes: WorkflowNode[], id: string): WorkflowNode[] {
     );
 }
 
+/* ─── on-load geometry normalization ────────────────────────────────────── */
+//
+// Older workflows were saved before Loops carried a `size` and assumed a
+// 460×240 default. The canvas now auto-fits a Loop to its children's bbox so
+// xyflow's `extent: 'parent'` doesn't crush them on top of each other — but
+// growing a Loop can make it overlap the original sibling layout (e.g. the
+// END node sitting just past the old default right edge). We normalize once
+// at load time so the in-memory workflow has consistent geometry: the user
+// sees no overlap, and the next save persists the corrected positions/size.
+
+const LOOP_DEFAULT_W = 460;
+const LOOP_DEFAULT_H = 240;
+const NODE_DEFAULT_W = 220;
+const NODE_DEFAULT_H = 72;
+const LOOP_PAD_LEFT = 24;
+const LOOP_PAD_RIGHT = 24;
+const LOOP_PAD_TOP = 56;
+const LOOP_PAD_BOTTOM = 24;
+
+function loopSizeFromChildren(
+  children: WorkflowNode[] | undefined,
+): { width: number; height: number } {
+  if (!children || children.length === 0) {
+    return { width: LOOP_DEFAULT_W, height: LOOP_DEFAULT_H };
+  }
+  let maxRight = 0;
+  let maxBottom = 0;
+  for (const c of children) {
+    const w = c.size?.width ?? NODE_DEFAULT_W;
+    const h = c.size?.height ?? NODE_DEFAULT_H;
+    const right = (c.position?.x ?? 0) + w;
+    const bottom = (c.position?.y ?? 0) + h;
+    if (right > maxRight) maxRight = right;
+    if (bottom > maxBottom) maxBottom = bottom;
+  }
+  return {
+    width: Math.max(LOOP_DEFAULT_W, maxRight + LOOP_PAD_LEFT + LOOP_PAD_RIGHT),
+    height: Math.max(LOOP_DEFAULT_H, maxBottom + LOOP_PAD_TOP + LOOP_PAD_BOTTOM),
+  };
+}
+
+interface Bbox { x: number; y: number; w: number; h: number }
+
+function bboxOf(n: WorkflowNode, defaultW = NODE_DEFAULT_W, defaultH = NODE_DEFAULT_H): Bbox {
+  return {
+    x: n.position?.x ?? 0,
+    y: n.position?.y ?? 0,
+    w: n.size?.width ?? defaultW,
+    h: n.size?.height ?? defaultH,
+  };
+}
+
+function rectsOverlap(a: Bbox, b: Bbox): boolean {
+  return (
+    a.x < b.x + b.w &&
+    a.x + a.w > b.x &&
+    a.y < b.y + b.h &&
+    a.y + a.h > b.y
+  );
+}
+
+/**
+ * Pure: returns a workflow whose top-level Loops without a persisted `size`
+ * have one computed from their children, and whose top-level non-Loop
+ * siblings are pushed horizontally so they no longer sit inside any Loop's
+ * (possibly newly-grown) bbox. Other layout details are preserved.
+ */
+export function normalizeWorkflowGeometry(wf: Workflow): Workflow {
+  if (!Array.isArray(wf.nodes) || wf.nodes.length === 0) return wf;
+
+  // First pass: assign a size to any Loop missing one.
+  let touched = false;
+  const sized = wf.nodes.map((n) => {
+    if (n.type !== 'loop' || n.size) return n;
+    touched = true;
+    return { ...n, size: loopSizeFromChildren(n.children) } as WorkflowNode;
+  });
+
+  // Second pass: push siblings out of every Loop's bbox along the shorter
+  // horizontal axis. Vertical pushes can collide with the canvas top/bottom
+  // and feel disorienting on load — horizontal-only is the conservative move.
+  const loopBoxes = sized
+    .filter((n) => n.type === 'loop')
+    .map((n) => ({
+      id: n.id,
+      ...bboxOf(n, LOOP_DEFAULT_W, LOOP_DEFAULT_H),
+    }));
+
+  const next = sized.map((n) => {
+    if (n.type === 'loop') return n;
+    const a = bboxOf(n);
+    let { x, y } = { x: a.x, y: a.y };
+    let pushed = false;
+    for (let pass = 0; pass < 4; pass++) {
+      let moved = false;
+      for (const lb of loopBoxes) {
+        const cur: Bbox = { x, y, w: a.w, h: a.h };
+        if (!rectsOverlap(cur, lb)) continue;
+        const pushRight = lb.x + lb.w; // candidate's new x sits at the loop's right edge
+        const pushLeft = lb.x - a.w;   // candidate's new right-edge sits at the loop's left edge
+        const dRight = pushRight - x;
+        const dLeft = x - pushLeft;
+        x = dLeft <= dRight ? pushLeft : pushRight;
+        moved = true;
+        pushed = true;
+      }
+      if (!moved) break;
+    }
+    if (!pushed) return n;
+    touched = true;
+    return { ...n, position: { x, y } };
+  });
+
+  return touched ? { ...wf, nodes: next } : wf;
+}
+
 /**
  * Compute the next history stacks given the workflow we're about to leave
  * behind. Returns a partial state slice; callers spread it into their `set`.
@@ -149,9 +265,15 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
     // Loading a different workflow invalidates history — entries describe a
     // different document and shouldn't survive the swap.
     lastHistoryPushAt = 0;
+    const normalized = normalizeWorkflowGeometry(w);
+    // If normalize materially changed the geometry (e.g. an old workflow with
+    // a missing Loop `size` got auto-fitted, or a sibling got pushed out),
+    // surface the dirty marker so a save persists the corrected layout. Next
+    // load is a no-op then — the bug stops re-occurring per workflow file.
+    const wasMutated = normalized !== w;
     set({
-      currentWorkflow: w,
-      isDirty: false,
+      currentWorkflow: normalized,
+      isDirty: wasMutated,
       selectedNodeId: null,
       past: [],
       future: [],

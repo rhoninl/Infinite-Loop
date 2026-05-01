@@ -144,7 +144,7 @@ export function buildLiveStateMap(
   return out;
 }
 
-/** Default visual size for a Loop container if children are present. */
+/** Default visual size for an empty Loop container. */
 const LOOP_DEFAULT_W = 460;
 const LOOP_DEFAULT_H = 240;
 
@@ -153,6 +153,43 @@ const LOOP_DEFAULT_H = 240;
  * candidate doesn't carry an explicit `size`. */
 const NODE_DEFAULT_W = 220;
 const NODE_DEFAULT_H = 72;
+
+/** Inner padding (px) we leave around the children's bbox when auto-sizing
+ * a Loop container so children sit clear of the LOOP header label and the
+ * dashed inner border instead of pressed against them. */
+const LOOP_PAD_LEFT = 24;
+const LOOP_PAD_RIGHT = 24;
+const LOOP_PAD_TOP = 56;
+const LOOP_PAD_BOTTOM = 24;
+
+/**
+ * Compute a Loop container's render size from its children's bounding box
+ * when no `size` is persisted on disk. Without this, an old workflow whose
+ * children sit at e.g. x=320 (a CONDITION's left edge) gets clamped into a
+ * 460px-wide default loop by xyflow's `extent: 'parent'`, which visually
+ * shoves siblings on top of each other.
+ */
+function loopSizeForChildren(
+  children: WorkflowNode[] | undefined,
+): { width: number; height: number } {
+  if (!children || children.length === 0) {
+    return { width: LOOP_DEFAULT_W, height: LOOP_DEFAULT_H };
+  }
+  let maxRight = 0;
+  let maxBottom = 0;
+  for (const c of children) {
+    const w = c.size?.width ?? NODE_DEFAULT_W;
+    const h = c.size?.height ?? NODE_DEFAULT_H;
+    const right = (c.position?.x ?? 0) + w;
+    const bottom = (c.position?.y ?? 0) + h;
+    if (right > maxRight) maxRight = right;
+    if (bottom > maxBottom) maxBottom = bottom;
+  }
+  return {
+    width: Math.max(LOOP_DEFAULT_W, maxRight + LOOP_PAD_RIGHT + LOOP_PAD_LEFT),
+    height: Math.max(LOOP_DEFAULT_H, maxBottom + LOOP_PAD_BOTTOM + LOOP_PAD_TOP),
+  };
+}
 
 interface CandidateNode {
   /** Node id, or `''` for a not-yet-created node (e.g. fresh drop). */
@@ -309,12 +346,15 @@ function buildXyNode(
     base.parentId = parentId;
     base.extent = 'parent';
   }
-  // Persisted size (Loop containers, mostly). Falls back to a default for Loop
-  // so a freshly-created Loop has somewhere to put children.
+  // Persisted size wins. Otherwise, for a Loop, fit the container to its
+  // children's bounding box so legacy workflows (saved without a `size`)
+  // don't get xyflow's `extent: 'parent'` clamping their kids on top of
+  // each other inside the default 460px-wide box.
   if (n.size) {
     base.style = { width: n.size.width, height: n.size.height };
   } else if (n.type === 'loop') {
-    base.style = { width: LOOP_DEFAULT_W, height: LOOP_DEFAULT_H };
+    const { width, height } = loopSizeForChildren(n.children);
+    base.style = { width, height };
   }
   return base;
 }

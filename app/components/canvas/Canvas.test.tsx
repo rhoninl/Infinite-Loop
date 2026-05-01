@@ -453,6 +453,76 @@ describe('workflowToXyflow', () => {
       sourceHandle: 'next',
     });
   });
+
+  it('auto-sizes a Loop without a persisted size to fit its children', () => {
+    // Regression: a legacy workflow (Loop saved without `size`) used to fall
+    // back to LOOP_DEFAULT_W=460 here, which is too narrow for a child sitting
+    // at x=320 with width 220. xyflow's `extent: 'parent'` then clamped the
+    // child leftward, stacking it on top of its sibling.
+    const wf: Workflow = {
+      id: 'wf',
+      name: 'wf',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [
+        {
+          id: 'loop-1',
+          type: 'loop',
+          position: { x: 280, y: 120 },
+          config: { maxIterations: 1, mode: 'while-not-met' },
+          children: [
+            {
+              id: 'agent-1',
+              type: 'agent',
+              position: { x: 40, y: 60 },
+              config: { providerId: 'claude', prompt: '', cwd: '/tmp', timeoutMs: 60000 },
+            },
+            {
+              id: 'cond-1',
+              type: 'condition',
+              position: { x: 320, y: 60 },
+              config: { kind: 'sentinel', sentinel: { pattern: 'OK', isRegex: false } },
+            },
+          ],
+        },
+      ],
+      edges: [],
+    };
+
+    const out = workflowToXyflow(wf, {}, null);
+    const loop = out.nodes.find((n) => n.id === 'loop-1');
+    const w = (loop?.style as { width?: number } | undefined)?.width ?? 0;
+
+    // The condition's right edge sits at 320 + 220 = 540 in child-local
+    // coordinates. The container needs at least that much room plus padding,
+    // so the loop should expand well past the 460 default.
+    expect(w).toBeGreaterThanOrEqual(540);
+  });
+
+  it('falls back to the default size when a Loop has no children', () => {
+    const wf: Workflow = {
+      id: 'wf',
+      name: 'wf',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [
+        {
+          id: 'loop-empty',
+          type: 'loop',
+          position: { x: 0, y: 0 },
+          config: { maxIterations: 1, mode: 'while-not-met' },
+        },
+      ],
+      edges: [],
+    };
+    const out = workflowToXyflow(wf, {}, null);
+    const loop = out.nodes.find((n) => n.id === 'loop-empty');
+    const style = loop?.style as { width?: number; height?: number } | undefined;
+    expect(style?.width).toBe(460);
+    expect(style?.height).toBe(240);
+  });
 });
 
 /* ─── component-level tests (xyflow DOM) ─────────────────────────────────── */
