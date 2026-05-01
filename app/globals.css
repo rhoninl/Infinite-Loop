@@ -1477,11 +1477,17 @@ body {
   border-color: var(--accent-ok);
 }
 .wf-node .react-flow__handle[data-handleid='error'],
-.wf-node .react-flow__handle[data-handleid='not_met'],
 .wf-node .react-flow__handle[data-handleid='false'],
 .wf-node .react-flow__handle[data-handleid='break'] {
   background: var(--accent-err);
   border-color: var(--accent-err);
+}
+/* `not_met` is "condition didn't match yet, keep looping" — that's a
+ * normal control-flow branch, not a failure. Yellow keeps it readable as
+ * a distinct outcome from the red `error` handle next to it. */
+.wf-node .react-flow__handle[data-handleid='not_met'] {
+  background: var(--accent-warn);
+  border-color: var(--accent-warn);
 }
 
 /* Hover halo — preserves xyflow's translate-based positioning by using
@@ -1501,12 +1507,16 @@ body {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-ok) 35%, transparent);
 }
 .wf-node .react-flow__handle[data-handleid='error']:hover,
-.wf-node .react-flow__handle[data-handleid='not_met']:hover,
 .wf-node .react-flow__handle[data-handleid='false']:hover,
 .wf-node .react-flow__handle[data-handleid='break']:hover {
   background: var(--accent-err);
   border-color: var(--accent-err);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-err) 35%, transparent);
+}
+.wf-node .react-flow__handle[data-handleid='not_met']:hover {
+  background: var(--accent-warn);
+  border-color: var(--accent-warn);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-warn) 35%, transparent);
 }
 
 /* Tooltip on hover — content is the handle id itself (`next`, `error`, …).
