@@ -5,7 +5,12 @@ import type { LineParser } from './index';
  * wrapper. Pulls human-readable text out of:
  *   - {"type":"content_block_delta","delta":{"type":"text_delta","text":"…"}}
  *   - {"type":"stream_event","event":{<inner anthropic event>}}
- *   - {"type":"assistant"|"message","message":{"content":[{"type":"text","text":"…"}]}}
+ *
+ * The CLI also emits a rolled-up `{"type":"assistant"|"message",…}` event
+ * after a turn whose `content[*].text` is the *concatenation* of the
+ * preceding deltas. Emitting both would duplicate the entire reply in the
+ * UI — once line-by-line, then again as one block. We treat the rolled-up
+ * frame as already-rendered (kind:'json', text:'') so it's swallowed.
  *
  * Returns `kind:'plain'` for non-JSON lines so the runner falls back to
  * passthrough — useful when fixtures or stderr leaks land on stdout.
@@ -33,21 +38,8 @@ export const claudeStreamJsonParser: LineParser = (line) => {
     return inner.kind === 'json' ? inner : { kind: 'json', text: '' };
   }
 
+  // Rolled-up turn frame — content already streamed via deltas above.
   if (obj.type === 'assistant' || obj.type === 'message') {
-    const msg = (obj.message as Record<string, unknown> | undefined) ?? obj;
-    const content = (msg as { content?: unknown }).content;
-    if (Array.isArray(content)) {
-      const parts = content
-        .filter(
-          (c): c is { type: string; text: string } =>
-            !!c &&
-            typeof c === 'object' &&
-            (c as { type?: unknown }).type === 'text' &&
-            typeof (c as { text?: unknown }).text === 'string',
-        )
-        .map((c) => c.text);
-      if (parts.length > 0) return { kind: 'json', text: parts.join('') };
-    }
     return { kind: 'json', text: '' };
   }
 
