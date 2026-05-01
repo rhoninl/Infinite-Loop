@@ -34,6 +34,10 @@ import ConditionNode from './nodes/ConditionNode';
 import EndNode from './nodes/EndNode';
 import LoopNode from './nodes/LoopNode';
 import StartNode from './nodes/StartNode';
+import CanvasContextMenu, {
+  type ContextMenuItem,
+  type ContextMenuOpenAt,
+} from './CanvasContextMenu';
 
 /* ─── pure helpers (exported for tests) ─────────────────────────────────── */
 
@@ -539,6 +543,50 @@ function CanvasInner() {
     [addEdge],
   );
 
+  /**
+   * Place a node described by `payload` at flow-graph position `rawPosition`.
+   * Shared by drag-drop and the right-click menu so the Loop-adoption +
+   * push-out-of-loop rules behave identically.
+   */
+  const placeNodeFromPayload = useCallback(
+    (payload: DropPayload, rawPosition: { x: number; y: number }) => {
+      const wf = currentWorkflow;
+      if (!wf) return;
+      // Loops themselves never become children of another Loop today.
+      if (payload.type !== 'loop') {
+        const containing = findContainingLoop(rawPosition, wf.nodes);
+        if (containing) {
+          // Position falls inside a Loop's bbox → adopt as a child. xyflow
+          // renders child positions relative to the parent, so subtract the
+          // Loop's origin.
+          const local = {
+            x: rawPosition.x - containing.position.x,
+            y: rawPosition.y - containing.position.y,
+          };
+          const child = buildDroppedNode(
+            payload,
+            local,
+            containing.children ?? [],
+          );
+          addChildNode(containing.id, child);
+          return;
+        }
+      }
+      // Outside any Loop (or Loop-on-Loop): top-level placement, with
+      // overlap-prevention pushing the new card to the nearest outside edge.
+      const position =
+        payload.type === 'loop'
+          ? rawPosition
+          : pushOutsideLoops(
+              { id: '', position: rawPosition },
+              wf.nodes,
+            );
+      const node = buildDroppedNode(payload, position, wf.nodes);
+      addNode(node);
+    },
+    [addNode, addChildNode, currentWorkflow],
+  );
+
   const onDragEnter = useCallback((e: DragEvent<HTMLDivElement>) => {
     // Browsers default to "drop forbidden" unless dragenter AND dragover both
     // call preventDefault().
@@ -586,42 +634,54 @@ function CanvasInner() {
         return;
       }
       const rawPosition = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-
-      // Loops themselves never become children of another Loop today.
-      if (payload.type !== 'loop') {
-        const containing = findContainingLoop(rawPosition, currentWorkflow.nodes);
-        if (containing) {
-          // Drop fell inside a Loop's bbox → adopt as a child. xyflow renders
-          // child positions relative to their parent, so subtract the Loop's
-          // origin. We don't push-out here: dropping inside a Loop is the
-          // explicit gesture for "add to this loop's body".
-          const local = {
-            x: rawPosition.x - containing.position.x,
-            y: rawPosition.y - containing.position.y,
-          };
-          const child = buildDroppedNode(
-            payload,
-            local,
-            containing.children ?? [],
-          );
-          addChildNode(containing.id, child);
-          return;
-        }
-      }
-
-      // Outside any Loop (or Loop-on-Loop): top-level placement, with
-      // overlap-prevention pushing the new card to the nearest outside edge.
-      const position =
-        payload.type === 'loop'
-          ? rawPosition
-          : pushOutsideLoops(
-              { id: '', position: rawPosition },
-              currentWorkflow.nodes,
-            );
-      const node = buildDroppedNode(payload, position, currentWorkflow.nodes);
-      addNode(node);
+      placeNodeFromPayload(payload, rawPosition);
     },
-    [addNode, addChildNode, currentWorkflow, screenToFlowPosition],
+    [placeNodeFromPayload, currentWorkflow, screenToFlowPosition],
+  );
+
+  /* ─── right-click context menu ────────────────────────────────────────── */
+
+  const [menuOpen, setMenuOpen] = useState<ContextMenuOpenAt | null>(null);
+
+  const onCanvasContextMenu = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      // Open only when the right-click landed on empty canvas area. xyflow
+      // renders nodes/edges/handles/controls as descendants of
+      // `.react-flow__pane`, so a positive-match on the pane alone doesn't
+      // distinguish empty space from a node. Negative-match every interactive
+      // xyflow surface so a future node-aware menu can claim them.
+      const target = e.target as HTMLElement | null;
+      if (
+        target?.closest(
+          '.react-flow__node,' +
+            '.react-flow__edge,' +
+            '.react-flow__handle,' +
+            '.react-flow__controls,' +
+            '.react-flow__minimap',
+        )
+      ) {
+        return;
+      }
+      e.preventDefault();
+      if (!currentWorkflow) return;
+      const flow = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      setMenuOpen({
+        clientX: e.clientX,
+        clientY: e.clientY,
+        flowX: flow.x,
+        flowY: flow.y,
+      });
+    },
+    [currentWorkflow, screenToFlowPosition],
+  );
+
+  const onContextMenuPick = useCallback(
+    (item: ContextMenuItem, at: ContextMenuOpenAt) => {
+      const payload: DropPayload = { type: item.type };
+      if (item.providerId) payload.providerId = item.providerId;
+      placeNodeFromPayload(payload, { x: at.flowX, y: at.flowY });
+    },
+    [placeNodeFromPayload],
   );
 
   return (
@@ -631,6 +691,7 @@ function CanvasInner() {
       onDrop={onDrop}
       onDragEnter={onDragEnter}
       onDragOver={onDragOver}
+      onContextMenu={onCanvasContextMenu}
     >
       <ReactFlow
         nodes={nodes}
@@ -640,6 +701,11 @@ function CanvasInner() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         proOptions={{ hideAttribution: true }}
+      />
+      <CanvasContextMenu
+        open={menuOpen}
+        onClose={() => setMenuOpen(null)}
+        onPick={onContextMenuPick}
       />
     </div>
   );

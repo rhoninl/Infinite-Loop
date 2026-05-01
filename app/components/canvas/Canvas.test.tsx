@@ -543,4 +543,10 @@ describe('<Canvas />', () => {
     expect(container.querySelector('[data-id="agent-1"]')).not.toBeNull();
     expect(container.querySelector('[data-id="end-1"]')).not.toBeNull();
   });
+
+  // The pane-only right-click contract (right-click on a node should not
+  // open the empty-canvas menu) is verified end-to-end in
+  // tests/_e2e/context-menu.mjs against real Chromium. We skip a unit test
+  // here because happy-dom's xyflow markup diverges from a real browser's
+  // enough that the pane/node ancestor relationship can't be relied on.
 });
