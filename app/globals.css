@@ -1027,6 +1027,32 @@ body {
   border-color: var(--accent-err);
   color: var(--accent-err);
 }
+
+/* Secondary toggle shaped like the theme-toggle / pill (24px) so it sits
+ * level with the rest of the actions row — used for non-primary controls
+ * such as History. */
+.btn-toggle {
+  height: 24px;
+  padding-inline: 10px;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  border-color: var(--border-strong);
+  color: var(--fg-soft);
+}
+.btn-toggle::before {
+  display: none;
+}
+.btn-toggle:hover:not(:disabled) {
+  background: transparent;
+  color: var(--accent-live);
+  border-color: var(--accent-live);
+}
+.btn-toggle[aria-pressed='true'] {
+  color: var(--fg);
+  border-color: var(--fg);
+}
 .btn-stop::before {
   background: currentColor;
   transform: none;

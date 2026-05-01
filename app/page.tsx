@@ -167,7 +167,7 @@ export default function Page() {
           <ThemeToggle />
           <button
             type="button"
-            className="btn"
+            className="btn btn-toggle"
             aria-label="toggle run history"
             aria-pressed={historyOpen}
             onClick={() => setHistoryOpen((v) => !v)}
