@@ -499,6 +499,89 @@ body {
   display: inline-block;
 }
 
+/* ─── per-node event cards (log panel) ───────────────────── */
+/* Each card collects every event for a single node in the current run. The
+ * outer .run-view-log keeps its scroll & background; cards stack inside. */
+.event-card {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin: 6px 0;
+  background: var(--bg-elevated);
+}
+.event-card + .event-card {
+  margin-top: 0;
+  border-top: 0;
+}
+.event-card[data-state='running'] {
+  border-left: 2px solid var(--accent-live);
+}
+.event-card[data-state='finished'] {
+  border-left: 2px solid var(--accent-ok);
+}
+.event-card[data-state='errored'] {
+  border-left: 2px solid var(--accent-err);
+}
+
+.event-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 14px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  background: var(--bg-deep);
+  border-bottom: 1px solid var(--border);
+}
+/* Clickable variant — strip default <button> chrome and stretch full width. */
+button.event-card-head-toggle {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  color: inherit;
+}
+button.event-card-head-toggle:hover {
+  background: color-mix(in srgb, var(--bg-deep) 70%, var(--fg-muted) 30%);
+}
+button.event-card-head-toggle:focus-visible {
+  outline: 1px solid var(--accent-live);
+  outline-offset: -1px;
+}
+.event-card-fold {
+  margin-left: 8px;
+  color: var(--fg-muted);
+  font-size: 10px;
+  width: 10px;
+  text-align: center;
+  user-select: none;
+}
+.event-card-id {
+  color: var(--fg);
+  font-weight: 600;
+}
+.event-card-kind {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 9px;
+  color: var(--fg-muted);
+}
+.event-card-status {
+  margin-left: auto;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 9px;
+  color: var(--fg-dim);
+}
+.event-card-status[data-state='running'] { color: var(--accent-live); }
+.event-card-status[data-state='finished'] { color: var(--accent-ok); }
+.event-card-status[data-state='errored'] { color: var(--accent-err); }
+
+.event-card-body {
+  padding: 4px 0;
+}
+
 /* ─── workflow node cards (canvas) ──────────────────────── */
 .wf-node {
   position: relative;

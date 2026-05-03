@@ -99,10 +99,12 @@ describe('RunHistory', () => {
       expect(screen.getByLabelText('event log')).toBeInTheDocument(),
     );
     const log = screen.getByLabelText('event log');
+    // node_started / node_finished rows are dropped from the body now —
+    // the per-node card header carries kind/branch/status instead. We can
+    // still assert the card itself rendered for `agent-1`.
     expect(log).toHaveTextContent('run_started');
-    expect(log).toHaveTextContent('node_started');
-    expect(log).toHaveTextContent('node_finished');
     expect(log).toHaveTextContent('run_finished');
+    expect(screen.getByLabelText('node card agent-1')).toBeInTheDocument();
   });
 
   it('back button returns to the list view', async () => {

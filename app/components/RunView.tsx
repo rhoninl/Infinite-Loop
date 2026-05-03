@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWorkflowStore } from '../../lib/client/workflow-store-client';
+import { GroupedEventLog } from './RunLog';
 import type {
   NodeStartedEvent,
   WorkflowEvent,
@@ -21,27 +22,6 @@ function findRunningNodeEvents(events: WorkflowEvent[]): NodeStartedEvent[] {
     }
   }
   return Array.from(inFlight.values());
-}
-
-function formatPayload(ev: WorkflowEvent): string {
-  switch (ev.type) {
-    case 'run_started':
-      return `${ev.workflowName} (${ev.workflowId})`;
-    case 'node_started':
-      return ev.nodeId;
-    case 'node_finished':
-      return `${ev.nodeId} → ${ev.branch}`;
-    case 'condition_checked':
-      return `${ev.nodeId} met:${ev.met ? 'Y' : 'N'} ${ev.detail}`;
-    case 'template_warning':
-      return `${ev.nodeId} missingKey:${ev.missingKey}`;
-    case 'error':
-      return ev.nodeId ? `${ev.nodeId} ${ev.message}` : ev.message;
-    case 'run_finished':
-      return ev.status;
-    default:
-      return '';
-  }
 }
 
 export default function RunView() {
@@ -121,22 +101,7 @@ export default function RunView() {
       ) : null}
 
       <div ref={logRef} className="run-view-log" aria-label="event log">
-        {runEvents.map((ev, idx) => {
-          if (ev.type === 'stdout_chunk') {
-            return (
-              <div key={idx} className="run-view-log-row is-stdout">
-                <span className="stdout-prefix">{ev.nodeId} │</span>
-                <span className="stdout-line">{ev.line}</span>
-              </div>
-            );
-          }
-          return (
-            <div key={idx} className="run-view-log-row">
-              <span className="run-view-log-type">{ev.type}</span>
-              <span className="run-view-log-payload">{formatPayload(ev)}</span>
-            </div>
-          );
-        })}
+        <GroupedEventLog events={runEvents} />
       </div>
     </aside>
   );

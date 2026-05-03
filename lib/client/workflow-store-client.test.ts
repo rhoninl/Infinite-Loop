@@ -49,6 +49,40 @@ beforeEach(() => {
   });
 });
 
+describe('appendRunEvent — run boundary', () => {
+  it('drops the previous run\'s events when a new run_started arrives', () => {
+    const s = useWorkflowStore.getState();
+    s.appendRunEvent({ type: 'run_started', workflowId: 'w', workflowName: 'W' });
+    s.appendRunEvent({
+      type: 'node_started',
+      nodeId: 'a',
+      nodeType: 'agent',
+      resolvedConfig: {},
+    });
+    s.appendRunEvent({ type: 'run_finished', status: 'succeeded', scope: {} });
+    expect(useWorkflowStore.getState().runEvents).toHaveLength(3);
+
+    // New run starts: previous events should be discarded so the panel only
+    // ever shows the latest run.
+    s.appendRunEvent({ type: 'run_started', workflowId: 'w', workflowName: 'W' });
+    const after = useWorkflowStore.getState().runEvents;
+    expect(after).toHaveLength(1);
+    expect(after[0].type).toBe('run_started');
+    expect(useWorkflowStore.getState().runStatus).toBe('running');
+  });
+
+  it('keeps appending non-run_started events to the current run', () => {
+    const s = useWorkflowStore.getState();
+    s.appendRunEvent({ type: 'run_started', workflowId: 'w', workflowName: 'W' });
+    s.appendRunEvent({
+      type: 'stdout_chunk',
+      nodeId: 'a',
+      line: 'hello',
+    });
+    expect(useWorkflowStore.getState().runEvents).toHaveLength(2);
+  });
+});
+
 describe('addChildNode', () => {
   it('appends a child to the matching Loop and marks the workflow dirty', () => {
     const wf = makeWorkflow();

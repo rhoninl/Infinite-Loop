@@ -442,8 +442,13 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
 
   appendRunEvent: (ev) =>
     set((s) => {
+      // `run_started` marks a fresh run boundary — drop the previous run's
+      // events so the panel only shows the latest run. Without this the log
+      // accumulates across runs and "the new run starts" gets lost in the
+      // tail of the old one.
+      const baseEvents = ev.type === 'run_started' ? [] : s.runEvents;
       const next: Partial<WorkflowStoreState> = {
-        runEvents: [...s.runEvents, ev],
+        runEvents: [...baseEvents, ev],
       };
       if (ev.type === 'run_started') next.runStatus = 'running';
       if (ev.type === 'run_finished') next.runStatus = ev.status;
