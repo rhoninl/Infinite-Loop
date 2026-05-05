@@ -44,11 +44,28 @@ export default function RunView() {
     return () => cancelAnimationFrame(raf);
   }, [runStatus]);
 
+  // Stick the log to the bottom while the user is reading the latest output,
+  // but stop yanking them down if they have scrolled up to inspect history.
+  // Re-engages once they scroll back near the bottom. The 48px threshold (~2
+  // wrapped stdout lines) keeps streaming chunks from flipping us out of
+  // stickiness when the user is essentially at the bottom.
   const logRef = useRef<HTMLDivElement | null>(null);
+  const stickToBottomRef = useRef(true);
   useEffect(() => {
     const el = logRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el || !stickToBottomRef.current) return;
+    el.scrollTop = el.scrollHeight;
+    // Immunize against the synthetic scroll event the assignment above fires
+    // — without this, a slightly off-by-one scrollTop value during the
+    // browser's scroll-into-place could flip stickToBottom to false.
+    stickToBottomRef.current = true;
   }, [runEvents.length]);
+  const onLogScroll = () => {
+    const el = logRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = distanceFromBottom < 48;
+  };
 
   const running = useMemo(
     () => findRunningNodeEvents(runEvents),
@@ -75,8 +92,8 @@ export default function RunView() {
         <span className="pill" aria-label="run status" data-status={runStatus}>
           <span className="dot" /> {runStatus}
         </span>
-        <span className="run-view-ws" aria-label="websocket status">
-          WS: {connectionStatus}
+        <span className="run-view-ws" aria-label="event stream status">
+          SSE: {connectionStatus}
         </span>
       </header>
 
@@ -100,7 +117,12 @@ export default function RunView() {
         </div>
       ) : null}
 
-      <div ref={logRef} className="run-view-log" aria-label="event log">
+      <div
+        ref={logRef}
+        className="run-view-log"
+        aria-label="event log"
+        onScroll={onLogScroll}
+      >
         <GroupedEventLog events={runEvents} />
       </div>
     </aside>

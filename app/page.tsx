@@ -172,6 +172,11 @@ export default function Page() {
             aria-pressed={historyOpen}
             onClick={() => setHistoryOpen((v) => !v)}
             disabled={isRunning}
+            title={
+              isRunning
+                ? 'Run history is unavailable while a run is in progress'
+                : undefined
+            }
           >
             History
           </button>
@@ -200,6 +205,11 @@ export default function Page() {
               className="btn"
               aria-label="run workflow"
               disabled={!currentWorkflow}
+              title={
+                !currentWorkflow
+                  ? 'Open or create a workflow first'
+                  : undefined
+              }
             >
               Run
             </button>

@@ -6,6 +6,7 @@ import type { ReactElement } from 'react';
 import StartNode from './StartNode';
 import EndNode from './EndNode';
 import AgentNode from './AgentNode';
+import BranchNode from './BranchNode';
 import ConditionNode from './ConditionNode';
 import LoopNode from './LoopNode';
 
@@ -98,6 +99,90 @@ describe('node components', () => {
     // truncated -> 39 chars + ellipsis = 40 chars total.
     expect(body!.textContent!.length).toBeLessThanOrEqual(40);
     expect(body!.textContent).toContain('a');
+    // The full prompt is exposed via title= so users can hover to peek
+    // without opening the config panel.
+    expect(body!.getAttribute('title')).toBe(longPrompt);
+  });
+
+  it('AgentNode does not set title when prompt fits without truncation', () => {
+    renderWithFlow(
+      <AgentNode
+        {...makeProps(
+          {
+            config: {
+              providerId: 'claude',
+              prompt: 'short',
+              cwd: '/tmp',
+              timeoutMs: 60000,
+            },
+          },
+          { type: 'agent' }
+        )}
+      />
+    );
+    const body = screen
+      .getByLabelText('agent node')
+      .querySelector('.wf-node-body');
+    expect(body!.getAttribute('title')).toBeNull();
+  });
+
+  it('ConditionNode exposes full sentinel pattern via title when truncated', () => {
+    const longPattern = 'X'.repeat(80);
+    renderWithFlow(
+      <ConditionNode
+        {...makeProps(
+          {
+            config: {
+              kind: 'sentinel',
+              sentinel: { pattern: longPattern, isRegex: false },
+            },
+          },
+          { type: 'condition' }
+        )}
+      />
+    );
+    const body = screen
+      .getByLabelText('condition node')
+      .querySelector('.wf-node-body');
+    expect(body!.textContent!.length).toBeLessThanOrEqual(40);
+    expect(body!.getAttribute('title')).toBe(`sentinel · ${longPattern}`);
+  });
+
+  it('BranchNode exposes full expression via title when truncated', () => {
+    const longRhs = 'y'.repeat(80);
+    renderWithFlow(
+      <BranchNode
+        {...makeProps(
+          { config: { lhs: 'x', op: '==', rhs: longRhs } },
+          { type: 'branch' }
+        )}
+      />
+    );
+    const body = screen
+      .getByLabelText('branch node')
+      .querySelector('.wf-node-body');
+    expect(body!.textContent!.length).toBeLessThanOrEqual(40);
+    expect(body!.getAttribute('title')).toBe(`x == ${longRhs}`);
+  });
+
+  it('ConditionNode does not set title when brief fits without truncation', () => {
+    renderWithFlow(
+      <ConditionNode
+        {...makeProps(
+          {
+            config: {
+              kind: 'sentinel',
+              sentinel: { pattern: 'DONE', isRegex: false },
+            },
+          },
+          { type: 'condition' }
+        )}
+      />
+    );
+    const body = screen
+      .getByLabelText('condition node')
+      .querySelector('.wf-node-body');
+    expect(body!.getAttribute('title')).toBeNull();
   });
 
   it('AgentNode shows the providerId in the header', () => {

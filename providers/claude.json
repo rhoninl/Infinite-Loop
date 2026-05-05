@@ -5,6 +5,7 @@
   "glyph": "⟳",
   "bin": "claude",
   "args": [
+    "--dangerously-skip-permissions",
     "--print",
     "--output-format",
     "stream-json",

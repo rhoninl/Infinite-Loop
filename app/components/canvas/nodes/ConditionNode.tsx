@@ -19,24 +19,28 @@ function truncate(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 }
 
-function brief(d: ConditionData): string {
+function brief(d: ConditionData): { preview: string; full: string } {
   const kind = d.config?.kind;
-  if (!kind) return '(unconfigured)';
+  if (!kind) return { preview: '(unconfigured)', full: '(unconfigured)' };
+  let full: string;
   if (kind === 'sentinel') {
     const pat = d.config?.sentinel?.pattern ?? '';
-    return truncate(`sentinel · ${pat || '(no pattern)'}`, PREVIEW_MAX);
-  }
-  if (kind === 'command') {
+    full = `sentinel · ${pat || '(no pattern)'}`;
+  } else if (kind === 'command') {
     const cmd = d.config?.command?.cmd ?? '';
-    return truncate(`command · ${cmd || '(no cmd)'}`, PREVIEW_MAX);
+    full = `command · ${cmd || '(no cmd)'}`;
+  } else {
+    const rubric = d.config?.judge?.rubric ?? '';
+    full = `judge · ${rubric || '(no rubric)'}`;
   }
-  const rubric = d.config?.judge?.rubric ?? '';
-  return truncate(`judge · ${rubric || '(no rubric)'}`, PREVIEW_MAX);
+  return { preview: truncate(full, PREVIEW_MAX), full };
 }
 
 export default function ConditionNode({ data, selected }: NodeProps) {
   const d = (data ?? {}) as ConditionData;
   const state = d._state ?? 'idle';
+  const { preview, full } = brief(d);
+  const bodyTitle = full !== preview ? full : undefined;
 
   return (
     <div
@@ -51,7 +55,9 @@ export default function ConditionNode({ data, selected }: NodeProps) {
         <span className="wf-node-title">CONDITION</span>
         <span className="wf-node-state-dot" data-state={state} aria-hidden="true" />
       </div>
-      <div className="wf-node-body wf-node-body-italic">{brief(d)}</div>
+      <div className="wf-node-body wf-node-body-italic" title={bodyTitle}>
+        {preview}
+      </div>
       <Handle
         type="source"
         position={Position.Right}

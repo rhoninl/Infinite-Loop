@@ -141,7 +141,7 @@ body {
   z-index: 10;
   height: var(--top-bar-h);
   display: grid;
-  grid-template-columns: var(--rail-w) 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   background: linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
   border-bottom: 1px solid var(--border-strong);
@@ -1475,13 +1475,37 @@ button.event-card-head-toggle:focus-visible {
     --rail-w: 100%;
   }
   .top-bar {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
   .top-bar .crumbs {
-    display: none;
+    /* Keep the workflow menu reachable on narrow viewports — it's the only
+     * affordance for switching workflows. Just tighten padding and let the
+     * trigger ellipsize via its own max-width. */
+    padding-inline: 12px;
+    gap: 12px;
+    min-width: 0;
+  }
+  .top-bar .crumbs .wf-menu-trigger-name {
+    max-width: 14ch;
+  }
+  .brand {
+    padding-inline: 16px;
+  }
+  .actions {
+    padding-inline: 16px;
+    gap: 10px;
   }
   .workspace {
     grid-template-columns: 1fr;
+  }
+  /* Inf·Loop is a desktop tool; below the breakpoint, keep the 3-pane
+   * geometry intact and let the workspace scroll horizontally so the
+   * canvas / palette / right panel each retain their working dimensions
+   * instead of stacking and squashing the ReactFlow viewport to zero. */
+  .workspace-tri {
+    grid-template-columns: var(--palette-w) minmax(360px, 1fr) 5px var(--right-w);
+    overflow-x: auto;
+    overflow-y: hidden;
   }
   .rail {
     position: static;

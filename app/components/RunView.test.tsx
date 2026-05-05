@@ -237,11 +237,71 @@ describe('RunView', () => {
     expect(stdoutLines.length).toBe(1);
   });
 
-  it('shows the websocket connection status', () => {
+  it('shows the event-stream connection status', () => {
     seed([], { runStatus: 'idle', connectionStatus: 'open' });
     render(<RunView />);
-    expect(screen.getByLabelText('websocket status')).toHaveTextContent(
-      'WS: open',
+    expect(screen.getByLabelText('event stream status')).toHaveTextContent(
+      'SSE: open',
     );
+  });
+
+  it('does not yank the log to bottom while the user has scrolled up', () => {
+    seed([{ type: 'run_started', workflowId: 'w1', workflowName: 'Demo' }], {
+      runStatus: 'running',
+    });
+    render(<RunView />);
+    const log = screen.getByLabelText('event log') as HTMLDivElement;
+    // happy-dom doesn't lay out scroll heights; fake the geometry so the
+    // distance-from-bottom calculation in the component evaluates as
+    // "user has scrolled up".
+    Object.defineProperty(log, 'scrollHeight', { value: 5000, configurable: true });
+    Object.defineProperty(log, 'clientHeight', { value: 200, configurable: true });
+    log.scrollTop = 100;
+    log.dispatchEvent(new Event('scroll', { bubbles: true }));
+
+    act(() => {
+      useWorkflowStore.getState().appendRunEvent({
+        type: 'node_started',
+        nodeId: 'agent-1',
+        nodeType: 'agent',
+        resolvedConfig: {},
+      });
+    });
+
+    // user's manual scroll position should be preserved
+    expect(log.scrollTop).toBe(100);
+  });
+
+  it('re-engages auto-scroll once the user scrolls back to the bottom', () => {
+    seed([{ type: 'run_started', workflowId: 'w1', workflowName: 'Demo' }], {
+      runStatus: 'running',
+    });
+    render(<RunView />);
+    const log = screen.getByLabelText('event log') as HTMLDivElement;
+    Object.defineProperty(log, 'scrollHeight', { value: 5000, configurable: true });
+    Object.defineProperty(log, 'clientHeight', { value: 200, configurable: true });
+
+    // user scrolls up to read history
+    log.scrollTop = 100;
+    log.dispatchEvent(new Event('scroll', { bubbles: true }));
+
+    // user scrolls back to (near) the bottom — within the 48px threshold
+    log.scrollTop = 4790;
+    log.dispatchEvent(new Event('scroll', { bubbles: true }));
+
+    // grow the content so the auto-pin would have a visible effect
+    Object.defineProperty(log, 'scrollHeight', { value: 5400, configurable: true });
+
+    act(() => {
+      useWorkflowStore.getState().appendRunEvent({
+        type: 'node_started',
+        nodeId: 'agent-2',
+        nodeType: 'agent',
+        resolvedConfig: {},
+      });
+    });
+
+    // sticky should have re-engaged and pinned us to the new bottom
+    expect(log.scrollTop).toBe(5400);
   });
 });

@@ -500,6 +500,46 @@ describe('workflowToXyflow', () => {
     expect(w).toBeGreaterThanOrEqual(540);
   });
 
+  it("propagates a child's live state to its Loop container", () => {
+    // The engine emits node_started for the child agent but never for the
+    // Loop container itself, so without this propagation the Loop card stays
+    // visually idle (gray dashed border) while a child is actively running —
+    // creating a visual disconnect with the pulsing live child inside.
+    const wf: Workflow = {
+      id: 'wf',
+      name: 'wf',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [
+        {
+          id: 'loop-1',
+          type: 'loop',
+          position: { x: 0, y: 0 },
+          config: { maxIterations: 5, mode: 'while-not-met' },
+          children: [
+            {
+              id: 'agent-1',
+              type: 'agent',
+              position: { x: 40, y: 60 },
+              config: { providerId: 'claude', prompt: '', cwd: '/tmp', timeoutMs: 60000 },
+            },
+          ],
+        },
+      ],
+      edges: [],
+    };
+    const liveOut = workflowToXyflow(wf, { 'agent-1': 'live' }, null);
+    const loopLive = liveOut.nodes.find((n) => n.id === 'loop-1');
+    const childLive = liveOut.nodes.find((n) => n.id === 'agent-1');
+    expect(loopLive?.data._state).toBe('live');
+    expect(childLive?.data._state).toBe('live');
+
+    // When no child is live, the Loop falls back to idle.
+    const idleOut = workflowToXyflow(wf, { 'agent-1': 'succeeded' }, null);
+    expect(idleOut.nodes.find((n) => n.id === 'loop-1')?.data._state).toBe('idle');
+  });
+
   it('falls back to the default size when a Loop has no children', () => {
     const wf: Workflow = {
       id: 'wf',

@@ -19,7 +19,11 @@ export default function AgentNode({ data, selected }: NodeProps) {
   const state = d._state ?? 'idle';
   const prompt = d.config?.prompt ?? '';
   const provider = d.config?.providerId ?? 'claude';
-  const preview = prompt ? truncate(prompt, PREVIEW_MAX) : '(no prompt)';
+  const full = prompt || '(no prompt)';
+  const preview = truncate(full, PREVIEW_MAX);
+  // Surface the full prompt on hover when it's been truncated, so users can
+  // peek without opening the config panel.
+  const bodyTitle = full !== preview ? full : undefined;
 
   return (
     <div
@@ -34,7 +38,9 @@ export default function AgentNode({ data, selected }: NodeProps) {
         <span className="wf-node-title">{provider.toUpperCase()}</span>
         <span className="wf-node-state-dot" data-state={state} aria-hidden="true" />
       </div>
-      <div className="wf-node-body wf-node-body-italic">{preview}</div>
+      <div className="wf-node-body wf-node-body-italic" title={bodyTitle}>
+        {preview}
+      </div>
       <Handle
         type="source"
         position={Position.Right}

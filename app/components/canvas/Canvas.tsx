@@ -11,7 +11,7 @@ import {
   type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useCallback, useMemo, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { useWorkflowStore } from '../../../lib/client/workflow-store-client';
 import type {
   AgentConfig,
@@ -376,12 +376,23 @@ export function workflowToXyflow(
   const wfNodes = Array.isArray(workflow.nodes) ? workflow.nodes : [];
   const wfEdges = Array.isArray(workflow.edges) ? workflow.edges : [];
 
+  // Containers (Loop) emit no `node_started` events of their own, so derive
+  // their state from their children: if any child is live, the container is
+  // live; otherwise leave the engine-emitted state alone (idle by default).
+  const effectiveLive: Record<string, NodeRunState> = { ...liveMap };
+  for (const n of wfNodes) {
+    if (n.type === 'loop' && Array.isArray(n.children) && n.children.length) {
+      const anyLive = n.children.some((c) => liveMap[c.id] === 'live');
+      if (anyLive) effectiveLive[n.id] = 'live';
+    }
+  }
+
   const nodes: XyNode[] = [];
   for (const n of wfNodes) {
-    nodes.push(buildXyNode(n, liveMap, selectedNodeId));
+    nodes.push(buildXyNode(n, effectiveLive, selectedNodeId));
     if (Array.isArray(n.children)) {
       for (const child of n.children) {
-        nodes.push(buildXyNode(child, liveMap, selectedNodeId, n.id));
+        nodes.push(buildXyNode(child, effectiveLive, selectedNodeId, n.id));
       }
     }
   }
@@ -426,7 +437,23 @@ function CanvasInner() {
   // enough for xyflow to know which edge Backspace targets.
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
 
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
+
+  // Fit the viewport to the workflow once per loaded workflow. Without this
+  // an opened workflow whose nodes sit at large x/y may render partially
+  // behind the palette or off the right edge.
+  const fittedFor = useRef<string | null>(null);
+  useEffect(() => {
+    const id = currentWorkflow?.id ?? null;
+    const hasNodes = (currentWorkflow?.nodes?.length ?? 0) > 0;
+    if (!id || !hasNodes || fittedFor.current === id) return;
+    fittedFor.current = id;
+    // Defer to the next frame so xyflow has measured the freshly-mounted nodes.
+    const raf = requestAnimationFrame(() => {
+      fitView({ padding: 0.18, maxZoom: 1, minZoom: 0.4, duration: 200 });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [currentWorkflow?.id, currentWorkflow?.nodes?.length, fitView]);
 
   // Memoize the nodeTypes map so xyflow doesn't warn / re-create internals.
   const nodeTypes = useMemo(() => NODE_TYPES, []);
@@ -700,6 +727,8 @@ function CanvasInner() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        fitView
+        fitViewOptions={{ padding: 0.18, maxZoom: 1, minZoom: 0.4 }}
         proOptions={{ hideAttribution: true }}
       />
       <CanvasContextMenu

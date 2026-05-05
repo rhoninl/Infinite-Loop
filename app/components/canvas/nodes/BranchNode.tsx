@@ -14,18 +14,21 @@ function truncate(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 }
 
-function brief(d: BranchData): string {
+function brief(d: BranchData): { preview: string; full: string } {
   const cfg = d.config ?? {};
   const lhs = cfg.lhs ?? '';
   const op = cfg.op ?? '==';
   const rhs = cfg.rhs ?? '';
-  if (!lhs && !rhs) return '(unconfigured)';
-  return truncate(`${lhs || '∅'} ${op} ${rhs || '∅'}`, PREVIEW_MAX);
+  if (!lhs && !rhs) return { preview: '(unconfigured)', full: '(unconfigured)' };
+  const full = `${lhs || '∅'} ${op} ${rhs || '∅'}`;
+  return { preview: truncate(full, PREVIEW_MAX), full };
 }
 
 export default function BranchNode({ data, selected }: NodeProps) {
   const d = (data ?? {}) as BranchData;
   const state = d._state ?? 'idle';
+  const { preview, full } = brief(d);
+  const bodyTitle = full !== preview ? full : undefined;
 
   return (
     <div
@@ -40,7 +43,9 @@ export default function BranchNode({ data, selected }: NodeProps) {
         <span className="wf-node-title">BRANCH</span>
         <span className="wf-node-state-dot" data-state={state} aria-hidden="true" />
       </div>
-      <div className="wf-node-body wf-node-body-italic">{brief(d)}</div>
+      <div className="wf-node-body wf-node-body-italic" title={bodyTitle}>
+        {preview}
+      </div>
       <Handle
         type="source"
         position={Position.Right}
