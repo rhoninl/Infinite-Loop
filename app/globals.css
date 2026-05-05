@@ -1060,21 +1060,26 @@ button.event-card-head-toggle:focus-visible {
 }
 
 /* ─── primary button ────────────────────────────────────── */
+/* Primary action button. Sized to sit level with the other top-bar controls
+ * (theme toggle, History, status pills — all 24px). Filled with --accent-ok
+ * (green) so the action stands out against those outlined/transparent
+ * neighbours; .btn-stop swaps the fill to --accent-err (red) — same shape,
+ * opposite intent. */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  height: 44px;
-  padding-inline: 22px;
-  background: transparent;
-  color: var(--fg);
+  gap: 8px;
+  height: 24px;
+  padding-inline: 10px;
+  background: var(--accent-ok);
+  color: var(--accent-on-live);
   font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.24em;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  border: 1px solid var(--fg);
+  border: 1px solid var(--accent-ok);
   cursor: pointer;
   position: relative;
   transition: background 140ms ease, color 140ms ease, border-color 140ms ease,
@@ -1082,15 +1087,14 @@ button.event-card-head-toggle:focus-visible {
 }
 .btn::before {
   content: '';
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   background: currentColor;
   transform: rotate(45deg);
 }
 .btn:hover:not(:disabled) {
-  background: var(--accent-live);
-  color: var(--accent-on-live);
-  border-color: var(--accent-live);
+  background: color-mix(in srgb, var(--accent-ok) 82%, white 18%);
+  border-color: color-mix(in srgb, var(--accent-ok) 82%, white 18%);
 }
 .btn:active:not(:disabled) {
   transform: translateY(1px);
@@ -1098,29 +1102,21 @@ button.event-card-head-toggle:focus-visible {
 .btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+  background: transparent;
   border-color: var(--border-strong);
   color: var(--fg-dim);
 }
 
 .btn-stop {
-  height: 28px;
-  padding-inline: 12px;
-  font-size: 10px;
-  letter-spacing: 0.22em;
+  background: var(--accent-err);
+  color: var(--accent-on-live);
   border-color: var(--accent-err);
-  color: var(--accent-err);
 }
 
-/* Secondary toggle shaped like the theme-toggle / pill (24px) so it sits
- * level with the rest of the actions row — used for non-primary controls
- * such as History. */
+/* Secondary toggle — same geometry as the base .btn, but transparent fill
+ * and a muted outline so it reads as a non-primary control (History). */
 .btn-toggle {
-  height: 24px;
-  padding-inline: 10px;
-  gap: 8px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
+  background: transparent;
   border-color: var(--border-strong);
   color: var(--fg-soft);
 }
@@ -1133,19 +1129,16 @@ button.event-card-head-toggle:focus-visible {
   border-color: var(--accent-live);
 }
 .btn-toggle[aria-pressed='true'] {
+  background: transparent;
   color: var(--fg);
   border-color: var(--fg);
 }
 .btn-stop::before {
-  background: currentColor;
   transform: none;
-  width: 8px;
-  height: 8px;
 }
 .btn-stop:hover:not(:disabled) {
-  background: var(--accent-err);
-  color: var(--accent-on-live);
-  border-color: var(--accent-err);
+  background: color-mix(in srgb, var(--accent-err) 82%, white 18%);
+  border-color: color-mix(in srgb, var(--accent-err) 82%, white 18%);
 }
 
 /* ─── empty state ───────────────────────────────────────── */
