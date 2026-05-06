@@ -268,7 +268,7 @@ const paletteCss = `
   font-family: var(--mono);
   font-style: normal;
   font-size: 10px;
-  color: var(--fg-muted);
+  color: var(--fg-dim);
   letter-spacing: 0.02em;
   text-transform: none;
 }
