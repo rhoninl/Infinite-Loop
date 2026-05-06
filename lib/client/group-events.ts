@@ -84,7 +84,7 @@ export function groupEventsByNode(events: WorkflowEvent[]): {
 }
 
 /** Extract the nodeId an event applies to, or undefined for run-level events. */
-function eventNodeId(ev: WorkflowEvent): string | undefined {
+export function eventNodeId(ev: WorkflowEvent): string | undefined {
   switch (ev.type) {
     case 'node_started':
     case 'node_finished':

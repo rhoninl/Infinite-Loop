@@ -489,6 +489,81 @@ body {
   line-height: 1;
 }
 
+/* Parallel branches: rendered as sub-rows nested under their parallel node's
+ * "currently running" row. Each branch has its own status dot, kind tag, and
+ * an expandable stdout body. Indented with a left rail so the parent/child
+ * relationship reads visually without extra chrome. */
+.run-view-current-row-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.run-view-branches {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0 0 0 28px;
+  border-left: 1px dashed color-mix(in srgb, var(--accent-live) 35%, transparent);
+  margin-left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.run-view-branch {
+  display: flex;
+  flex-direction: column;
+}
+.run-view-branch-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--fg-soft);
+  padding: 2px 0;
+}
+.run-view-branch-head:hover {
+  color: var(--fg);
+}
+.run-view-branch-head:focus-visible {
+  outline: 1px solid var(--accent-live);
+  outline-offset: 2px;
+}
+.run-view-branch-id {
+  font-weight: 600;
+  color: var(--fg);
+  letter-spacing: 0.04em;
+}
+.run-view-branch-kind {
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: 10.5px;
+  color: var(--fg-muted);
+}
+.run-view-branch-preview,
+.run-view-branch-full {
+  margin: 2px 0 4px;
+  padding: 4px 10px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg);
+  background: rgba(255, 184, 77, 0.03);
+  border-left: 1px solid color-mix(in srgb, var(--accent-live) 40%, transparent);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+  max-height: 220px;
+}
+.run-view-branch-preview {
+  max-height: 48px;
+  opacity: 0.85;
+}
+
 .run-view-log {
   border: 1px solid var(--border);
   background: var(--bg-deep);
