@@ -38,11 +38,10 @@ describe('Palette', () => {
     }
   });
 
-  it('renders Control, I/O, and Model Runners category headings', async () => {
+  it('renders Control and Model Runners category headings', async () => {
     render(<Palette />);
 
     expect(screen.getByRole('heading', { name: /control/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /i\/o/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /model runners/i })).toBeInTheDocument();
     // Provider list is fetched async — wait for them.
     await waitFor(() => {

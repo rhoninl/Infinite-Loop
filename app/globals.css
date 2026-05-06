@@ -235,11 +235,28 @@ body {
   outline: 1px solid var(--accent-live);
   outline-offset: 2px;
 }
+/* CSS-drawn half-disc — left-filled in dark mode, right-filled in light mode.
+ * Drawn rather than typeset (◐ / ◑) because the Unicode forms ride at
+ * different vertical positions in different serif faces, so a fixed-size
+ * box couldn't reliably centre against the cap-height of the label. */
 .theme-toggle-glyph {
-  font-family: var(--serif);
-  font-size: 14px;
-  line-height: 1;
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 1px solid var(--fg);
+  border-radius: 50%;
+  background: linear-gradient(90deg, var(--fg) 0 50%, transparent 50% 100%);
   color: var(--fg);
+}
+.theme-toggle[aria-pressed='true'] .theme-toggle-glyph {
+  background: linear-gradient(90deg, transparent 0 50%, var(--fg) 50% 100%);
+}
+.theme-toggle:hover .theme-toggle-glyph {
+  border-color: var(--accent-live);
+  background: linear-gradient(90deg, var(--accent-live) 0 50%, transparent 50% 100%);
+}
+.theme-toggle:hover[aria-pressed='true'] .theme-toggle-glyph {
+  background: linear-gradient(90deg, transparent 0 50%, var(--accent-live) 50% 100%);
 }
 .theme-toggle:hover .theme-toggle-glyph {
   color: var(--accent-live);

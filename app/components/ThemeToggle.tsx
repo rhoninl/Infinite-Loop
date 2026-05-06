@@ -33,8 +33,9 @@ export default function ThemeToggle() {
     }
   }, [theme]);
 
-  // Glyph: filled circle for active mode, outlined for the alternate.
-  const glyph = theme === 'dark' ? '◐' : '◑';
+  // Glyph is drawn in CSS (half-disc) — see .theme-toggle-glyph in globals.css.
+  // Which half is filled is controlled by `aria-pressed` so the JSX stays
+  // declarative and the glyph alignment is independent of font metrics.
   const label = theme === 'dark' ? 'switch to light theme' : 'switch to dark theme';
 
   return (
@@ -46,9 +47,7 @@ export default function ThemeToggle() {
       aria-pressed={theme === 'light'}
       title={label}
     >
-      <span className="theme-toggle-glyph" aria-hidden="true">
-        {glyph}
-      </span>
+      <span className="theme-toggle-glyph" aria-hidden="true" />
       <span className="theme-toggle-label">{theme}</span>
     </button>
   );

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { NodeType } from '@/lib/shared/workflow';
 import type { ProviderInfo } from '@/lib/server/providers/types';
+import ProviderIcon from './icons/ProviderIcon';
 
 const DRAG_MIME = 'application/x-infloop-node';
 
@@ -33,11 +34,6 @@ const STATIC_CATEGORIES: PaletteCategory[] = [
       { type: 'end', name: 'End', glyph: '◆', description: 'settle the run' },
       { type: 'loop', name: 'Loop', glyph: '↻', description: 'repeat until met' },
       { type: 'branch', name: 'If', glyph: '⋔', description: 'if/else on a value' },
-    ],
-  },
-  {
-    heading: 'I/O',
-    items: [
       { type: 'condition', name: 'Condition', glyph: '◷', description: 'evaluate a condition' },
     ],
   },
@@ -120,7 +116,14 @@ export default function Palette() {
                     onDragStart={(e) => handleDragStart(e, item)}
                   >
                     <span className="palette-icon" aria-hidden="true">
-                      {item.glyph}
+                      {item.providerId ? (
+                        <ProviderIcon
+                          providerId={item.providerId}
+                          fallbackGlyph={item.glyph}
+                        />
+                      ) : (
+                        item.glyph
+                      )}
                     </span>
                     <span className="palette-text">
                       <span className="palette-name">{item.name}</span>
@@ -195,11 +198,29 @@ const paletteCss = `
   outline-offset: -2px;
 }
 .palette-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--serif);
   font-size: 18px;
   line-height: 1;
   color: var(--fg-dim);
-  text-align: center;
+}
+.palette-icon svg {
+  display: block;
+}
+/* Raster brand asset rendered through a CSS mask so its silhouette is
+ * painted in currentColor — keeps theme/hover tinting consistent with the
+ * inline-SVG marks. */
+.provider-icon-mask {
+  display: inline-block;
+  background-color: currentColor;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
 }
 .palette-item:hover .palette-icon {
   color: var(--accent-live);
