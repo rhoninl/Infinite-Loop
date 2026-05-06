@@ -1,7 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render as rtlRender,
+  screen,
+  waitFor,
+} from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { Providers } from '../../providers/heroui-provider';
 import type { RunRecord, RunSummary } from '../../lib/shared/workflow';
 import RunHistory from './RunHistory';
+
+// HeroUI components rely on HeroUIProvider for portals, keyboard navigation
+// and theme defaults — wrap every render in the same Providers tree the app
+// uses at runtime so Card / Chip / Button behave like they do in production.
+const render = (ui: ReactElement) =>
+  rtlRender(ui, { wrapper: ({ children }) => <Providers>{children}</Providers> });
 
 const SUMMARY_A: RunSummary = {
   runId: 'r-a',
