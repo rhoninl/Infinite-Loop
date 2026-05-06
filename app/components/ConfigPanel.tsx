@@ -441,8 +441,9 @@ function AgentForm({
             value={timeoutUnit}
             onValueChange={(next) => setTimeoutUnit(next as TimeoutUnit)}
             classNames={{
-              base: 'gap-0',
-              wrapper: 'gap-0 rounded-md border border-border bg-bg-input p-0.5',
+              base: 'gap-0 shrink-0',
+              wrapper:
+                'flex-nowrap gap-0 rounded-md border border-border bg-bg-input p-0.5',
             }}
           >
             {TIMEOUT_UNITS.map((u) => (
@@ -451,7 +452,7 @@ function AgentForm({
                 value={u}
                 classNames={{
                   base: [
-                    'm-0 max-w-none',
+                    'm-0 max-w-none shrink-0',
                     'cursor-pointer rounded px-2 py-0.5',
                     'data-[selected=true]:bg-bg-elevated',
                     'data-[selected=true]:text-fg',
@@ -459,7 +460,7 @@ function AgentForm({
                   ].join(' '),
                   wrapper: 'hidden',
                   labelWrapper: 'm-0 p-0',
-                  label: 'text-xs',
+                  label: 'text-xs whitespace-nowrap',
                 }}
               >
                 {u}
