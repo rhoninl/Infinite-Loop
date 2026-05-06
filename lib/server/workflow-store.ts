@@ -114,6 +114,69 @@ function validateNodeConfig(n: WorkflowNode): void {
   }
 }
 
+function collectSubworkflowIds(nodes: WorkflowNode[]): string[] {
+  const ids: string[] = [];
+  walkAllNodes(nodes, (n) => {
+    if (n.type === 'subworkflow') {
+      const cfg = n.config as SubworkflowConfig;
+      if (typeof cfg.workflowId === 'string' && cfg.workflowId.length > 0) {
+        ids.push(cfg.workflowId);
+      }
+    }
+  });
+  return ids;
+}
+
+/**
+ * DFS over the subworkflow reference graph rooted at `wf`. If any path
+ * revisits `wf.id`, the save would create a cycle.
+ *
+ * Loading errors during the walk are tolerated as "not a cycle" — runtime,
+ * not validation, is responsible for missing-target diagnostics.
+ *
+ * Exported (alongside saveWorkflow) so unit tests can exercise it directly
+ * without round-tripping through the disk writer.
+ */
+export async function validateNoSubworkflowCycles(wf: Workflow): Promise<void> {
+  // Visited set is keyed by workflow id — once we've cleared a referenced
+  // workflow we don't need to walk its subtree again.
+  const cleared = new Set<string>();
+
+  const visit = async (currentId: string, ancestors: Set<string>): Promise<void> => {
+    if (cleared.has(currentId)) return;
+    if (ancestors.has(currentId)) {
+      throw new Error(
+        `invalid workflow: subworkflow cycle detected involving "${currentId}"`,
+      );
+    }
+
+    let nodes: WorkflowNode[];
+    if (currentId === wf.id) {
+      nodes = wf.nodes; // use the in-memory pending workflow, not on-disk version
+    } else {
+      try {
+        const loaded = await getWorkflow(currentId);
+        nodes = loaded.nodes;
+      } catch {
+        // Missing or unreadable workflow: not a cycle. Mark as cleared so we
+        // don't keep retrying along sibling branches of the DFS.
+        cleared.add(currentId);
+        return;
+      }
+    }
+
+    const nextAncestors = new Set(ancestors);
+    nextAncestors.add(currentId);
+    const childIds = collectSubworkflowIds(nodes);
+    for (const childId of childIds) {
+      await visit(childId, nextAncestors);
+    }
+    cleared.add(currentId);
+  };
+
+  await visit(wf.id, new Set());
+}
+
 function validateWorkflow(wf: Workflow): void {
   if (typeof wf.id !== 'string' || wf.id.length === 0) {
     throw new Error('invalid workflow: id must be a non-empty string');
@@ -266,6 +329,7 @@ export async function getWorkflow(id: string): Promise<Workflow> {
 
 export async function saveWorkflow(workflow: Workflow): Promise<Workflow> {
   validateWorkflow(workflow);
+  await validateNoSubworkflowCycles(workflow);
 
   const dir = storageDir();
   await fs.mkdir(dir, { recursive: true });
