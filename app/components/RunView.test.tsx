@@ -2,16 +2,18 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { render, screen, act, cleanup, fireEvent } from '@testing-library/react';
 import RunView from './RunView';
 import { useWorkflowStore } from '../../lib/client/workflow-store-client';
-import type { WorkflowEvent } from '../../lib/shared/workflow';
+import type { Workflow, WorkflowEvent } from '../../lib/shared/workflow';
 
 function seed(events: WorkflowEvent[], extra: Partial<{
   runStatus: ReturnType<typeof useWorkflowStore.getState>['runStatus'];
   connectionStatus: ReturnType<typeof useWorkflowStore.getState>['connectionStatus'];
+  currentWorkflow: Workflow | null;
 }> = {}) {
   useWorkflowStore.setState({
     runEvents: events,
     runStatus: extra.runStatus ?? 'idle',
     connectionStatus: extra.connectionStatus ?? 'open',
+    currentWorkflow: extra.currentWorkflow ?? null,
   });
 }
 
@@ -21,7 +23,13 @@ describe('RunView', () => {
       runEvents: [],
       runStatus: 'idle',
       connectionStatus: 'open',
+      currentWorkflow: null,
     });
+    try {
+      window.localStorage.removeItem('infloop:runview:expandSubworkflows');
+    } catch {
+      // ignore
+    }
   });
 
   afterEach(() => {
@@ -270,6 +278,198 @@ describe('RunView', () => {
 
     // user's manual scroll position should be preserved
     expect(log.scrollTop).toBe(100);
+  });
+
+  it('renders parallel branch sub-rows that update independently', () => {
+    const wf: Workflow = {
+      id: 'team',
+      name: 'Team',
+      version: 1,
+      nodes: [
+        {
+          id: 'par-1',
+          type: 'parallel',
+          position: { x: 0, y: 0 },
+          config: { mode: 'wait-all', onError: 'fail-fast' },
+          children: [
+            {
+              id: 'a-1',
+              type: 'agent',
+              position: { x: 0, y: 0 },
+              config: {
+                providerId: 'claude',
+                prompt: '',
+                cwd: '.',
+                timeoutMs: 60000,
+              },
+            },
+            {
+              id: 'a-2',
+              type: 'agent',
+              position: { x: 0, y: 0 },
+              config: {
+                providerId: 'claude',
+                prompt: '',
+                cwd: '.',
+                timeoutMs: 60000,
+              },
+            },
+          ],
+        },
+      ],
+      edges: [],
+      createdAt: 0,
+      updatedAt: 0,
+    };
+
+    seed(
+      [
+        { type: 'run_started', workflowId: 'team', workflowName: 'Team' },
+        {
+          type: 'node_started',
+          nodeId: 'par-1',
+          nodeType: 'parallel',
+          resolvedConfig: {},
+        },
+        {
+          type: 'node_started',
+          nodeId: 'a-1',
+          nodeType: 'agent',
+          resolvedConfig: {},
+        },
+        {
+          type: 'node_started',
+          nodeId: 'a-2',
+          nodeType: 'agent',
+          resolvedConfig: {},
+        },
+        { type: 'stdout_chunk', nodeId: 'a-1', line: 'a-1 working\n' },
+        { type: 'stdout_chunk', nodeId: 'a-2', line: 'a-2 working\n' },
+      ],
+      { runStatus: 'running', currentWorkflow: wf },
+    );
+
+    render(<RunView />);
+    const branches = screen.getByLabelText('parallel branches of par-1');
+    expect(branches).toHaveTextContent('a-1');
+    expect(branches).toHaveTextContent('a-2');
+    // Both branches start in `live` state.
+    expect(screen.getByLabelText('branch a-1 of par-1')).toHaveAttribute(
+      'data-state',
+      'live',
+    );
+    expect(screen.getByLabelText('branch a-2 of par-1')).toHaveAttribute(
+      'data-state',
+      'live',
+    );
+    // Live previews are visible while collapsed.
+    expect(screen.getByLabelText('live preview a-1')).toHaveTextContent(
+      'a-1 working',
+    );
+    expect(screen.getByLabelText('live preview a-2')).toHaveTextContent(
+      'a-2 working',
+    );
+
+    // Finish branch a-1 — only its sub-row's state should flip; a-2 stays live.
+    act(() => {
+      useWorkflowStore.getState().appendRunEvent({
+        type: 'node_finished',
+        nodeId: 'a-1',
+        nodeType: 'agent',
+        branch: 'next',
+        outputs: {},
+        durationMs: 10,
+      });
+    });
+    expect(screen.getByLabelText('branch a-1 of par-1')).toHaveAttribute(
+      'data-state',
+      'succeeded',
+    );
+    expect(screen.getByLabelText('branch a-2 of par-1')).toHaveAttribute(
+      'data-state',
+      'live',
+    );
+
+    // Click to expand a-1 → full stdout becomes visible.
+    fireEvent.click(screen.getByLabelText(/expand branch a-1 of par-1/i));
+    expect(screen.getByLabelText('full stdout a-1')).toHaveTextContent(
+      'a-1 working',
+    );
+  });
+
+  it('collapses subworkflow-internal events under the subworkflow card by default and toggles via the chip', () => {
+    const wf: Workflow = {
+      id: 'parent',
+      name: 'Parent',
+      version: 1,
+      nodes: [
+        {
+          id: 'sub-1',
+          type: 'subworkflow',
+          position: { x: 0, y: 0 },
+          config: { workflowId: 'team', inputs: {}, outputs: {} },
+        },
+      ],
+      edges: [],
+      createdAt: 0,
+      updatedAt: 0,
+    };
+
+    // Internal event uses an id that is NOT in the parent workflow — that's
+    // the fallback signal a subworkflow event uses when the engine hasn't
+    // started emitting `subworkflowStack` yet.
+    seed(
+      [
+        { type: 'run_started', workflowId: 'parent', workflowName: 'Parent' },
+        {
+          type: 'node_started',
+          nodeId: 'sub-1',
+          nodeType: 'subworkflow',
+          resolvedConfig: {},
+        },
+        {
+          type: 'node_started',
+          nodeId: 'inner-agent',
+          nodeType: 'agent',
+          resolvedConfig: {},
+        },
+        { type: 'stdout_chunk', nodeId: 'inner-agent', line: 'INNER_LINE' },
+      ],
+      { runStatus: 'running', currentWorkflow: wf },
+    );
+
+    render(<RunView />);
+
+    // Default: collapsed — there should be NO inner-agent card surfaced in
+    // the event log; the line is folded under sub-1.
+    expect(screen.queryByLabelText('node card inner-agent')).toBeNull();
+    const subCard = screen.getByLabelText('node card sub-1');
+    expect(subCard).toHaveTextContent('INNER_LINE');
+
+    // Toggle the chip → expand. Now the inner-agent card materializes.
+    fireEvent.click(screen.getByLabelText('toggle subworkflow expansion'));
+    expect(screen.getByLabelText('node card inner-agent')).toBeInTheDocument();
+    // Subworkflow card no longer carries the folded line itself.
+    expect(screen.getByLabelText('node card sub-1')).not.toHaveTextContent(
+      'INNER_LINE',
+    );
+  });
+
+  it('persists the subworkflow expansion preference to localStorage', () => {
+    seed([], { runStatus: 'idle' });
+    const { unmount } = render(<RunView />);
+    fireEvent.click(screen.getByLabelText('toggle subworkflow expansion'));
+    expect(window.localStorage.getItem('infloop:runview:expandSubworkflows')).toBe(
+      '1',
+    );
+    unmount();
+
+    // New mount picks the preference back up.
+    render(<RunView />);
+    expect(screen.getByLabelText('toggle subworkflow expansion')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 
   it('re-engages auto-scroll once the user scrolls back to the bottom', () => {

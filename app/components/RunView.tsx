@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Chip, Spinner } from '@heroui/react';
 import { useWorkflowStore } from '../../lib/client/workflow-store-client';
-import { GroupedEventLog } from './RunLog';
+import { GroupedEventLog, formatPayload } from './RunLog';
+import { eventNodeId } from '../../lib/client/group-events';
 import type {
   NodeStartedEvent,
   RunStatus,
+  Workflow,
   WorkflowEvent,
+  WorkflowNode,
 } from '../../lib/shared/workflow';
 
 // Map run status onto HeroUI semantic colors. `running` is warning (warm) so
@@ -16,6 +19,28 @@ import type {
 const STATUS_COLOR: Record<RunStatus, 'warning' | 'success' | 'danger' | 'default'> = {
   idle: 'default',
   running: 'warning',
+  succeeded: 'success',
+  failed: 'danger',
+  cancelled: 'default',
+};
+
+const SUBWORKFLOW_PREF_KEY = 'infloop:runview:expandSubworkflows';
+
+/** Per-branch state derived from the event stream for one parallel child. */
+interface BranchState {
+  nodeId: string;
+  nodeType: string;
+  status: 'idle' | 'live' | 'succeeded' | 'failed' | 'cancelled';
+  /** All stdout lines emitted by this branch, in arrival order. */
+  stdoutLines: string[];
+}
+
+const BRANCH_STATUS_CHIP: Record<
+  BranchState['status'],
+  'default' | 'warning' | 'success' | 'danger'
+> = {
+  idle: 'default',
+  live: 'warning',
   succeeded: 'success',
   failed: 'danger',
   cancelled: 'default',
@@ -37,10 +62,205 @@ function findRunningNodeEvents(events: WorkflowEvent[]): NodeStartedEvent[] {
   return Array.from(inFlight.values());
 }
 
+/** Walk the workflow node tree and return every nodeId, including descendants. */
+function collectNodeIds(nodes: WorkflowNode[] | undefined): Set<string> {
+  const out = new Set<string>();
+  const stack: WorkflowNode[] = [...(nodes ?? [])];
+  while (stack.length > 0) {
+    const n = stack.pop()!;
+    out.add(n.id);
+    if (n.children && n.children.length > 0) stack.push(...n.children);
+  }
+  return out;
+}
+
+/**
+ * Map every parallel container's node id → set of its direct child node ids,
+ * by walking the workflow. Parallel children live in `node.children` per the
+ * shared workflow shape.
+ */
+function findParallelChildIds(wf: Workflow | null): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  if (!wf) return out;
+  const stack: WorkflowNode[] = [...wf.nodes];
+  while (stack.length > 0) {
+    const n = stack.pop()!;
+    if (n.type === 'parallel' && n.children && n.children.length > 0) {
+      out.set(n.id, new Set(n.children.map((c) => c.id)));
+    }
+    if (n.children && n.children.length > 0) stack.push(...n.children);
+  }
+  return out;
+}
+
+/** Find subworkflow node ids in this workflow (top-level or descendants). */
+function findSubworkflowNodeIds(wf: Workflow | null): Set<string> {
+  const out = new Set<string>();
+  if (!wf) return out;
+  const stack: WorkflowNode[] = [...wf.nodes];
+  while (stack.length > 0) {
+    const n = stack.pop()!;
+    if (n.type === 'subworkflow') out.add(n.id);
+    if (n.children && n.children.length > 0) stack.push(...n.children);
+  }
+  return out;
+}
+
+/** Read `subworkflowStack` off an event if the engine tagged it. The shared
+ * type doesn't declare the field yet (see U1), so we read it defensively. */
+function eventSubworkflowStack(ev: WorkflowEvent): string[] | undefined {
+  const stack = (ev as { subworkflowStack?: unknown }).subworkflowStack;
+  if (Array.isArray(stack) && stack.length > 0) return stack as string[];
+  return undefined;
+}
+
+/**
+ * Build a per-branch state by replaying the event stream and only keeping
+ * events whose nodeId is in `branchIds`. Branch status follows the obvious
+ * lifecycle: live on `node_started`, terminal on `node_finished` or `error`.
+ */
+function deriveBranchStates(
+  events: WorkflowEvent[],
+  branchIds: Set<string>,
+): BranchState[] {
+  const byId = new Map<string, BranchState>();
+  // Order branches by first appearance so the layout is stable and matches
+  // the order events actually arrived.
+  const order: string[] = [];
+  for (const ev of events) {
+    const nodeId = eventNodeId(ev);
+    if (!nodeId || !branchIds.has(nodeId)) continue;
+    let st = byId.get(nodeId);
+    if (!st) {
+      st = {
+        nodeId,
+        nodeType: ev.type === 'node_started' ? ev.nodeType : 'agent',
+        status: 'idle',
+        stdoutLines: [],
+      };
+      byId.set(nodeId, st);
+      order.push(nodeId);
+    }
+    if (ev.type === 'node_started') {
+      st.status = 'live';
+      st.nodeType = ev.nodeType;
+    } else if (ev.type === 'node_finished') {
+      st.status = 'succeeded';
+    } else if (ev.type === 'error') {
+      st.status = 'failed';
+    } else if (ev.type === 'stdout_chunk') {
+      st.stdoutLines.push(ev.line);
+    }
+  }
+  return order.map((id) => byId.get(id)!);
+}
+
+/**
+ * Render-list wrapper: take the full event stream and, when subworkflows are
+ * collapsed, fold every event that's "internal to a subworkflow" into the
+ * parent subworkflow node's slot so the user sees one card per subworkflow
+ * instead of N internal cards.
+ *
+ * Detection:
+ *   1) `subworkflowStack` event tag (preferred) — the deepest entry names the
+ *      subworkflow node id whose run produced the event.
+ *   2) Fallback by node-id provenance: an event whose nodeId is NOT a known
+ *      node in the local workflow, while at least one subworkflow node exists,
+ *      is attributed to the most-recently-started, still-in-flight
+ *      subworkflow node (LIFO). This handles the common single-level nesting
+ *      until U1 starts emitting `subworkflowStack`.
+ *
+ * When `expand` is true, events pass through untouched.
+ */
+function applySubworkflowCollapse(
+  events: WorkflowEvent[],
+  wf: Workflow | null,
+  expand: boolean,
+): WorkflowEvent[] {
+  if (expand) return events;
+  const subIds = findSubworkflowNodeIds(wf);
+  if (subIds.size === 0) return events;
+  const localIds = collectNodeIds(wf?.nodes);
+
+  const out: WorkflowEvent[] = [];
+  // Stack of currently in-flight subworkflow node ids, in start order. Top of
+  // stack is the parent attribution for fallback events.
+  const subStack: string[] = [];
+
+  for (const ev of events) {
+    const stackTag = eventSubworkflowStack(ev);
+    const evNodeId = eventNodeId(ev);
+
+    // Path 1: explicit tag from engine.
+    if (stackTag) {
+      const owner = stackTag[0];
+      if (subIds.has(owner)) {
+        // Re-attribute as a stdout line on the owning subworkflow card so it
+        // shows up under that one card. We keep it generic by stringifying.
+        out.push(folded(owner, ev));
+        continue;
+      }
+    }
+
+    // Track our LIFO stack of in-flight subworkflow node ids (used by the
+    // fallback path). This is independent of whether we end up folding the
+    // event — the bookkeeping has to mirror engine lifecycle.
+    if (ev.type === 'node_started' && subIds.has(ev.nodeId)) {
+      subStack.push(ev.nodeId);
+    } else if (ev.type === 'node_finished' && subIds.has(ev.nodeId)) {
+      const idx = subStack.lastIndexOf(ev.nodeId);
+      if (idx >= 0) subStack.splice(idx, 1);
+    }
+
+    // Path 2: fallback. An event with a nodeId not in the local workflow,
+    // while a subworkflow is in flight, is treated as subworkflow-internal.
+    if (
+      evNodeId &&
+      !localIds.has(evNodeId) &&
+      subStack.length > 0 &&
+      ev.type !== 'run_started' &&
+      ev.type !== 'run_finished'
+    ) {
+      const owner = subStack[subStack.length - 1];
+      out.push(folded(owner, ev));
+      continue;
+    }
+
+    out.push(ev);
+  }
+  return out;
+}
+
+/** Fold one internal event into a stdout-style line attributed to `owner`.
+ * Keeping the surface tiny (one row) is the point — the user opted out of
+ * seeing internal cards. The original event type prefix preserves enough
+ * context to debug without exploding into a full sub-card. */
+function folded(owner: string, ev: WorkflowEvent): WorkflowEvent {
+  if (ev.type === 'stdout_chunk') {
+    return { type: 'stdout_chunk', nodeId: owner, line: ev.line };
+  }
+  return {
+    type: 'stdout_chunk',
+    nodeId: owner,
+    line: `[${ev.type}] ${formatPayload(ev)}`,
+  };
+}
+
+/** Last 2 non-empty lines of a branch's stdout, joined for the live preview. */
+function tailPreview(lines: string[]): string {
+  // The provider runner emits chunks that may be partial-token deltas, so
+  // concatenating preserves the source text either way; we then split on
+  // newlines and keep the trailing 1-2 non-empty lines for the snippet.
+  const text = lines.join('');
+  const split = text.split('\n').filter((l) => l.length > 0);
+  return split.slice(-2).join('\n');
+}
+
 export default function RunView() {
   const runStatus = useWorkflowStore((s) => s.runStatus);
   const runEvents = useWorkflowStore((s) => s.runEvents);
   const connectionStatus = useWorkflowStore((s) => s.connectionStatus);
+  const currentWorkflow = useWorkflowStore((s) => s.currentWorkflow);
 
   // Re-render on every animation frame while running so the elapsed-time
   // counter steps smoothly instead of jumping by 0.2-0.3s every interval
@@ -56,6 +276,34 @@ export default function RunView() {
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, [runStatus]);
+
+  // Subworkflow collapse preference. Default: collapsed (expand=false). The
+  // preference persists across page loads; we read it lazily so SSR doesn't
+  // touch `localStorage`. The state is the source of truth after mount; the
+  // localStorage write keeps it sticky.
+  const [expandSubworkflows, setExpandSubworkflows] = useState(false);
+  const [prefHydrated, setPrefHydrated] = useState(false);
+  useEffect(() => {
+    try {
+      const v = window.localStorage.getItem(SUBWORKFLOW_PREF_KEY);
+      if (v === '1') setExpandSubworkflows(true);
+      else if (v === '0') setExpandSubworkflows(false);
+    } catch {
+      // ignore: private mode / disabled storage just means non-sticky
+    }
+    setPrefHydrated(true);
+  }, []);
+  useEffect(() => {
+    if (!prefHydrated) return;
+    try {
+      window.localStorage.setItem(
+        SUBWORKFLOW_PREF_KEY,
+        expandSubworkflows ? '1' : '0',
+      );
+    } catch {
+      // ignore — same reason as above
+    }
+  }, [expandSubworkflows, prefHydrated]);
 
   // Stick the log to the bottom while the user is reading the latest output,
   // but stop yanking them down if they have scrolled up to inspect history.
@@ -85,6 +333,11 @@ export default function RunView() {
     [runEvents],
   );
 
+  const parallelChildIds = useMemo(
+    () => findParallelChildIds(currentWorkflow),
+    [currentWorkflow],
+  );
+
   // Track the wall-clock time at which each in-flight node was first seen so
   // the elapsed counter does not reset whenever an unrelated event arrives.
   const startedAtRef = useRef<Map<string, number>>(new Map());
@@ -99,6 +352,26 @@ export default function RunView() {
     }
   }, [running]);
 
+  const visibleEvents = useMemo(
+    () =>
+      applySubworkflowCollapse(runEvents, currentWorkflow, expandSubworkflows),
+    [runEvents, currentWorkflow, expandSubworkflows],
+  );
+
+  // Memoized once per (events, parallel topology) pair so the rAF tick that
+  // drives the elapsed counter doesn't re-walk the full event list per
+  // parallel parent. Empty when no parallel container is currently in flight.
+  const branchesByParent = useMemo(() => {
+    const out = new Map<string, BranchState[]>();
+    for (const ev of running) {
+      const childIds = parallelChildIds.get(ev.nodeId);
+      if (childIds && childIds.size > 0) {
+        out.set(ev.nodeId, deriveBranchStates(runEvents, childIds));
+      }
+    }
+    return out;
+  }, [running, parallelChildIds, runEvents]);
+
   return (
     <aside aria-label="run view" className="run-view">
       <header className="run-view-head">
@@ -110,6 +383,17 @@ export default function RunView() {
         >
           {runStatus}
         </Chip>
+        <Chip
+          as="button"
+          aria-label="toggle subworkflow expansion"
+          aria-pressed={expandSubworkflows}
+          variant={expandSubworkflows ? 'solid' : 'bordered'}
+          size="sm"
+          color={expandSubworkflows ? 'warning' : 'default'}
+          onClick={() => setExpandSubworkflows((v) => !v)}
+        >
+          Subworkflow: {expandSubworkflows ? 'show all' : 'collapsed'}
+        </Chip>
         <span className="run-view-ws" aria-label="event stream status">
           SSE: {connectionStatus}
         </span>
@@ -120,20 +404,37 @@ export default function RunView() {
           {running.map((ev) => {
             const since = startedAtRef.current.get(ev.nodeId) ?? Date.now();
             const elapsed = Date.now() - since;
+            const branches = branchesByParent.get(ev.nodeId) ?? [];
             return (
-              <div key={ev.nodeId} className="run-view-current-row">
-                <Spinner
-                  aria-label={`running ${ev.nodeId}`}
-                  size="sm"
-                  color="warning"
-                />
-                <span className="tag" data-kind="live">
-                  <span className="dot" /> {ev.nodeType}
-                </span>
-                <span className="run-view-current-id">{ev.nodeId}</span>
-                <span className="run-view-current-elapsed">
-                  {(elapsed / 1000).toFixed(1)}s
-                </span>
+              <div key={ev.nodeId} className="run-view-current-row-group">
+                <div className="run-view-current-row">
+                  <Spinner
+                    aria-label={`running ${ev.nodeId}`}
+                    size="sm"
+                    color="warning"
+                  />
+                  <span className="tag" data-kind="live">
+                    <span className="dot" /> {ev.nodeType}
+                  </span>
+                  <span className="run-view-current-id">{ev.nodeId}</span>
+                  <span className="run-view-current-elapsed">
+                    {(elapsed / 1000).toFixed(1)}s
+                  </span>
+                </div>
+                {branches.length > 0 ? (
+                  <ul
+                    className="run-view-branches"
+                    aria-label={`parallel branches of ${ev.nodeId}`}
+                  >
+                    {branches.map((b) => (
+                      <BranchRow
+                        key={b.nodeId}
+                        branch={b}
+                        parentId={ev.nodeId}
+                      />
+                    ))}
+                  </ul>
+                ) : null}
               </div>
             );
           })}
@@ -146,8 +447,61 @@ export default function RunView() {
         aria-label="event log"
         onScroll={onLogScroll}
       >
-        <GroupedEventLog events={runEvents} />
+        <GroupedEventLog events={visibleEvents} />
       </div>
     </aside>
+  );
+}
+
+/** Sub-row rendered under a running parallel node for one of its child
+ * branches. Defaults collapsed showing the last 1-2 stdout lines; click
+ * expands to the full branch stream. */
+function BranchRow({ branch, parentId }: { branch: BranchState; parentId: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const preview = useMemo(() => tailPreview(branch.stdoutLines), [branch.stdoutLines]);
+  const full = useMemo(() => branch.stdoutLines.join(''), [branch.stdoutLines]);
+  const cardLabel = `branch ${branch.nodeId} of ${parentId}`;
+
+  return (
+    <li className="run-view-branch" aria-label={cardLabel} data-state={branch.status}>
+      <button
+        type="button"
+        className="run-view-branch-head"
+        aria-label={
+          expanded
+            ? `collapse ${cardLabel}`
+            : `expand ${cardLabel}`
+        }
+        aria-expanded={expanded}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <span className="run-view-branch-id">{branch.nodeId}</span>
+        <span className="run-view-branch-kind">{branch.nodeType}</span>
+        <Chip
+          size="sm"
+          variant="dot"
+          color={BRANCH_STATUS_CHIP[branch.status]}
+          className="ml-auto"
+        >
+          {branch.status}
+        </Chip>
+      </button>
+      {!expanded && branch.status === 'live' && preview ? (
+        <pre
+          className="run-view-branch-preview"
+          aria-label={`live preview ${branch.nodeId}`}
+        >
+          {preview}
+        </pre>
+      ) : null}
+      {expanded ? (
+        <pre
+          className="run-view-branch-full"
+          aria-label={`full stdout ${branch.nodeId}`}
+        >
+          {full}
+        </pre>
+      ) : null}
+    </li>
   );
 }
