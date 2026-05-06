@@ -372,6 +372,15 @@ body {
   min-height: calc(100vh - var(--top-bar-h));
 }
 
+.workspace-bi {
+  /* palette · canvas — right panel hidden until a node is selected
+   * or run history is opened. Same fixed height as workspace-tri so
+   * ReactFlow has a concrete parent to mount into. */
+  grid-template-columns: var(--palette-w) minmax(360px, 1fr);
+  height: calc(100vh - var(--top-bar-h));
+  min-height: calc(100vh - var(--top-bar-h));
+}
+
 .resize-gutter {
   background: var(--border);
   cursor: col-resize;
@@ -1225,6 +1234,11 @@ input[type='number'].no-spin {
    * instead of stacking and squashing the ReactFlow viewport to zero. */
   .workspace-tri {
     grid-template-columns: var(--palette-w) minmax(360px, 1fr) 5px var(--right-w);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .workspace-bi {
+    grid-template-columns: var(--palette-w) minmax(360px, 1fr);
     overflow-x: auto;
     overflow-y: hidden;
   }

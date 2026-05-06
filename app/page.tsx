@@ -44,6 +44,7 @@ export default function Page() {
   const currentWorkflow = useWorkflowStore((s) => s.currentWorkflow);
   const runStatus = useWorkflowStore((s) => s.runStatus);
   const wsStatus = useWorkflowStore((s) => s.connectionStatus);
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
   const loadWorkflow = useWorkflowStore((s) => s.loadWorkflow);
   const undo = useWorkflowStore((s) => s.undo);
   const redo = useWorkflowStore((s) => s.redo);
@@ -76,6 +77,7 @@ export default function Page() {
   const [rightWidth, setRightWidth] = useState<number>(RIGHT_WIDTH_DEFAULT);
   const [historyOpen, setHistoryOpen] = useState(false);
   const dragStateRef = useRef<{ active: boolean }>({ active: false });
+  const showRightPanel = isRunning || historyOpen || !!selectedNodeId;
 
   // Hydrate the persisted width on mount (avoids SSR mismatch).
   useEffect(() => {
@@ -241,25 +243,29 @@ export default function Page() {
       </header>
 
       <div
-        className="workspace workspace-tri"
+        className={`workspace ${showRightPanel ? 'workspace-tri' : 'workspace-bi'}`}
         style={{ '--right-w': `${rightWidth}px` } as CSSProperties}
       >
         <Palette />
         <Canvas />
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="resize right panel"
-          tabIndex={0}
-          className="resize-gutter"
-          onMouseDown={onResizeStart}
-        />
-        {isRunning ? (
-          <RunView />
-        ) : historyOpen ? (
-          <RunHistory workflowId={currentWorkflow?.id} />
-        ) : (
-          <ConfigPanel />
+        {showRightPanel && (
+          <>
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="resize right panel"
+              tabIndex={0}
+              className="resize-gutter"
+              onMouseDown={onResizeStart}
+            />
+            {isRunning ? (
+              <RunView />
+            ) : historyOpen ? (
+              <RunHistory workflowId={currentWorkflow?.id} />
+            ) : (
+              <ConfigPanel />
+            )}
+          </>
         )}
       </div>
     </>
