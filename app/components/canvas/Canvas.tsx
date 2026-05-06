@@ -452,8 +452,17 @@ function CanvasInner() {
   // (e.g. node status Chips) would otherwise pick up the *wrong* token set
   // whenever xyflow's class disagreed with our `<html>` class. Reading the
   // resolved theme from `next-themes` keeps them in lockstep.
+  //
+  // Gate on `mounted` so the first client render matches SSR (which has no
+  // access to the user's stored theme): otherwise a user with light mode
+  // saved in localStorage hydrates with `light` while the server emitted
+  // `dark`, producing a hydration mismatch on the ReactFlow root className.
   const { resolvedTheme } = useTheme();
-  const colorMode: ColorMode = resolvedTheme === 'light' ? 'light' : 'dark';
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  const colorMode: ColorMode = mounted && resolvedTheme === 'light' ? 'light' : 'dark';
 
   // Fit the viewport to the workflow once per loaded workflow. Without this
   // an opened workflow whose nodes sit at large x/y may render partially
