@@ -13,6 +13,7 @@ const MIN_H = 140;
 
 interface LoopData {
   _state?: string;
+  label?: string;
   config?: {
     maxIterations?: number;
     mode?: 'while-not-met' | 'unbounded';
@@ -27,6 +28,7 @@ export default function LoopNode({ data, selected }: NodeProps) {
   const mode = d.config?.mode ?? 'while-not-met';
   const infinite = d.config?.infinite === true;
   const iterLabel = infinite ? '∞' : String(maxIter);
+  const title = d.label?.trim() || 'LOOP';
 
   return (
     <div
@@ -45,7 +47,7 @@ export default function LoopNode({ data, selected }: NodeProps) {
       />
       <Handle type="target" position={Position.Left} id="in" />
       <div className="wf-node-group-head">
-        <span className="wf-node-title">LOOP</span>
+        <span className="wf-node-title">{title}</span>
         <span className="wf-node-group-meta wf-node-body-italic">
           ×{iterLabel} · {mode}
         </span>

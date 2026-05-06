@@ -1,12 +1,15 @@
 'use client';
 
 import { Handle, Position, type NodeProps } from '@xyflow/react';
+import ProviderIcon from '../../icons/ProviderIcon';
 
 const NODE_TYPE = 'agent';
 const PREVIEW_MAX = 40;
+const TITLE_ICON_SIZE = 16;
 
 interface AgentData {
   _state?: string;
+  label?: string;
   config?: { providerId?: string; prompt?: string; cwd?: string; timeoutMs?: number };
 }
 
@@ -24,6 +27,7 @@ export default function AgentNode({ data, selected }: NodeProps) {
   // Surface the full prompt on hover when it's been truncated, so users can
   // peek without opening the config panel.
   const bodyTitle = full !== preview ? full : undefined;
+  const customLabel = d.label?.trim();
 
   return (
     <div
@@ -35,7 +39,20 @@ export default function AgentNode({ data, selected }: NodeProps) {
     >
       <Handle type="target" position={Position.Left} id="in" />
       <div className="wf-node-head">
-        <span className="wf-node-title">{provider.toUpperCase()}</span>
+        {/* Brand icon takes the title slot. When a custom display name is
+         * set on the node, it sits to the right of the icon; without one,
+         * the icon stands alone. We keep .wf-node-title on the wrapper so
+         * the per-state / per-node-type color rules still tint icon + text
+         * via currentColor (ProviderIcon's mask-image uses currentColor). */}
+        <span
+          className="wf-node-title wf-node-title-icon"
+          aria-label={customLabel ? `${customLabel} (${provider} agent)` : `${provider} agent`}
+        >
+          <ProviderIcon providerId={provider} size={TITLE_ICON_SIZE} />
+          {customLabel ? (
+            <span className="wf-node-title-text">{customLabel}</span>
+          ) : null}
+        </span>
         <span className="wf-node-state-dot" data-state={state} aria-hidden="true" />
       </div>
       <div className="wf-node-body wf-node-body-italic" title={bodyTitle}>

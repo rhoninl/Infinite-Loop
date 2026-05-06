@@ -434,7 +434,10 @@ describe('workflowToXyflow', () => {
     expect(agentOut?.type).toBe('agent');
     expect(agentOut?.selected).toBe(true);
     expect(agentOut?.data._state).toBe('live');
-    expect(agentOut?.data.label).toBe('agent-1');
+    // data.label is now undefined when the WorkflowNode has no custom
+    // `label` (used to default to n.id, but that made it impossible for
+    // the node component to tell "no custom name" apart from "name == id").
+    expect(agentOut?.data.label).toBeUndefined();
     expect(agentOut?.data.config).toEqual({ providerId: 'claude', prompt: 'do thing', cwd: '/tmp', timeoutMs: 60000 });
 
     const startOut = out.nodes.find((n) => n.id === 'start-1');

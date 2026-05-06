@@ -6,11 +6,13 @@ const NODE_TYPE = 'start';
 
 interface StartData {
   _state?: string;
+  label?: string;
 }
 
 export default function StartNode({ data, selected }: NodeProps) {
   const d = (data ?? {}) as StartData;
   const state = d._state ?? 'idle';
+  const title = d.label?.trim() || 'START';
 
   return (
     <div
@@ -21,7 +23,7 @@ export default function StartNode({ data, selected }: NodeProps) {
       aria-label="start node"
     >
       <div className="wf-node-head">
-        <span className="wf-node-title">START</span>
+        <span className="wf-node-title">{title}</span>
         <span className="wf-node-state-dot" data-state={state} aria-hidden="true" />
       </div>
       <div className="wf-node-body">begin</div>

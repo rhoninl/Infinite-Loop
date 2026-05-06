@@ -341,7 +341,12 @@ function buildXyNode(
     position: n.position ?? { x: 0, y: 0 },
     selected: n.id === selectedNodeId,
     data: {
-      label: n.label ?? n.id,
+      // Pass the user-set label through as undefined when absent so each
+      // node component can decide its own type-specific fallback (e.g.
+      // "START", or for AgentNode the brand icon). Previously defaulted
+      // to `n.id` which made it impossible to tell "no custom name" from
+      // "name happens to equal the id".
+      label: n.label,
       config: n.config ?? {},
       _state: liveMap[n.id] ?? 'idle',
     },

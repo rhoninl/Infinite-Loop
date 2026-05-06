@@ -153,6 +153,37 @@ function Segmented<T extends string>({
   );
 }
 
+/* ─── display-name field ────────────────────────────────────── */
+/* Lets the user rename the canvas card's title independent of the node's
+ * underlying id/type. Empty / whitespace-only commits clear the label so
+ * the per-type fallback ("START", brand icon for agents, etc.) is used. */
+function DisplayNameField({
+  value,
+  fallback,
+  onCommit,
+}: {
+  value: string;
+  fallback: string;
+  onCommit: (next: string) => void;
+}) {
+  const [v, setV] = useDebouncedString(value, onCommit);
+  return (
+    <div className="field">
+      <span className="field-label">Display name</span>
+      <input
+        aria-label="Display name"
+        type="text"
+        value={v}
+        placeholder={fallback}
+        onChange={(e) => setV(e.target.value)}
+      />
+      <span className="field-hint">
+        Shown on the canvas card. Leave blank to use the default.
+      </span>
+    </div>
+  );
+}
+
 /* ─── chips listing available template refs ────────────────── */
 function RefChips({ refs }: { refs: string[] }) {
   if (refs.length === 0) return null;
@@ -708,6 +739,19 @@ export default function ConfigPanel() {
       </header>
 
       <form className="task-form" onSubmit={(e) => e.preventDefault()}>
+        {/* Display name applies to every node type — overrides the default
+         * "START" / "CLAUDE" / etc. title on the canvas card. Empty value
+         * (or whitespace) falls back to the type-default. */}
+        <DisplayNameField
+          key={node.id}
+          value={node.label ?? ''}
+          fallback={node.type.toUpperCase()}
+          onCommit={(next) =>
+            updateNode(node.id, {
+              label: next.trim() ? next.trim() : undefined,
+            })
+          }
+        />
         {node.type === 'start' && <StartForm />}
         {node.type === 'end' && (
           <EndForm

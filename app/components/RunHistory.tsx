@@ -203,14 +203,12 @@ export default function RunHistory({ workflowId }: Props) {
             key={s.runId}
             type="button"
             aria-label={`run ${s.runId}`}
-            className="wf-menu-row"
+            className="run-history-row"
+            data-status={s.status}
             onClick={() => setSelectedRunId(s.runId)}
           >
-            <span className="wf-menu-row-mark" data-status={s.status}>
-              ●
-            </span>
-            <span className="wf-menu-row-name">{s.status}</span>
-            <span className="wf-menu-row-id serif-italic">
+            <span className="run-history-row-status">{s.status}</span>
+            <span className="run-history-row-meta">
               {fmtTime(s.startedAt)} · {fmtDuration(s.durationMs)} ·{' '}
               {s.eventCount} ev
             </span>

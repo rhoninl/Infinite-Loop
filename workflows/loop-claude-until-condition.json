@@ -1,9 +1,9 @@
 {
   "id": "loop-claude-until-condition",
   "name": "Loop Claude until condition",
-  "version": 7,
+  "version": 10,
   "createdAt": 1777359000000,
-  "updatedAt": 1778047812451,
+  "updatedAt": 1778051532178,
   "nodes": [
     {
       "id": "start-1",
@@ -30,8 +30,8 @@
           "id": "claude-1",
           "type": "agent",
           "position": {
-            "x": 97.5380023039678,
-            "y": 79.17933410132261
+            "x": 84.83102061595844,
+            "y": 65.41343727264584
           },
           "config": {
             "providerId": "claude",

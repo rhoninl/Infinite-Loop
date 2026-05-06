@@ -213,7 +213,7 @@ describe('ConfigPanel', () => {
     expect(stored2.infinite).toBe(false);
   });
 
-  it('Start node shows the descriptor copy and no editable fields', () => {
+  it('Start node shows the descriptor copy and only the Display name field', () => {
     const wf = makeWorkflow([startNode]);
     act(() => {
       useWorkflowStore.getState().loadWorkflow(wf);
@@ -223,8 +223,11 @@ describe('ConfigPanel', () => {
     render(<ConfigPanel />);
 
     expect(screen.getByText('Begin the workflow.')).toBeInTheDocument();
-    // No text/number/textarea inputs should be present for a start node.
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    // Display name (renames the canvas card title) is shared across all
+    // node types — that's the only textbox a Start node carries. No other
+    // type-specific text/number inputs.
+    expect(screen.getByLabelText('Display name')).toBeInTheDocument();
+    expect(screen.queryAllByRole('textbox')).toHaveLength(1);
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
   });
 

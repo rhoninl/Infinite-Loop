@@ -7,6 +7,7 @@ const PREVIEW_MAX = 40;
 
 interface BranchData {
   _state?: string;
+  label?: string;
   config?: { lhs?: string; op?: string; rhs?: string };
 }
 
@@ -29,6 +30,7 @@ export default function BranchNode({ data, selected }: NodeProps) {
   const state = d._state ?? 'idle';
   const { preview, full } = brief(d);
   const bodyTitle = full !== preview ? full : undefined;
+  const title = d.label?.trim() || 'BRANCH';
 
   return (
     <div
@@ -40,7 +42,7 @@ export default function BranchNode({ data, selected }: NodeProps) {
     >
       <Handle type="target" position={Position.Left} id="in" />
       <div className="wf-node-head">
-        <span className="wf-node-title">BRANCH</span>
+        <span className="wf-node-title">{title}</span>
         <span className="wf-node-state-dot" data-state={state} aria-hidden="true" />
       </div>
       <div className="wf-node-body wf-node-body-italic" title={bodyTitle}>

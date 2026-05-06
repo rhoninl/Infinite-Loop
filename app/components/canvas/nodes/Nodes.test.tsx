@@ -201,7 +201,9 @@ describe('node components', () => {
         )}
       />
     );
-    expect(screen.getByText('CODEX')).toBeInTheDocument();
+    // Title is now the brand icon (a span with aria-label="<provider> agent")
+    // instead of the provider name in caps.
+    expect(screen.getByLabelText('codex agent')).toBeInTheDocument();
   });
 
   it('ConditionNode renders kind brief', () => {

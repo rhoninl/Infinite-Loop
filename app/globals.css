@@ -810,6 +810,32 @@ button.event-card-head-toggle:focus-visible {
   text-transform: uppercase;
   color: var(--fg);
 }
+/* Icon variant — used by AgentNode so the brand mark replaces the
+ * provider name. We keep the .wf-node-title class on the wrapper so the
+ * existing per-state / per-node-type color rules tint the icon (the mask
+ * is painted in currentColor). */
+.wf-node-title.wf-node-title-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0;
+  min-width: 0;
+}
+/* Optional custom display name shown next to the brand icon when the user
+ * has renamed the agent node (data.label). Inherits color from the parent
+ * .wf-node-title so it matches the icon and the per-state tints. */
+.wf-node-title-text {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
 /* Per-node-type tinting — each node card on the canvas gets its title and
  * a soft left-edge stripe in its own color, so a workflow reads as a
  * keyboard of distinct instruments rather than a sea of identical blocks.
@@ -1057,6 +1083,59 @@ button.event-card-head-toggle:focus-visible {
 .wf-menu-row-id::before {
   content: 'id › ';
   color: var(--fg-faint);
+}
+
+/* ─── run history rows ──────────────────────────────────── */
+/* The History panel's list of past runs. Distinct from .wf-menu-row (which
+ * is now a flex wrapper with inner pick/delete buttons + an "id › " prefix
+ * that doesn't make sense here). Status drives the left-edge stripe color
+ * and the status-text tint; the meta line carries timestamp + duration +
+ * event count. */
+.run-history-row {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-left: 2px solid transparent;
+  width: 100%;
+  text-align: left;
+  padding: 8px 14px;
+  display: grid;
+  grid-template-columns: 1fr;
+  row-gap: 2px;
+  cursor: pointer;
+  font-family: var(--mono);
+  color: var(--fg-soft);
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.run-history-row:last-child { border-bottom: 0; }
+.run-history-row:hover {
+  background: var(--hover-tint);
+  border-left-color: var(--border-strong);
+}
+.run-history-row[data-status='succeeded'] { border-left-color: var(--accent-ok); }
+.run-history-row[data-status='failed'],
+.run-history-row[data-status='exhausted'] { border-left-color: var(--accent-err); }
+.run-history-row[data-status='cancelled'] { border-left-color: var(--accent-warn); }
+
+.run-history-row-status {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg);
+  line-height: 1.3;
+}
+.run-history-row[data-status='succeeded'] .run-history-row-status { color: var(--accent-ok); }
+.run-history-row[data-status='failed'] .run-history-row-status,
+.run-history-row[data-status='exhausted'] .run-history-row-status { color: var(--accent-err); }
+.run-history-row[data-status='cancelled'] .run-history-row-status { color: var(--accent-warn); }
+
+.run-history-row-meta {
+  font-size: 10px;
+  color: var(--fg-muted);
+  letter-spacing: 0.04em;
+  line-height: 1.2;
 }
 
 /* Footer "+" button to create a new workflow. Single full-width tap target
