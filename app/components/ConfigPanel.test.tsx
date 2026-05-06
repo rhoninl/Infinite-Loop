@@ -1,9 +1,23 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import FakeTimers, { type InstalledClock } from '@sinonjs/fake-timers';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { Providers } from '@/providers/heroui-provider';
 import { useWorkflowStore } from '@/lib/client/workflow-store-client';
 import type { Workflow, WorkflowNode } from '@/lib/shared/workflow';
 import ConfigPanel from './ConfigPanel';
+
+/**
+ * HeroUI components rely on the HeroUIProvider being mounted. Wrap every
+ * render in <Providers> so radio groups, inputs, etc. behave the same way
+ * they would in the real app shell.
+ */
+function renderPanel() {
+  return render(
+    <Providers>
+      <ConfigPanel />
+    </Providers>,
+  );
+}
 
 function makeWorkflow(nodes: WorkflowNode[]): Workflow {
   return {
@@ -73,7 +87,7 @@ describe('ConfigPanel', () => {
   });
 
   it('renders the empty placeholder when nothing is selected', () => {
-    render(<ConfigPanel />);
+    renderPanel();
     expect(screen.getByLabelText('config panel')).toBeInTheDocument();
     // Terminal-prompt placeholder: "› select a node to configure_". Match
     // the meaningful inner text rather than the prompt + cursor decoration.
@@ -89,15 +103,17 @@ describe('ConfigPanel', () => {
       useWorkflowStore.getState().selectNode('agent-1');
     });
 
-    render(<ConfigPanel />);
+    renderPanel();
 
     expect(screen.getByLabelText('Prompt')).toBeInTheDocument();
     expect(screen.getByLabelText('Working directory')).toBeInTheDocument();
     expect(screen.getByLabelText('Iteration timeout')).toBeInTheDocument();
+    // Unit picker is now a HeroUI RadioGroup → role="radiogroup".
     expect(
-      screen.getByRole('group', { name: 'Iteration timeout unit' }),
+      screen.getByRole('radiogroup', { name: 'Iteration timeout unit' }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText('Provider')).toHaveTextContent('claude');
+    // Provider is rendered as a read-only HeroUI Input → has a value, not text.
+    expect(screen.getByLabelText('Provider')).toHaveValue('claude');
     // header shows id + type
     expect(screen.getByText(/agent-1/)).toBeInTheDocument();
     expect(screen.getByText(/agent/)).toBeInTheDocument();
@@ -111,7 +127,7 @@ describe('ConfigPanel', () => {
       useWorkflowStore.getState().selectNode('agent-1');
     });
 
-    render(<ConfigPanel />);
+    renderPanel();
 
     const promptField = screen.getByLabelText('Prompt') as HTMLTextAreaElement;
     act(() => {
@@ -141,20 +157,30 @@ describe('ConfigPanel', () => {
       useWorkflowStore.getState().selectNode('cond-1');
     });
 
-    render(<ConfigPanel />);
+    renderPanel();
 
     expect(screen.getByLabelText('Pattern')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Command')).not.toBeInTheDocument();
+    // The "Command" radio always exists (it's a Kind option) — only the
+    // Command text input is conditional. Disambiguate by role+name.
+    expect(
+      screen.queryByRole('textbox', { name: 'Command' }),
+    ).not.toBeInTheDocument();
 
-    const commandBtn = screen.getByRole('button', { name: 'Command' });
+    // Segmented control is now a RadioGroup of Radios — click the radio
+    // labelled "Command" to switch the kind.
+    const commandRadio = screen.getByRole('radio', { name: 'Command' });
     act(() => {
-      fireEvent.click(commandBtn);
+      fireEvent.click(commandRadio);
     });
 
-    expect(screen.getByLabelText('Command')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Pattern')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('textbox', { name: 'Command' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('textbox', { name: 'Pattern' }),
+    ).not.toBeInTheDocument();
 
-    // Store reflects the kind change immediately (segmented controls fire sync).
+    // Store reflects the kind change immediately (RadioGroup commits sync).
     const stored = useWorkflowStore.getState().currentWorkflow!.nodes.find(
       (n) => n.id === 'cond-1',
     )!.config as { kind: string };
@@ -168,13 +194,14 @@ describe('ConfigPanel', () => {
       useWorkflowStore.getState().selectNode('loop-1');
     });
 
-    render(<ConfigPanel />);
+    renderPanel();
 
     expect(screen.getByLabelText('Max iterations')).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Mode' })).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Mode' })).toBeInTheDocument();
+    // Active segment is now the checked radio in the RadioGroup.
     expect(
-      screen.getByRole('button', { name: 'While not met' }),
-    ).toHaveAttribute('data-active', 'true');
+      screen.getByRole('radio', { name: 'While not met' }),
+    ).toBeChecked();
   });
 
   it('Loop infinite toggle hides Max iterations and persists infinite=true', () => {
@@ -184,14 +211,14 @@ describe('ConfigPanel', () => {
       useWorkflowStore.getState().selectNode('loop-1');
     });
 
-    render(<ConfigPanel />);
+    renderPanel();
 
     // Bounded by default → Max iterations input is rendered.
     expect(screen.getByLabelText('Max iterations')).toBeInTheDocument();
 
-    const infiniteBtn = screen.getByRole('button', { name: 'Infinite ∞' });
+    const infiniteRadio = screen.getByRole('radio', { name: 'Infinite ∞' });
     act(() => {
-      fireEvent.click(infiniteBtn);
+      infiniteRadio.click();
     });
 
     // Input disappears, store records infinite: true.
@@ -202,9 +229,9 @@ describe('ConfigPanel', () => {
     expect(stored.infinite).toBe(true);
 
     // Toggle back to Bounded restores the input and flips the flag.
-    const boundedBtn = screen.getByRole('button', { name: 'Bounded' });
+    const boundedRadio = screen.getByRole('radio', { name: 'Bounded' });
     act(() => {
-      fireEvent.click(boundedBtn);
+      boundedRadio.click();
     });
     expect(screen.getByLabelText('Max iterations')).toBeInTheDocument();
     const stored2 = useWorkflowStore.getState().currentWorkflow!.nodes.find(
@@ -220,7 +247,7 @@ describe('ConfigPanel', () => {
       useWorkflowStore.getState().selectNode('start-1');
     });
 
-    render(<ConfigPanel />);
+    renderPanel();
 
     expect(screen.getByText('Begin the workflow.')).toBeInTheDocument();
     // Display name (renames the canvas card title) is shared across all
@@ -247,7 +274,7 @@ describe('ConfigPanel', () => {
       useWorkflowStore.getState().selectNode('agent-inside-loop');
     });
 
-    render(<ConfigPanel />);
+    renderPanel();
 
     expect(screen.getByLabelText('Prompt')).toHaveValue('inner');
     // cwd field is a read-only div now (so CSS can truncate from the start

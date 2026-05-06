@@ -9,6 +9,13 @@ import {
   useState,
   type ChangeEvent,
 } from 'react';
+import {
+  Checkbox,
+  Input,
+  Radio,
+  RadioGroup,
+  Textarea,
+} from '@heroui/react';
 import { useWorkflowStore } from '@/lib/client/workflow-store-client';
 import FolderPicker from './FolderPicker';
 import type {
@@ -120,7 +127,11 @@ function pickInitialTimeoutUnit(ms: number): TimeoutUnit {
   return 's';
 }
 
-/* ─── segmented control ─────────────────────────────────────── */
+/* ─── segmented control built on HeroUI RadioGroup ─────────── */
+/* RadioGroup gives us proper accessibility (role="radiogroup" + role="radio"
+ * children) for free; the classNames just compress the radios into a
+ * pill/segment row visually. The data-selected attribute HeroUI puts on each
+ * radio's base slot is what drives the "active" tint. */
 interface SegmentedProps<T extends string> {
   label: string;
   value: T;
@@ -134,22 +145,38 @@ function Segmented<T extends string>({
   onChange,
 }: SegmentedProps<T>) {
   return (
-    <div className="field" role="group" aria-label={label}>
-      <span className="field-label">{label}</span>
-      <div className="segmented">
-        {options.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            data-active={value === opt.value}
-            aria-pressed={value === opt.value}
-            onClick={() => onChange(opt.value)}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-    </div>
+    <RadioGroup
+      label={label}
+      orientation="horizontal"
+      value={value}
+      onValueChange={(next) => onChange(next as T)}
+      classNames={{
+        base: 'gap-1',
+        label: 'text-fg-soft text-xs uppercase tracking-wider',
+        wrapper: 'gap-0 rounded-md border border-border bg-bg-input p-0.5',
+      }}
+    >
+      {options.map((opt) => (
+        <Radio
+          key={opt.value}
+          value={opt.value}
+          classNames={{
+            base: [
+              'm-0 max-w-none',
+              'cursor-pointer rounded px-3 py-1.5',
+              'data-[selected=true]:bg-bg-elevated',
+              'data-[selected=true]:text-fg',
+              'text-fg-soft hover:text-fg',
+            ].join(' '),
+            wrapper: 'hidden',
+            labelWrapper: 'm-0 p-0',
+            label: 'text-sm',
+          }}
+        >
+          {opt.label}
+        </Radio>
+      ))}
+    </RadioGroup>
   );
 }
 
@@ -168,31 +195,24 @@ function DisplayNameField({
 }) {
   const [v, setV] = useDebouncedString(value, onCommit);
   return (
-    <div className="field">
-      <span className="field-label">Display name</span>
-      <input
-        aria-label="Display name"
-        type="text"
-        value={v}
-        placeholder={fallback}
-        onChange={(e) => setV(e.target.value)}
-      />
-      <span className="field-hint">
-        Shown on the canvas card. Leave blank to use the default.
-      </span>
-    </div>
+    <Input
+      label="Display name"
+      labelPlacement="outside"
+      type="text"
+      value={v}
+      placeholder={fallback}
+      onValueChange={setV}
+      description="Shown on the canvas card. Leave blank to use the default."
+    />
   );
 }
 
-/* ─── chips listing available template refs ────────────────── */
-function RefChips({ refs }: { refs: string[] }) {
-  if (refs.length === 0) return null;
-  return (
-    <div className="field-hint" aria-label="available template refs">
-      {refs.length === 1 ? 'Available ref: ' : 'Available refs: '}
-      {refs.join('  ·  ')}
-    </div>
-  );
+/** Render the "Available refs: …" hint string for an Input's description prop.
+ * Returns undefined when there are no refs so HeroUI hides the helper row. */
+function refsHint(refs: string[]): string | undefined {
+  if (refs.length === 0) return undefined;
+  const prefix = refs.length === 1 ? 'Available ref: ' : 'Available refs: ';
+  return prefix + refs.join('  ·  ');
 }
 
 /* ─── per-type forms ───────────────────────────────────────── */
@@ -325,28 +345,26 @@ function AgentForm({
 
   return (
     <>
-      <div className="field">
-        <span className="field-label">Provider</span>
-        <span
-          className="field-hint"
-          aria-label="Provider"
-          style={{ fontFamily: 'var(--mono)', color: 'var(--fg-soft)' }}
-        >
-          {providerId}
-        </span>
-      </div>
+      {/* Provider is read-only display, not a form field — but keeping the
+       * label/value shape identical to the inputs below so the right-rail
+       * forms read as a single column. */}
+      <Input
+        label="Provider"
+        labelPlacement="outside"
+        value={providerId}
+        isReadOnly
+        classNames={{ input: 'font-mono text-fg-soft' }}
+      />
 
-      <div className="field">
-        <span className="field-label">Prompt</span>
-        <textarea
-          aria-label="Prompt"
-          required
-          rows={5}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-        />
-        <RefChips refs={refs} />
-      </div>
+      <Textarea
+        label="Prompt"
+        labelPlacement="outside"
+        isRequired
+        minRows={5}
+        value={prompt}
+        onValueChange={setPrompt}
+        description={refsHint(refs)}
+      />
 
       <div className="field" style={{ position: 'relative' }}>
         <span className="field-label">Working directory</span>
@@ -401,38 +419,53 @@ function AgentForm({
         )}
       </div>
 
-      <div className="field">
-        <span className="field-label">Iteration timeout</span>
-        <div className="field-row">
-          <input
-            aria-label="Iteration timeout"
-            type="number"
-            inputMode="decimal"
-            min={0}
-            step="any"
-            value={timeoutDisplay}
-            onChange={onTimeoutChange}
-            className="no-spin"
-          />
-          <div
-            className="seg-tight"
-            role="group"
+      {/* Iteration timeout: number input + unit segmented control. The unit
+       * picker rides as endContent so it stays inside the Input's labeled
+       * frame instead of fighting alignment in a separate row. */}
+      <Input
+        label="Iteration timeout"
+        labelPlacement="outside"
+        type="number"
+        inputMode="decimal"
+        min={0}
+        step="any"
+        value={String(timeoutDisplay)}
+        onChange={onTimeoutChange}
+        classNames={{ input: 'no-spin' }}
+        endContent={
+          <RadioGroup
             aria-label="Iteration timeout unit"
+            orientation="horizontal"
+            value={timeoutUnit}
+            onValueChange={(next) => setTimeoutUnit(next as TimeoutUnit)}
+            classNames={{
+              base: 'gap-0',
+              wrapper: 'gap-0 rounded-md border border-border bg-bg-input p-0.5',
+            }}
           >
             {TIMEOUT_UNITS.map((u) => (
-              <button
+              <Radio
                 key={u}
-                type="button"
-                data-active={timeoutUnit === u}
-                aria-pressed={timeoutUnit === u}
-                onClick={() => setTimeoutUnit(u)}
+                value={u}
+                classNames={{
+                  base: [
+                    'm-0 max-w-none',
+                    'cursor-pointer rounded px-2 py-0.5',
+                    'data-[selected=true]:bg-bg-elevated',
+                    'data-[selected=true]:text-fg',
+                    'text-fg-soft hover:text-fg',
+                  ].join(' '),
+                  wrapper: 'hidden',
+                  labelWrapper: 'm-0 p-0',
+                  label: 'text-xs',
+                }}
               >
                 {u}
-              </button>
+              </Radio>
             ))}
-          </div>
-        </div>
-      </div>
+          </RadioGroup>
+        }
+      />
     </>
   );
 }
@@ -493,81 +526,69 @@ function ConditionForm({
 
       {kind === 'sentinel' && (
         <>
-          <div className="field">
-            <span className="field-label">Pattern</span>
-            <input
-              aria-label="Pattern"
-              type="text"
-              value={pattern}
-              onChange={(e) => setPattern(e.target.value)}
-            />
-          </div>
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={config.sentinel?.isRegex ?? false}
-              onChange={(e) =>
-                onPatch({
-                  ...config,
-                  sentinel: {
-                    pattern: config.sentinel?.pattern ?? '',
-                    isRegex: e.target.checked,
-                  },
-                })
-              }
-            />
-            <span>Treat as regex</span>
-          </label>
+          <Input
+            label="Pattern"
+            labelPlacement="outside"
+            type="text"
+            value={pattern}
+            onValueChange={setPattern}
+          />
+          <Checkbox
+            isSelected={config.sentinel?.isRegex ?? false}
+            onValueChange={(checked) =>
+              onPatch({
+                ...config,
+                sentinel: {
+                  pattern: config.sentinel?.pattern ?? '',
+                  isRegex: checked,
+                },
+              })
+            }
+          >
+            Treat as regex
+          </Checkbox>
         </>
       )}
 
       {kind === 'command' && (
-        <div className="field">
-          <span className="field-label">Command</span>
-          <input
-            aria-label="Command"
-            type="text"
-            value={cmd}
-            onChange={(e) => setCmd(e.target.value)}
-          />
-        </div>
+        <Input
+          label="Command"
+          labelPlacement="outside"
+          type="text"
+          value={cmd}
+          onValueChange={setCmd}
+        />
       )}
 
       {kind === 'judge' && (
         <>
-          <div className="field">
-            <span className="field-label">Rubric</span>
-            <textarea
-              aria-label="Rubric"
-              rows={4}
-              value={rubric}
-              onChange={(e) => setRubric(e.target.value)}
-            />
-          </div>
-          <div className="field">
-            <span className="field-label">Model</span>
-            <input
-              aria-label="Model"
-              type="text"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-            />
-            <span className="field-hint">blank = claude code default</span>
-          </div>
+          <Textarea
+            label="Rubric"
+            labelPlacement="outside"
+            minRows={4}
+            value={rubric}
+            onValueChange={setRubric}
+          />
+          <Input
+            label="Model"
+            labelPlacement="outside"
+            type="text"
+            value={model}
+            onValueChange={setModel}
+            description="blank = claude code default"
+          />
         </>
       )}
 
-      <div className="field">
-        <span className="field-label">Against</span>
-        <input
-          aria-label="Against"
-          type="text"
-          value={against}
-          placeholder="{{<previous-node>.stdout}}"
-          onChange={(e) => setAgainst(e.target.value)}
-        />
-        <RefChips refs={refs} />
-      </div>
+      <Input
+        label="Against"
+        labelPlacement="outside"
+        type="text"
+        value={against}
+        placeholder="{{<previous-node>.stdout}}"
+        onValueChange={setAgainst}
+        description={refsHint(refs)}
+      />
     </>
   );
 }
@@ -603,17 +624,15 @@ function LoopForm({
       />
 
       {!infinite && (
-        <div className="field">
-          <span className="field-label">Max iterations</span>
-          <input
-            aria-label="Max iterations"
-            type="number"
-            min={1}
-            max={100}
-            value={config.maxIterations ?? 5}
-            onChange={onMaxChange}
-          />
-        </div>
+        <Input
+          label="Max iterations"
+          labelPlacement="outside"
+          type="number"
+          min={1}
+          max={100}
+          value={String(config.maxIterations ?? 5)}
+          onChange={onMaxChange}
+        />
       )}
 
       <Segmented<LoopConfig['mode']>
@@ -648,17 +667,15 @@ function BranchForm({
 
   return (
     <>
-      <div className="field">
-        <span className="field-label">Left</span>
-        <input
-          aria-label="Left"
-          type="text"
-          value={lhs}
-          onChange={(e) => setLhs(e.target.value)}
-          placeholder="{{claude-1.stdout}}"
-        />
-        <RefChips refs={refs} />
-      </div>
+      <Input
+        label="Left"
+        labelPlacement="outside"
+        type="text"
+        value={lhs}
+        onValueChange={setLhs}
+        placeholder="{{claude-1.stdout}}"
+        description={refsHint(refs)}
+      />
 
       <Segmented<BranchOp>
         label="Operator"
@@ -672,17 +689,15 @@ function BranchForm({
         onChange={(next) => onPatch({ ...config, op: next })}
       />
 
-      <div className="field">
-        <span className="field-label">Right</span>
-        <input
-          aria-label="Right"
-          type="text"
-          value={rhs}
-          onChange={(e) => setRhs(e.target.value)}
-          placeholder={op === 'matches' ? '^DONE' : 'DONE'}
-        />
-        <RefChips refs={refs} />
-      </div>
+      <Input
+        label="Right"
+        labelPlacement="outside"
+        type="text"
+        value={rhs}
+        onValueChange={setRhs}
+        placeholder={op === 'matches' ? '^DONE' : 'DONE'}
+        description={refsHint(refs)}
+      />
     </>
   );
 }
