@@ -4,6 +4,7 @@ import { Card, CardBody, CardHeader, Chip } from '@heroui/react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 
 const NODE_TYPE = 'judge';
+const CRITERIA_PREVIEW_MAX = 60;
 
 type ChipColor = 'default' | 'success' | 'danger' | 'warning';
 
@@ -24,16 +25,21 @@ interface JudgeData {
   };
 }
 
-/**
- * Foundation stub for the judge node. Final visual treatment (criteria
- * preview, candidate count badge) lands in unit U3.
- */
+function truncate(s: string, n: number): string {
+  return s.length > n ? `${s.slice(0, n - 1)}…` : s;
+}
+
 export default function JudgeNode({ data, selected }: NodeProps) {
   const d = (data ?? {}) as JudgeData;
   const state = d._state ?? 'idle';
   const title = d.label?.trim() || 'JUDGE';
   const n = (d.config?.candidates ?? []).length;
   const provider = d.config?.providerId ?? 'claude';
+  const criteria = d.config?.criteria ?? '';
+  const preview = criteria ? truncate(criteria, CRITERIA_PREVIEW_MAX) : '';
+  // Only surface the full criteria via title when truncation actually
+  // hid characters, matching AgentNode/BranchNode hover-peek convention.
+  const criteriaTitle = preview !== criteria ? criteria : undefined;
 
   return (
     <Card
@@ -60,9 +66,19 @@ export default function JudgeNode({ data, selected }: NodeProps) {
         </Chip>
       </CardHeader>
       <CardBody className="wf-node-body !p-0">
-        ⚖ {n} candidates · {provider}
+        <div>
+          ⚖ {n} candidates · {provider}
+        </div>
+        <div className="wf-node-body-italic" title={criteriaTitle}>
+          {preview || '(no criteria)'}
+        </div>
       </CardBody>
-      <Handle type="source" position={Position.Right} id="next" />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="next"
+        style={{ top: '40%' }}
+      />
       <Handle
         type="source"
         position={Position.Right}

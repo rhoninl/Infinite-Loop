@@ -24,15 +24,11 @@ interface SubworkflowData {
   };
 }
 
-/**
- * Foundation stub for the subworkflow node. Real I/O badge rendering lands
- * in unit U3.
- */
 export default function SubworkflowNode({ data, selected }: NodeProps) {
   const d = (data ?? {}) as SubworkflowData;
   const state = d._state ?? 'idle';
   const title = d.label?.trim() || 'SUBWORKFLOW';
-  const wfId = d.config?.workflowId?.trim() || '(none)';
+  const wfId = d.config?.workflowId?.trim() ?? '';
   const nIn = Object.keys(d.config?.inputs ?? {}).length;
   const nOut = Object.keys(d.config?.outputs ?? {}).length;
 
@@ -61,9 +57,20 @@ export default function SubworkflowNode({ data, selected }: NodeProps) {
         </Chip>
       </CardHeader>
       <CardBody className="wf-node-body !p-0">
-        → {wfId} · in:{nIn} out:{nOut}
+        <div>
+          →{' '}
+          {wfId ? wfId : <span className="wf-node-body-italic">(unset)</span>}
+        </div>
+        <div className="wf-node-body-italic">
+          inputs: {nIn} · outputs: {nOut}
+        </div>
       </CardBody>
-      <Handle type="source" position={Position.Right} id="next" />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="next"
+        style={{ top: '40%' }}
+      />
       <Handle
         type="source"
         position={Position.Right}
