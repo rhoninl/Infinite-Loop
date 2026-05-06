@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { Providers } from '@/providers/heroui-provider';
 import ThemeToggle from './ThemeToggle';
 
-// Bun's runtime ships a partial localStorage shim that lacks removeItem; jsdom
-// alone is enough for this component, so we install a minimal in-memory mock
-// per test and restore the original descriptor in afterEach so the override
-// can't leak across files if test ordering changes.
+// Bun's runtime ships a partial localStorage shim that lacks removeItem;
+// next-themes calls removeItem internally, so we install a minimal
+// in-memory mock per test and restore the original descriptor in afterEach
+// so the override can't leak across files if test ordering changes.
 function makeFakeStorage(): Storage {
   const map = new Map<string, string>();
   return {
@@ -35,8 +36,6 @@ beforeEach(() => {
     configurable: true,
     value: makeFakeStorage(),
   });
-  // Simulate the pre-paint script having set dark.
-  document.documentElement.dataset.theme = 'dark';
 });
 
 afterEach(() => {
@@ -45,23 +44,32 @@ afterEach(() => {
   if (originalStorageDescriptor) {
     Object.defineProperty(window, 'localStorage', originalStorageDescriptor);
   } else {
-    // The descriptor was synthesized by us; remove our property so the
-    // global slot is empty for the next test file.
     delete (window as unknown as { localStorage?: Storage }).localStorage;
   }
 });
 
+function renderWithProviders(saved?: 'dark' | 'light') {
+  if (saved) window.localStorage.setItem('infloop:theme', saved);
+  return render(
+    <Providers>
+      <ThemeToggle />
+    </Providers>,
+  );
+}
+
 describe('<ThemeToggle />', () => {
-  it('reflects the current dataset.theme on mount', async () => {
-    document.documentElement.dataset.theme = 'light';
-    render(<ThemeToggle />);
-    // Initial render uses 'dark'; effect syncs to 'light' on mount.
+  it('reflects the saved theme on mount', async () => {
+    renderWithProviders('light');
+    // After the mount effect fires, the button reports the *next* theme
+    // it would switch to ("dark") and aria-pressed reflects current
+    // ("light").
     const btn = await screen.findByRole('button', { name: /switch to dark theme/i });
     expect(btn).toHaveAttribute('aria-pressed', 'true');
+    expect(document.documentElement.dataset.theme).toBe('light');
   });
 
   it('toggles dark → light, updates dataset.theme + localStorage', () => {
-    render(<ThemeToggle />);
+    renderWithProviders('dark');
     const btn = screen.getByRole('button', { name: /switch to light theme/i });
     expect(document.documentElement.dataset.theme).toBe('dark');
 
@@ -77,8 +85,7 @@ describe('<ThemeToggle />', () => {
   });
 
   it('toggles light → dark on a second click', () => {
-    document.documentElement.dataset.theme = 'light';
-    render(<ThemeToggle />);
+    renderWithProviders('light');
     const btn = screen.getByRole('button', { name: /switch to dark theme/i });
 
     act(() => {
