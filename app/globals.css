@@ -720,6 +720,13 @@ button.event-card-head-toggle:focus-visible {
  * box-drawing-character look without depending on Unicode rendering. */
 .wf-node {
   position: relative;
+  /* HeroUI's <Card> sets `display: flex`, which defaults to flex-direction: row.
+   * Without this override, header + body lay out horizontally and the body's
+   * flex-shrink:1 + word-break:break-word collapses long prompts to a 1-char
+   * column (e.g. agent prompts inside the Parallel/Team workflow). Pin to
+   * column so header sits above body the way the design intends. */
+  display: flex;
+  flex-direction: column;
   width: 220px;
   min-height: 72px;
   padding: 12px 14px;
