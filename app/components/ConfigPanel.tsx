@@ -3,12 +3,14 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ChangeEvent,
 } from 'react';
 import { useWorkflowStore } from '@/lib/client/workflow-store-client';
+import FolderPicker from './FolderPicker';
 import type {
   AgentConfig,
   BranchConfig,
@@ -96,6 +98,26 @@ function useDebouncedString(
   }, []);
 
   return [value, set];
+}
+
+/* ─── timeout unit helpers ──────────────────────────────────── */
+type TimeoutUnit = 's' | 'min' | 'hr';
+
+const TIMEOUT_UNIT_MS: Record<TimeoutUnit, number> = {
+  s: 1000,
+  min: 60_000,
+  hr: 3_600_000,
+};
+
+const TIMEOUT_UNITS: ReadonlyArray<TimeoutUnit> = ['s', 'min', 'hr'];
+
+/** Pick the largest unit that represents `ms` cleanly (no fractional part).
+ * 5 min as 300_000 ms reads as "5 min", not "300 s". Falls back to seconds
+ * for the awkward middle values. */
+function pickInitialTimeoutUnit(ms: number): TimeoutUnit {
+  if (ms >= TIMEOUT_UNIT_MS.hr && ms % TIMEOUT_UNIT_MS.hr === 0) return 'hr';
+  if (ms >= TIMEOUT_UNIT_MS.min && ms % TIMEOUT_UNIT_MS.min === 0) return 'min';
+  return 's';
 }
 
 /* ─── segmented control ─────────────────────────────────────── */
@@ -189,16 +211,84 @@ function AgentForm({
   const [cwd, setCwd] = useDebouncedString(config.cwd ?? '', (next) =>
     onPatch({ ...config, cwd: next }),
   );
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+
+  // Tail-truncate the cwd preview in JS — the previous direction:rtl CSS
+  // trick is unreliable when the path starts with `/` (a bidi-neutral
+  // character that the algorithm treats as a run boundary). Measure the
+  // available width with a hidden monospace probe, count how many chars
+  // fit, slice the path's tail to that length and prefix with an ellipsis.
+  const cwdRef = useRef<HTMLDivElement | null>(null);
+  const [cwdDisplay, setCwdDisplay] = useState(cwd);
+  useLayoutEffect(() => {
+    const el = cwdRef.current;
+    if (!el || !cwd) {
+      setCwdDisplay(cwd);
+      return;
+    }
+
+    const recompute = () => {
+      const cs = getComputedStyle(el);
+      const padX =
+        parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const usable = el.clientWidth - padX;
+      if (usable <= 0) return;
+
+      // Probe the rendered character width once per recompute (mono so any
+      // glyph is the same width — `M` is just a stable reference).
+      const probe = document.createElement('span');
+      probe.style.font = cs.font;
+      probe.style.visibility = 'hidden';
+      probe.style.position = 'absolute';
+      probe.style.whiteSpace = 'pre';
+      probe.textContent = 'M';
+      document.body.appendChild(probe);
+      const charW = probe.getBoundingClientRect().width;
+      document.body.removeChild(probe);
+      if (charW <= 0) return;
+
+      const fits = Math.floor(usable / charW);
+      if (cwd.length <= fits) {
+        setCwdDisplay(cwd);
+      } else {
+        // Reserve one slot for the leading ellipsis glyph.
+        setCwdDisplay('…' + cwd.slice(cwd.length - (fits - 1)));
+      }
+    };
+
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [cwd]);
 
   const cwdInvalid = cwd.length > 0 && !cwd.startsWith('/');
   const providerId = config.providerId ?? 'claude';
 
+  // Timeout: millisecond is the wire format (kept as `timeoutMs` on the
+  // workflow), but a human entering "60000" was a paper cut. We let the
+  // user pick a unit (s / min / hr) and convert at the field boundary.
+  // Initial unit is auto-picked so an existing 5-min timeout reads as
+  // "5 min" not "300 s".
+  const timeoutMsRaw = config.timeoutMs ?? 60000;
+  const [timeoutUnit, setTimeoutUnit] = useState<TimeoutUnit>(() =>
+    pickInitialTimeoutUnit(timeoutMsRaw),
+  );
+  // Round display to 2 decimals so a value that doesn't divide cleanly into
+  // the chosen unit (e.g. 1,000,000 ms shown as minutes = 16.6666…) renders
+  // as `16.67` instead of a wall of repeating digits. Number() drops the
+  // trailing zero so a clean value still reads as `60`, not `60.00`.
+  const timeoutDisplay = Number(
+    (timeoutMsRaw / TIMEOUT_UNIT_MS[timeoutUnit]).toFixed(2),
+  );
+
   const onTimeoutChange = (e: ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
     if (raw === '') return;
-    const parsed = Number(raw);
-    if (Number.isFinite(parsed)) {
-      onPatch({ ...config, timeoutMs: Math.max(1000, Math.floor(parsed)) });
+    const value = Number(raw);
+    if (Number.isFinite(value) && value > 0) {
+      const ms = Math.max(1000, Math.round(value * TIMEOUT_UNIT_MS[timeoutUnit]));
+      onPatch({ ...config, timeoutMs: ms });
     }
   };
 
@@ -227,33 +317,90 @@ function AgentForm({
         <RefChips refs={refs} />
       </div>
 
-      <div className="field">
+      <div className="field" style={{ position: 'relative' }}>
         <span className="field-label">Working directory</span>
-        <input
+        {/* Read-only preview of the resolved cwd. The only way to mutate it
+         * is to open the picker (click, Enter, or Space) — the popover
+         * handles both manual path entry and tree navigation, with the two
+         * views live-synced. */}
+        {/* Rendered as a div (not <input>) so CSS truncation can show the
+         * TAIL of the path. Long cwds like
+         * "/Users/liyuqi/project/Codecase/InfLoop" should anchor to
+         * "…/Codecase/InfLoop" — the inner folder is what the user is
+         * orienting on. `<input>` doesn't honour text-overflow: ellipsis
+         * reliably and resets scrollLeft on focus, so a div is more honest. */}
+        <div
+          ref={cwdRef}
+          role="button"
+          tabIndex={0}
           aria-label="Working directory"
-          type="text"
-          required
-          value={cwd}
-          onChange={(e) => setCwd(e.target.value)}
+          aria-haspopup="dialog"
+          aria-expanded={folderPickerOpen}
           aria-invalid={cwdInvalid || undefined}
-        />
+          // `title` is the screen-reader / OS-level tooltip; the visible
+          // hover tooltip is CSS-only via `::after` reading data-tooltip.
+          // We carry both so the full path is always discoverable.
+          title={cwd || undefined}
+          data-tooltip={cwd || undefined}
+          className={`field-readonly cwd-preview${cwd ? '' : ' is-empty'}`}
+          onClick={() => setFolderPickerOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setFolderPickerOpen(true);
+            }
+          }}
+        >
+          {cwd ? cwdDisplay : '(no folder selected — click to choose)'}
+        </div>
         {cwdInvalid && (
           <span className="field-hint" style={{ color: 'var(--accent-err)' }}>
             Must start with /
           </span>
         )}
+        {folderPickerOpen && (
+          <FolderPicker
+            initialPath={cwd && cwd.startsWith('/') ? cwd : undefined}
+            onSelect={(picked) => {
+              setCwd(picked);
+              setFolderPickerOpen(false);
+            }}
+            onClose={() => setFolderPickerOpen(false)}
+          />
+        )}
       </div>
 
       <div className="field">
-        <span className="field-label">Iteration timeout (ms)</span>
-        <input
-          aria-label="Iteration timeout (ms)"
-          type="number"
-          min={1000}
-          step={1000}
-          value={config.timeoutMs ?? 60000}
-          onChange={onTimeoutChange}
-        />
+        <span className="field-label">Iteration timeout</span>
+        <div className="field-row">
+          <input
+            aria-label="Iteration timeout"
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="any"
+            value={timeoutDisplay}
+            onChange={onTimeoutChange}
+            className="no-spin"
+          />
+          <div
+            className="seg-tight"
+            role="group"
+            aria-label="Iteration timeout unit"
+          >
+            {TIMEOUT_UNITS.map((u) => (
+              <button
+                key={u}
+                type="button"
+                data-active={timeoutUnit === u}
+                aria-pressed={timeoutUnit === u}
+                onClick={() => setTimeoutUnit(u)}
+              >
+                {u}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </>
   );
@@ -532,7 +679,10 @@ export default function ConfigPanel() {
   if (!node) {
     return (
       <aside aria-label="config panel" className="config-stub">
-        <p className="serif-italic">Select a node to configure</p>
+        <p className="config-empty">
+          <span className="config-empty-prompt">›</span> select a node to
+          configure<span className="crt-cursor" aria-hidden="true" />
+        </p>
       </aside>
     );
   }

@@ -692,12 +692,20 @@ function CanvasInner() {
       e.preventDefault();
       if (!currentWorkflow) return;
       const flow = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-      setMenuOpen({
-        clientX: e.clientX,
-        clientY: e.clientY,
-        flowX: flow.x,
-        flowY: flow.y,
-      });
+      // Toggle: a second right-click while the menu is already open closes
+      // it instead of repositioning. Functional setState so we can read the
+      // previous state without depending on `menuOpen` in the deps array
+      // (which would invalidate the callback on every menu state change).
+      setMenuOpen((prev) =>
+        prev
+          ? null
+          : {
+              clientX: e.clientX,
+              clientY: e.clientY,
+              flowX: flow.x,
+              flowY: flow.y,
+            },
+      );
     },
     [currentWorkflow, screenToFlowPosition],
   );

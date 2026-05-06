@@ -31,7 +31,6 @@ export default function WorkflowMenu() {
   const currentWorkflow = useWorkflowStore((s) => s.currentWorkflow);
   const loadWorkflow = useWorkflowStore((s) => s.loadWorkflow);
   const isDirty = useWorkflowStore((s) => s.isDirty);
-  const saveCurrentWorkflow = useWorkflowStore((s) => s.saveCurrentWorkflow);
 
   const [open, setOpen] = useState(false);
   const [summaries, setSummaries] = useState<WorkflowSummary[]>([]);
@@ -111,43 +110,18 @@ export default function WorkflowMenu() {
     }
   };
 
-  const onDuplicate = async () => {
-    if (!currentWorkflow) return;
-    try {
-      const now = Date.now();
-      const copy: Workflow = {
-        ...currentWorkflow,
-        id: `${currentWorkflow.id}-copy-${now}`,
-        name: `${currentWorkflow.name} (copy)`,
-        version: 1,
-        createdAt: now,
-        updatedAt: now,
-      };
-      const res = await fetch('/api/workflows', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(copy),
-      });
-      if (!res.ok) throw new Error(`duplicate failed: ${res.status}`);
-      const data = (await res.json()) as { workflow?: Workflow };
-      if (!data.workflow) throw new Error('malformed duplicate response');
-      loadWorkflow(data.workflow);
-      await refreshList();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'failed to duplicate');
-    }
-  };
-
-  const onDelete = async () => {
-    if (!currentWorkflow) return;
+  // Delete by id — one button per row in the list, shown on hover. Confirms
+  // before destroying. Stops event propagation so it doesn't also fire the
+  // row's pick handler.
+  const onDeleteRow = async (id: string, name: string) => {
     const ok =
       typeof window === 'undefined'
         ? true
-        : window.confirm(`Delete workflow "${currentWorkflow.name}"?`);
+        : window.confirm(`Delete workflow "${name}"?`);
     if (!ok) return;
     try {
       const res = await fetch(
-        `/api/workflows/${encodeURIComponent(currentWorkflow.id)}`,
+        `/api/workflows/${encodeURIComponent(id)}`,
         { method: 'DELETE' },
       );
       if (!res.ok) throw new Error(`delete failed: ${res.status}`);
@@ -157,16 +131,9 @@ export default function WorkflowMenu() {
     }
   };
 
-  const onSave = async () => {
-    if (!currentWorkflow) return;
-    try {
-      await saveCurrentWorkflow();
-      await refreshList();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'failed to save');
-    }
-  };
-
+  // Trigger shows a small "•" while there are unsaved edits — it briefly
+  // appears whenever the user changes the workflow and disappears when
+  // auto-save settles. Mostly informational; users don't need to act on it.
   const triggerLabel = currentWorkflow
     ? `${currentWorkflow.name}${isDirty ? ' •' : ''}`
     : '(no workflow)';
@@ -206,62 +173,52 @@ export default function WorkflowMenu() {
               !error &&
               summaries.map((s) => {
                 const isCurrent = currentWorkflow?.id === s.id;
+                // Row is a wrapping <div> rather than a <button> so we can
+                // nest a separate "delete" button inside without putting a
+                // button-in-button (invalid HTML). Click anywhere except the
+                // delete glyph picks the row; the × handler stops propagation.
                 return (
-                  <button
+                  <div
                     key={s.id}
-                    type="button"
-                    aria-label={`workflow ${s.id}`}
                     aria-current={isCurrent}
                     className="wf-menu-row"
-                    onClick={() => void onPickRow(s.id)}
                   >
-                    <span className="wf-menu-row-mark" aria-hidden="true">
-                      {isCurrent ? '●' : ' '}
-                    </span>
-                    <span className="wf-menu-row-name">{s.name}</span>
-                    <span className="wf-menu-row-id serif-italic">{s.id}</span>
-                  </button>
+                    <button
+                      type="button"
+                      aria-label={`workflow ${s.id}`}
+                      className="wf-menu-row-pick"
+                      onClick={() => void onPickRow(s.id)}
+                    >
+                      <span className="wf-menu-row-name">{s.name}</span>
+                      <span className="wf-menu-row-id">{s.id}</span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`delete workflow ${s.id}`}
+                      className="wf-menu-row-delete"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void onDeleteRow(s.id, s.name);
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
                 );
               })}
           </div>
 
-          <div className="wf-menu-actions">
-            <button
-              type="button"
-              aria-label="save workflow"
-              className="wf-menu-action"
-              disabled={!currentWorkflow || !isDirty}
-              onClick={() => void onSave()}
-            >
-              save
-            </button>
-            <button
-              type="button"
-              aria-label="new workflow"
-              className="wf-menu-action"
-              onClick={() => void onNew()}
-            >
-              new
-            </button>
-            <button
-              type="button"
-              aria-label="duplicate workflow"
-              className="wf-menu-action"
-              disabled={!currentWorkflow}
-              onClick={() => void onDuplicate()}
-            >
-              duplicate
-            </button>
-            <button
-              type="button"
-              aria-label="delete workflow"
-              className="wf-menu-action wf-menu-action-danger"
-              disabled={!currentWorkflow}
-              onClick={() => void onDelete()}
-            >
-              delete
-            </button>
-          </div>
+          {/* Footer action: a single "+" button to create a new workflow.
+           * Replaces the old SAVE / DUPLICATE / DELETE row — Save auto-fires
+           * on change, Duplicate is gone, Delete moved per-row. */}
+          <button
+            type="button"
+            aria-label="new workflow"
+            className="wf-menu-new"
+            onClick={() => void onNew()}
+          >
+            +
+          </button>
         </div>
       )}
     </div>

@@ -1,88 +1,128 @@
 /*
- * InfLoop · Industrial Observatory
- * Hand-written, no Tailwind. Design tokens at the top, components below.
+ * InfLoop · Console
+ * Multi-hue terminal palette — Tokyo-Night-flavoured dark with per-node-type
+ * accent colors so each card on the canvas reads as its own small instrument
+ * rather than a uniformly-amber CRT. No scanlines, no glow, no blink — the
+ * colors do the work. Light theme is a calmer Tokyo Day analogue.
  */
 
 @import '@xyflow/react/dist/style.css';
 
 :root,
 [data-theme='dark'] {
-  --bg: #0a0a0c;
-  --bg-elevated: #111118;
-  --bg-input: #0e0e14;
-  --bg-deep: #050507;
-  /* Focus-state tint: warm brown-black for the dark theme. Used by inputs
-   * when focused. Light theme overrides below. */
-  --bg-input-focus: #14140e;
-  /* Surface overlay applied via theme-aware mix-blend-mode (see .grain
-   * and .wf-node-group-head). */
-  --surface-overlay: rgba(10, 10, 12, 0.55);
-  --grain-blend: overlay;
-  --grain-opacity: 0.05;
+  /* Warm-neutral charcoal substrate. Lifted from near-black to a soft
+   * dark-grey so the screen reads as paper-on-stage rather than a black
+   * pit; the accents still pop but the wall behind them is calmer.
+   * --bg-deep is the log/input surface (one notch darker than --bg) and
+   * --bg-elevated is for cards (one notch lighter). */
+  --bg: #2f2d29;
+  --bg-elevated: #383530;
+  --bg-input: #252320;
+  --bg-deep: #282622;
+  --bg-input-focus: #353129;
+  --surface-overlay: rgba(47, 45, 41, 0.65);
 
-  --border: rgba(160, 145, 115, 0.14);
-  --border-strong: rgba(160, 145, 115, 0.28);
-  --border-bright: rgba(245, 239, 225, 0.2);
+  --border: rgba(240, 237, 228, 0.10);
+  --border-strong: rgba(240, 237, 228, 0.22);
+  --border-bright: rgba(240, 237, 228, 0.45);
 
-  --fg: #f5efe1;
-  --fg-soft: #c9c2b3;
-  --fg-dim: #8a8478;
-  --fg-muted: #5e5a52;
-  --fg-faint: #3a3832;
+  --fg: #f0ede4;
+  --fg-soft: #cbc6b9;
+  --fg-dim: #8e8a7e;
+  --fg-muted: #6a665d;
+  --fg-faint: #423f39;
 
-  --accent-live: #ffb84d;
-  --accent-live-glow: rgba(255, 184, 77, 0.35);
-  --accent-on-live: #0a0a0c;
-  --accent-on-live-soft: rgba(10, 10, 12, 0.65);
-  --accent-ok: #5fb787;
-  --accent-err: #d76a5b;
-  --accent-info: #7c8aa8;
-  --accent-warn: #e6c068;
+  /* Status palette. `--accent-live` is the "running / hot" color used by
+   * pills, the live strip, the running card chevron, etc. */
+  --accent-live: #ff9e64;          /* peach — running */
+  --accent-live-glow: rgba(255, 158, 100, 0.0);
+  --accent-on-live: #16161e;
+  --accent-on-live-soft: rgba(22, 22, 30, 0.7);
+  --accent-ok: #9ece6a;             /* leaf green — succeeded */
+  --accent-ok-glow: rgba(158, 206, 106, 0.0);
+  --accent-err: #f7768e;             /* coral pink — failed / error */
+  --accent-err-glow: rgba(247, 118, 142, 0.0);
+  --accent-warn: #e0af68;            /* sand amber — cancelled / warning */
+  --accent-info: #7dcfff;            /* phosphor cyan — info / link */
 
-  /* Subtle wash used for hovers / row accents. Distinct token so it can
-   * shift hue per theme without changing the underlying accents. */
-  --hover-tint: rgba(255, 239, 200, 0.03);
+  /* Per-node-type accents. Each node card on the canvas tints its title +
+   * border with the matching color so the workflow reads at a glance. */
+  --node-start: #7aa2f7;             /* blue-violet — entrypoint */
+  --node-end: #9ece6a;               /* green — terminal */
+  --node-agent: #ff9e64;             /* warm peach — model runner */
+  --node-condition: #7dcfff;         /* cyan — predicate */
+  --node-loop: #bb9af7;              /* mauve — iteration */
+  --node-branch: #e0af68;            /* amber — branch */
+
+  --hover-tint: rgba(240, 237, 228, 0.05);
+
+  /* CRT effects retired — kept as `none` so any leftover references no-op
+   * gracefully. Worth deleting when the call-sites are pruned. */
+  --scanline: transparent;
+  --scanline-step: 3px;
+  --vignette: none;
+  --crt-glow: none;
+  --crt-glow-strong: none;
+  --crt-glow-ok: none;
+  --crt-glow-err: none;
 
   --serif: var(--font-serif), 'Newsreader', 'Source Serif', Georgia, serif;
   --mono: var(--font-mono), 'JetBrains Mono', 'Berkeley Mono', ui-monospace, monospace;
+  --display: var(--mono);
 
-  --top-bar-h: 56px;
+  --top-bar-h: 48px;
   --rail-w: 380px;
   --palette-w: 220px;
   --right-w: 440px;
 }
 
 [data-theme='light'] {
-  --bg: #f5efe1;
-  --bg-elevated: #ece5d3;
+  /* Warm-neutral paper. Previously had a faint blue undertone (Tokyo Day);
+   * the new base is a soft warm cream so the multi-hue accents land on a
+   * sympathetic substrate. */
+  --bg: #ece8df;
+  --bg-elevated: #e1ddd2;
   --bg-input: #ffffff;
-  --bg-deep: #e0d8c2;
-  --bg-input-focus: #fffbef;
-  --surface-overlay: rgba(245, 239, 225, 0.65);
-  --grain-blend: multiply;
-  --grain-opacity: 0.04;
+  --bg-deep: #d4cfc1;
+  --bg-input-focus: #faf6ec;
+  --surface-overlay: rgba(236, 232, 223, 0.65);
 
-  --border: rgba(60, 50, 30, 0.14);
-  --border-strong: rgba(60, 50, 30, 0.32);
-  --border-bright: rgba(30, 22, 8, 0.4);
+  --border: rgba(60, 52, 36, 0.16);
+  --border-strong: rgba(60, 52, 36, 0.34);
+  --border-bright: rgba(60, 52, 36, 0.6);
 
-  --fg: #1a1612;
-  --fg-soft: #3e362a;
-  --fg-dim: #6c6356;
-  --fg-muted: #8e8676;
-  --fg-faint: #b6ad9b;
+  --fg: #2a261d;
+  --fg-soft: #50493b;
+  --fg-dim: #786f5c;
+  --fg-muted: #9b937e;
+  --fg-faint: #beb6a3;
 
-  /* Slightly darker amber so it has contrast against cream paper. */
-  --accent-live: #c87a1a;
-  --accent-live-glow: rgba(200, 122, 26, 0.3);
-  --accent-on-live: #fffbef;
-  --accent-on-live-soft: rgba(255, 251, 239, 0.75);
-  --accent-ok: #2e7a4d;
-  --accent-err: #b04030;
-  --accent-info: #4a5c80;
-  --accent-warn: #a87a20;
+  --accent-live: #b15c00;             /* burnt orange */
+  --accent-live-glow: rgba(177, 92, 0, 0);
+  --accent-on-live: #ffffff;
+  --accent-on-live-soft: rgba(255, 255, 255, 0.85);
+  --accent-ok: #587539;
+  --accent-ok-glow: rgba(88, 117, 57, 0);
+  --accent-err: #8c4351;
+  --accent-err-glow: rgba(140, 67, 81, 0);
+  --accent-warn: #8f5e15;
+  --accent-info: #166775;
 
-  --hover-tint: rgba(60, 50, 30, 0.04);
+  --node-start: #2959aa;
+  --node-end: #587539;
+  --node-agent: #b15c00;
+  --node-condition: #166775;
+  --node-loop: #5a3e8e;
+  --node-branch: #8f5e15;
+
+  --hover-tint: rgba(60, 52, 36, 0.05);
+
+  --scanline: transparent;
+  --vignette: none;
+  --crt-glow: none;
+  --crt-glow-strong: none;
+  --crt-glow-ok: none;
+  --crt-glow-err: none;
 }
 
 * {
@@ -111,16 +151,22 @@ body {
   overflow-x: hidden;
 }
 
-/* ─── grain overlay ─────────────────────────────────────── */
+/* ─── grain (kept very subtle for surface texture, no CRT effect) ── */
 .grain {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 1;
-  opacity: var(--grain-opacity);
-  mix-blend-mode: var(--grain-blend);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  opacity: 0.025;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
 }
+
+/* CRT primitives retired. Kept as no-op shells so any consumer still
+ * referencing them by class name renders cleanly with no decoration. */
+.crt-cursor::after { content: ''; }
+.crt-glow,
+.crt-glow-strong { text-shadow: none; }
 
 /* ─── headlines ─────────────────────────────────────────── */
 .serif {
@@ -134,7 +180,10 @@ body {
   font-weight: 500;
 }
 
-/* ─── top bar ───────────────────────────────────────────── */
+/* ─── top bar (terminal status line) ─────────────────────── */
+/* Reads as a thin HUD bar across the top of the tube — solid black, single
+ * hairline rule below, no gradient. Feels less like a SaaS app chrome and
+ * more like a system monitor. */
 .top-bar {
   position: sticky;
   top: 0;
@@ -143,49 +192,72 @@ body {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  background: linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+  background: var(--bg-deep);
   border-bottom: 1px solid var(--border-strong);
-  backdrop-filter: blur(10px);
 }
 
 .brand {
-  padding-inline: 28px;
-  border-right: 1px solid var(--border);
+  padding-inline: 18px;
+  border-right: 1px dashed var(--border);
   height: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
+/* Connection-status cube. Doubles as the brand pip and the websocket / run
+ * indicator (the dedicated LINK pill is gone — its information lives here).
+ *   data-ws=closed | connecting → empty (transparent fill, grey outline)
+ *   data-ws=open + data-run=running → filled peach (live)
+ *   data-ws=open + any other run state → filled green (online, idle/done)
+ * The title attribute on the element exposes the same info on hover. */
 .brand-mark {
-  width: 12px;
-  height: 12px;
+  width: 9px;
+  height: 9px;
+  background: transparent;
+  border: 1px solid var(--fg-muted);
+  transform: none;
+  transition: background 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+}
+.brand-mark[data-ws='open'] {
+  background: var(--accent-ok);
+  border-color: var(--accent-ok);
+}
+.brand-mark[data-ws='open'][data-run='running'] {
   background: var(--accent-live);
-  box-shadow: 0 0 12px var(--accent-live-glow);
-  transform: rotate(45deg);
+  border-color: var(--accent-live);
 }
 .brand-text {
-  font-family: var(--serif);
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
+  color: var(--accent-live);
+  text-shadow: var(--crt-glow);
 }
 .brand-text em {
-  font-style: italic;
-  font-weight: 500;
-  color: var(--fg-soft);
-  margin-left: 6px;
+  font-style: normal;
+  font-weight: 400;
+  color: var(--fg-dim);
+  letter-spacing: 0.18em;
+  margin-left: 8px;
+  text-shadow: none;
+}
+.brand-text em::before {
+  content: '// ';
+  color: var(--fg-faint);
 }
 
 .crumbs {
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding-inline: 28px;
-  font-size: 11px;
+  gap: 14px;
+  padding-inline: 22px;
+  font-family: var(--mono);
+  font-size: 10.5px;
   color: var(--fg-dim);
   text-transform: uppercase;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.22em;
 }
 .crumbs span {
   display: inline-flex;
@@ -195,19 +267,22 @@ body {
 .crumbs strong {
   color: var(--fg);
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: none;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .actions {
-  padding-inline: 24px;
+  padding-inline: 18px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
 }
 
 /* ─── theme toggle ──────────────────────────────────────── */
+/* Same height/family as the rest of the action row. Transparent fill, single
+ * dashed border so it reads as "soft control" — closer to a switch than a
+ * button. */
 .theme-toggle {
   appearance: none;
   -webkit-appearance: none;
@@ -216,13 +291,13 @@ body {
   gap: 8px;
   height: 24px;
   padding-inline: 10px;
-  border: 1px solid var(--border-strong);
-  background: var(--bg-elevated);
+  border: 1px dashed var(--border-strong);
+  background: transparent;
   color: var(--fg-soft);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   cursor: pointer;
   transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
@@ -230,6 +305,7 @@ body {
 .theme-toggle:hover {
   color: var(--accent-live);
   border-color: var(--accent-live);
+  border-style: solid;
 }
 .theme-toggle:focus-visible {
   outline: 1px solid var(--accent-live);
@@ -266,6 +342,8 @@ body {
 }
 
 /* ─── status pill (top bar + RunPanel header) ──────────── */
+/* Hard-cornered status block with a square phosphor LED on the left. No
+ * rounded radius, no cards-everywhere look — reads like a relay panel. */
 .pill {
   display: inline-flex;
   align-items: center;
@@ -273,31 +351,34 @@ body {
   height: 24px;
   padding-inline: 10px;
   border: 1px solid var(--border-strong);
-  background: var(--bg-elevated);
-  font-size: 11px;
+  background: transparent;
+  font-family: var(--mono);
+  font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--fg-soft);
 }
 .pill .dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: 0;
   background: var(--fg-muted);
 }
 .pill[data-status='running'] .dot,
 .pill[data-state='running'] .dot {
   background: var(--accent-live);
-  box-shadow: 0 0 0 0 var(--accent-live-glow);
-  animation: pulse 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  box-shadow: 0 0 6px var(--accent-live-glow), 0 0 14px var(--accent-live-glow);
+  animation: crt-blink 1.05s step-end infinite;
 }
 .pill[data-status='succeeded'] .dot {
   background: var(--accent-ok);
+  box-shadow: var(--crt-glow-ok);
 }
 .pill[data-status='failed'] .dot,
 .pill[data-status='exhausted'] .dot {
   background: var(--accent-err);
+  box-shadow: var(--crt-glow-err);
 }
 .pill[data-status='cancelled'] .dot {
   background: var(--accent-warn);
@@ -305,28 +386,22 @@ body {
 .pill[data-status='running'] {
   color: var(--accent-live);
   border-color: var(--accent-live);
+  text-shadow: var(--crt-glow);
 }
 .pill[data-status='succeeded'] {
   color: var(--accent-ok);
   border-color: var(--accent-ok);
+  text-shadow: var(--crt-glow-ok);
 }
 .pill[data-status='failed'],
 .pill[data-status='exhausted'] {
   color: var(--accent-err);
   border-color: var(--accent-err);
+  text-shadow: var(--crt-glow-err);
 }
 .pill[data-status='cancelled'] {
   color: var(--accent-warn);
   border-color: var(--accent-warn);
-}
-
-@keyframes pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 var(--accent-live-glow);
-  }
-  50% {
-    box-shadow: 0 0 0 6px transparent;
-  }
 }
 
 /* ─── workspace ─────────────────────────────────────────── */
@@ -363,9 +438,10 @@ body {
 .config-stub,
 .run-view-stub {
   border: 1px dashed var(--border);
-  padding: 36px 24px;
+  padding: 28px 22px;
   color: var(--fg-dim);
   height: calc(100vh - var(--top-bar-h));
+  font-family: var(--mono);
 }
 .canvas-stub {
   border-left: none;
@@ -379,17 +455,38 @@ body {
 .run-view-stub {
   border-left: 1px solid var(--border);
   border-right: none;
+  border-top: 0;
+  border-bottom: 0;
+}
+
+/* Empty-config-panel placeholder — terminal prompt with a blinking cursor.
+ * Replaces the previous serif-italic "select a node to configure" text. */
+.config-empty {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--fg-dim);
+  margin: 0;
+}
+.config-empty-prompt {
+  color: var(--accent-live);
+  margin-right: 6px;
+  text-shadow: var(--crt-glow);
 }
 
 /* ─── RunView (live execution panel) ─────────────────────── */
+/* Reads as a terminal output pane. Hairline amber frame, no background fill
+ * for the outer panel — the log inside has its own deep-black surface so
+ * it visually pops as the "screen". */
 .run-view {
   border-left: 1px solid var(--border);
-  padding: 24px 22px;
+  padding: 18px 18px;
   height: calc(100vh - var(--top-bar-h));
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
   min-width: 0;
+  background: var(--bg);
 }
 
 .run-view-head {
@@ -397,66 +494,78 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--border);
 }
 
 .run-view-ws {
-  font-size: 10px;
-  letter-spacing: 0.18em;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--fg-dim);
 }
 
+/* "Currently running" strip — phosphor block at the top of the panel
+ * showing whatever node is live, styled like a HUD readout. */
 .run-view-current {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
-  padding: 12px 14px;
+  gap: 4px;
+  border: 1px solid var(--accent-live);
+  background: rgba(255, 184, 77, 0.04);
+  padding: 8px 12px;
+  box-shadow: inset 0 0 12px var(--accent-live-glow);
 }
 
 .run-view-current-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 12px;
-  color: var(--fg);
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent-live);
+  text-shadow: var(--crt-glow);
 }
 
 .run-view-current-id {
   font-family: var(--mono);
-  color: var(--fg-soft);
+  color: var(--fg);
+  letter-spacing: 0.04em;
 }
 
 .run-view-current-elapsed {
   margin-left: auto;
-  font-family: var(--mono);
-  font-size: 11px;
+  font-family: var(--display);
+  font-size: 18px;
   color: var(--accent-live);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
+  line-height: 1;
 }
 
 .run-view-log {
   border: 1px solid var(--border);
   background: var(--bg-deep);
+  box-shadow: inset 0 0 24px rgba(255, 184, 77, 0.04);
   max-height: 50vh;
   overflow: auto;
-  padding: 8px 0;
+  padding: 6px 0;
   flex: 1 1 auto;
   min-height: 0;
+  font-family: var(--mono);
 }
 
-/* Control-flow rows (run_started / node_started / node_finished / etc.):
- * keep the two-column "type | payload" layout — concise and scannable. */
+/* Control-flow rows (run_started / condition_checked / etc.) — terminal-
+ * style two-column readout. Type is a left-aligned uppercase label, payload
+ * is the value. */
 .run-view-log-row {
   display: grid;
-  grid-template-columns: 120px 1fr;
+  grid-template-columns: 110px 1fr;
   gap: 10px;
-  padding: 4px 14px;
+  padding: 3px 14px;
   font-family: var(--mono);
   font-size: 11px;
   color: var(--fg-soft);
-  border-bottom: 1px solid rgba(160, 145, 115, 0.06);
   align-items: baseline;
 }
 
@@ -466,7 +575,7 @@ body {
 
 .run-view-log-type {
   text-transform: uppercase;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.18em;
   color: var(--fg-dim);
   font-weight: 600;
   font-size: 9px;
@@ -474,23 +583,28 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.run-view-log-type::before {
+  content: '› ';
+  color: var(--fg-muted);
+}
 
 .run-view-log-payload {
   word-break: break-word;
   white-space: pre-wrap;
+  color: var(--fg);
 }
 
-/* Stdout streaming rows: full-width, monospace, no repeated label.
- * Reads like a tail. The nodeId prefix is dim so the actual line stands out. */
+/* Stdout streaming rows — reads like a tail. The nodeId prefix is faint so
+ * the actual line stands out; phosphor body color, slightly larger. */
 .run-view-log-row.is-stdout {
   display: block;
   padding: 1px 14px;
   font-family: var(--mono);
   font-size: 11.5px;
-  line-height: 1.45;
+  line-height: 1.5;
   color: var(--fg);
   border-bottom: 0;
-  background: var(--bg-deep);
+  background: transparent;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -498,12 +612,12 @@ body {
   margin-top: 4px;
 }
 .run-view-log-row.is-stdout .stdout-prefix {
-  color: var(--fg-muted);
+  color: var(--fg-faint);
   margin-right: 8px;
   user-select: none;
 }
 .run-view-log-row.is-stdout .stdout-line {
-  color: var(--fg-soft);
+  color: var(--fg);
 }
 
 .node-stub {
@@ -517,114 +631,168 @@ body {
 }
 
 /* ─── per-node event cards (log panel) ───────────────────── */
-/* Each card collects every event for a single node in the current run. The
- * outer .run-view-log keeps its scroll & background; cards stack inside. */
+/* Each card is a sub-panel of the terminal — a thin amber chevron on the
+ * left edge marks status (live/ok/err), the head reads as a tty prompt
+ * row, and the body holds the chunked output. No background fill so they
+ * blend into the log surface; the chevron + dashed header rule do the
+ * visual partitioning. */
 .event-card {
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  margin: 6px 0;
-  background: var(--bg-elevated);
-}
-.event-card + .event-card {
-  margin-top: 0;
-  border-top: 0;
+  border-left: 2px solid var(--border);
+  margin: 4px 0;
+  background: transparent;
+  position: relative;
 }
 .event-card[data-state='running'] {
-  border-left: 2px solid var(--accent-live);
+  border-left-color: var(--accent-live);
+  box-shadow: -2px 0 8px var(--accent-live-glow);
 }
 .event-card[data-state='finished'] {
-  border-left: 2px solid var(--accent-ok);
+  border-left-color: var(--accent-ok);
 }
 .event-card[data-state='errored'] {
-  border-left: 2px solid var(--accent-err);
+  border-left-color: var(--accent-err);
+  box-shadow: -2px 0 8px var(--accent-err-glow);
 }
 
 .event-card-head {
   display: flex;
   align-items: baseline;
-  gap: 12px;
-  padding: 6px 14px;
+  gap: 10px;
+  padding: 5px 12px;
   font-family: var(--mono);
   font-size: 10.5px;
   letter-spacing: 0.04em;
-  background: var(--bg-deep);
-  border-bottom: 1px solid var(--border);
+  background: transparent;
+  border-bottom: 1px dashed var(--border);
 }
-/* Clickable variant — strip default <button> chrome and stretch full width. */
 button.event-card-head-toggle {
   width: 100%;
   text-align: left;
   border: 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px dashed var(--border);
   cursor: pointer;
   color: inherit;
 }
 button.event-card-head-toggle:hover {
-  background: color-mix(in srgb, var(--bg-deep) 70%, var(--fg-muted) 30%);
+  background: var(--hover-tint);
 }
 button.event-card-head-toggle:focus-visible {
   outline: 1px solid var(--accent-live);
   outline-offset: -1px;
 }
 .event-card-fold {
-  margin-left: 8px;
+  margin-left: 6px;
   color: var(--fg-muted);
   font-size: 10px;
   width: 10px;
   text-align: center;
   user-select: none;
 }
+/* Pseudo-prompt before the node id, so each card head reads like a shell
+ * prompt in the log (`> claude-1 agent  RUNNING ...`). */
 .event-card-id {
   color: var(--fg);
   font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.event-card-id::before {
+  content: '> ';
+  color: var(--fg-muted);
 }
 .event-card-kind {
   text-transform: uppercase;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.22em;
   font-size: 9px;
   color: var(--fg-muted);
 }
 .event-card-status {
   margin-left: auto;
   text-transform: uppercase;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.2em;
   font-size: 9px;
   color: var(--fg-dim);
 }
-.event-card-status[data-state='running'] { color: var(--accent-live); }
-.event-card-status[data-state='finished'] { color: var(--accent-ok); }
-.event-card-status[data-state='errored'] { color: var(--accent-err); }
+.event-card-status[data-state='running'] {
+  color: var(--accent-live);
+  text-shadow: var(--crt-glow);
+  animation: crt-blink 1.05s step-end infinite;
+}
+.event-card-status[data-state='finished'] {
+  color: var(--accent-ok);
+  text-shadow: var(--crt-glow-ok);
+}
+.event-card-status[data-state='errored'] {
+  color: var(--accent-err);
+  text-shadow: var(--crt-glow-err);
+}
 
 .event-card-body {
-  padding: 4px 0;
+  padding: 4px 0 6px;
 }
 
 /* ─── workflow node cards (canvas) ──────────────────────── */
+/* Each node card on the canvas reads as a thin instrument tile with a
+ * phosphor LED in the head and a faint inner glow when live. Hard corners,
+ * monospace everywhere. The corner ticks (::before / ::after) hint at the
+ * box-drawing-character look without depending on Unicode rendering. */
 .wf-node {
   position: relative;
   width: 220px;
   min-height: 72px;
   padding: 12px 14px;
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   font-family: var(--mono);
   font-size: 12px;
   color: var(--fg-soft);
   transition: border-color 120ms ease, box-shadow 140ms ease;
 }
+.wf-node::before,
+.wf-node::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-color: var(--accent-live);
+  border-style: solid;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+.wf-node::before {
+  top: -1px;
+  left: -1px;
+  border-width: 1px 0 0 1px;
+}
+.wf-node::after {
+  bottom: -1px;
+  right: -1px;
+  border-width: 0 1px 1px 0;
+}
 .wf-node[data-selected='true'] {
   border-color: var(--border-bright);
-  box-shadow: 0 0 0 1px var(--border-bright);
+}
+.wf-node[data-selected='true']::before,
+.wf-node[data-selected='true']::after {
+  opacity: 1;
+  border-color: var(--fg);
 }
 .wf-node[data-state='live'] {
   border-color: var(--accent-live);
-  box-shadow: 0 0 16px var(--accent-live-glow);
+  box-shadow: 0 0 0 1px var(--accent-live), 0 0 18px var(--accent-live-glow),
+    inset 0 0 18px var(--accent-live-glow);
+}
+.wf-node[data-state='live']::before,
+.wf-node[data-state='live']::after {
+  opacity: 1;
 }
 .wf-node[data-state='succeeded'] {
-  border-color: color-mix(in srgb, var(--accent-ok) 55%, transparent);
+  border-color: var(--accent-ok);
+  box-shadow: 0 0 12px var(--accent-ok-glow);
 }
 .wf-node[data-state='failed'] {
-  border-color: color-mix(in srgb, var(--accent-err) 55%, transparent);
+  border-color: var(--accent-err);
+  box-shadow: 0 0 12px var(--accent-err-glow);
 }
 
 .wf-node-head {
@@ -642,45 +810,69 @@ button.event-card-head-toggle:focus-visible {
   text-transform: uppercase;
   color: var(--fg);
 }
-.wf-node[data-state='live'] .wf-node-title {
-  color: var(--accent-live);
-}
-.wf-node[data-state='succeeded'] .wf-node-title {
-  color: var(--accent-ok);
-}
-.wf-node[data-state='failed'] .wf-node-title {
-  color: var(--accent-err);
-}
+/* Per-node-type tinting — each node card on the canvas gets its title and
+ * a soft left-edge stripe in its own color, so a workflow reads as a
+ * keyboard of distinct instruments rather than a sea of identical blocks.
+ * Tokens live in :root (--node-*). */
+.wf-node[data-node-type='start'] { border-left: 2px solid var(--node-start); }
+.wf-node[data-node-type='start'] .wf-node-title { color: var(--node-start); }
+.wf-node[data-node-type='end'] { border-left: 2px solid var(--node-end); }
+.wf-node[data-node-type='end'] .wf-node-title { color: var(--node-end); }
+.wf-node[data-node-type='agent'] { border-left: 2px solid var(--node-agent); }
+.wf-node[data-node-type='agent'] .wf-node-title { color: var(--node-agent); }
+.wf-node[data-node-type='condition'] { border-left: 2px solid var(--node-condition); }
+.wf-node[data-node-type='condition'] .wf-node-title { color: var(--node-condition); }
+.wf-node[data-node-type='loop'] { border-left: 2px solid var(--node-loop); }
+.wf-node[data-node-type='loop'] .wf-node-title { color: var(--node-loop); }
+.wf-node[data-node-type='branch'] { border-left: 2px solid var(--node-branch); }
+.wf-node[data-node-type='branch'] .wf-node-title { color: var(--node-branch); }
+/* Run state still wins over the type color when the run is active, so the
+ * user can spot which node is hot at a glance. */
+.wf-node[data-state='live'] .wf-node-title { color: var(--accent-live); }
+.wf-node[data-state='succeeded'] .wf-node-title { color: var(--accent-ok); }
+.wf-node[data-state='failed'] .wf-node-title { color: var(--accent-err); }
 
+/* Square phosphor LED, not a round dot — feels like a relay panel. */
 .wf-node-state-dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
-  background: var(--fg-muted);
+  border-radius: 0;
+  background: var(--fg-faint);
 }
 .wf-node-state-dot[data-state='live'] {
   background: var(--accent-live);
-  box-shadow: 0 0 0 0 var(--accent-live-glow);
-  animation: pulse 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  box-shadow: 0 0 6px var(--accent-live-glow), 0 0 14px var(--accent-live-glow);
+  animation: crt-blink 1.05s step-end infinite;
 }
 .wf-node-state-dot[data-state='succeeded'] {
   background: var(--accent-ok);
+  box-shadow: 0 0 6px var(--accent-ok-glow);
 }
 .wf-node-state-dot[data-state='failed'] {
   background: var(--accent-err);
+  box-shadow: 0 0 6px var(--accent-err-glow);
 }
 
 .wf-node-body {
-  font-size: 12px;
-  color: var(--fg-soft);
-  line-height: 1.45;
+  font-size: 11px;
+  color: var(--fg);
+  line-height: 1.5;
   word-break: break-word;
+  font-family: var(--mono);
+  /* xyflow puts user-select: none on .react-flow__node so panning the
+   * canvas doesn't accidentally select text. Override on the body content
+   * specifically so the prompt preview / config preview is copy-able. */
+  user-select: text;
+  -webkit-user-select: text;
 }
+/* Was serif italic — switched to mono to stay consistent with the rest of
+ * the terminal aesthetic. Slightly muted vs. the head label, but readable. */
 .wf-node-body-italic {
-  font-family: var(--serif);
-  font-style: italic;
+  font-family: var(--mono);
+  font-style: normal;
   color: var(--fg-soft);
-  font-size: 13px;
+  font-size: 11px;
+  letter-spacing: 0;
 }
 
 .workflow-menu-stub {
@@ -697,34 +889,49 @@ button.event-card-head-toggle:focus-visible {
 
 .wf-menu-trigger {
   appearance: none;
-  background: var(--bg-elevated);
+  background: transparent;
   color: var(--fg-soft);
   font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.16em;
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  border: 1px solid var(--border-strong);
-  height: 28px;
+  border: 1px dashed var(--border-strong);
+  height: 26px;
   padding: 0 12px;
   display: inline-flex;
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  transition: border-color 120ms ease, color 120ms ease;
+  transition: border-color 120ms ease, color 120ms ease, border-style 120ms ease,
+    text-shadow 120ms ease;
+}
+.wf-menu-trigger::before {
+  content: '◇';
+  color: var(--fg-dim);
+  font-size: 11px;
+  margin-right: 2px;
 }
 .wf-menu-trigger:hover {
   color: var(--accent-live);
   border-color: var(--accent-live);
+  border-style: solid;
+  text-shadow: var(--crt-glow);
+}
+.wf-menu-trigger:hover::before {
+  color: var(--accent-live);
 }
 .wf-menu-trigger-name {
-  max-width: 22ch;
+  max-width: 24ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .wf-menu-trigger-caret {
-  font-size: 8px;
-  color: var(--fg-dim);
+  font-size: 9px;
+  color: var(--fg-muted);
+}
+.wf-menu-trigger:hover .wf-menu-trigger-caret {
+  color: var(--accent-live);
 }
 
 .wf-menu-panel {
@@ -732,8 +939,9 @@ button.event-card-head-toggle:focus-visible {
   top: calc(100% + 6px);
   right: 0;
   min-width: 280px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
+  background: var(--bg-deep);
+  border: 1px solid var(--accent-live);
+  box-shadow: 0 0 12px var(--accent-live-glow);
   z-index: 20;
   display: flex;
   flex-direction: column;
@@ -754,73 +962,131 @@ button.event-card-head-toggle:focus-visible {
   color: var(--accent-err);
 }
 
+/* Workflow rows: each row is a flex wrapper holding a "pick" button (the
+ * full-width click target — name + id) and a "delete" button (× shown on
+ * hover only). Name + id stack so the headline dominates, the id reads as
+ * a quiet annotation. Active row gets a full-height left-edge stripe in
+ * the accent color, plus a light background tint. */
 .wf-menu-row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+  border-left: 2px solid transparent;
+  background: transparent;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.wf-menu-row:last-child { border-bottom: 0; }
+.wf-menu-row:hover {
+  background: var(--hover-tint);
+  border-left-color: var(--border-strong);
+}
+.wf-menu-row[aria-current='true'] {
+  background: rgba(255, 158, 100, 0.08);
+  border-left-color: var(--accent-live);
+}
+
+.wf-menu-row-pick {
+  flex: 1 1 auto;
+  min-width: 0;
   appearance: none;
   background: transparent;
   border: 0;
-  border-bottom: 1px solid var(--border);
-  width: 100%;
   text-align: left;
   padding: 10px 14px;
   display: grid;
-  grid-template-columns: 14px 1fr auto;
-  gap: 10px;
-  align-items: baseline;
+  grid-template-columns: 1fr;
+  row-gap: 2px;
   cursor: pointer;
   font-family: var(--mono);
   color: var(--fg-soft);
-  transition: background 120ms ease, color 120ms ease;
+  transition: color 120ms ease;
 }
-.wf-menu-row:last-child {
-  border-bottom: 0;
-}
-.wf-menu-row:hover {
-  background: rgba(255, 184, 77, 0.06);
-  color: var(--accent-live);
-}
-.wf-menu-row-mark {
-  color: var(--accent-live);
-  font-size: 10px;
-  text-align: center;
-}
-.wf-menu-row-name {
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.wf-menu-row-id {
-  font-size: 11px;
-  color: var(--fg-muted);
+.wf-menu-row:hover .wf-menu-row-pick { color: var(--fg); }
+.wf-menu-row-pick:focus-visible {
+  outline: 1px solid var(--accent-live);
+  outline-offset: -2px;
 }
 
-.wf-menu-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-}
-.wf-menu-action {
+/* Per-row delete: a × glyph that appears only when the row is hovered or
+ * keyboard-focused. Keeps the rest list calm — no permanent destructive
+ * affordance. confirm() prompt fires on click. */
+.wf-menu-row-delete {
   appearance: none;
   background: transparent;
   border: 0;
-  border-right: 1px solid var(--border);
-  padding: 10px 12px;
+  align-self: stretch;
+  width: 32px;
+  flex: 0 0 32px;
   font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--fg-dim);
+  font-size: 16px;
+  line-height: 1;
+  color: var(--fg-muted);
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  opacity: 0;
+  transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
 }
-.wf-menu-action:last-child {
-  border-right: 0;
+.wf-menu-row:hover .wf-menu-row-delete { opacity: 1; }
+.wf-menu-row-delete:hover {
+  color: var(--accent-err);
+  background: rgba(247, 118, 142, 0.08);
 }
-.wf-menu-action:hover:not(:disabled) {
-  background: rgba(255, 184, 77, 0.08);
+.wf-menu-row-delete:focus-visible {
+  opacity: 1;
+  outline: 1px solid var(--accent-err);
+  outline-offset: -2px;
+}
+
+/* Hierarchy — name is the headline, id is the subtitle. */
+.wf-menu-row-name {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg);
+  line-height: 1.3;
+}
+.wf-menu-row[aria-current='true'] .wf-menu-row-name {
   color: var(--accent-live);
 }
-.wf-menu-action:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
+.wf-menu-row-id {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+  line-height: 1.2;
+}
+.wf-menu-row-id::before {
+  content: 'id › ';
+  color: var(--fg-faint);
+}
+
+/* Footer "+" button to create a new workflow. Single full-width tap target
+ * since the previous SAVE / DUPLICATE / DELETE row is gone (save is now
+ * automatic, delete moved per-row, duplicate retired). */
+.wf-menu-new {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--border);
+  width: 100%;
+  padding: 10px;
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--fg-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 120ms ease, background 120ms ease;
+}
+.wf-menu-new:hover {
+  color: var(--accent-live);
+  background: var(--hover-tint);
+}
+.wf-menu-new:focus-visible {
+  outline: 1px solid var(--accent-live);
+  outline-offset: -2px;
 }
 .wf-menu-action-danger:hover:not(:disabled) {
   background: rgba(215, 106, 91, 0.1);
@@ -856,43 +1122,58 @@ button.event-card-head-toggle:focus-visible {
 }
 
 /* ─── section heading (used in form + main) ─────────────── */
+/* Reads as a terminal section label: small phosphor block, label, then a
+ * dashed line out to the panel edge. Replaces the cleanly-typeset eyebrow. */
 .section-eyebrow {
-  font-size: 10px;
+  font-family: var(--mono);
+  font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: 0.32em;
+  letter-spacing: 0.34em;
   text-transform: uppercase;
-  color: var(--fg-muted);
+  color: var(--accent-live);
+  text-shadow: var(--crt-glow);
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 0 0 16px;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+.section-eyebrow::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--accent-live);
+  box-shadow: 0 0 6px var(--accent-live-glow);
 }
 .section-eyebrow::after {
   content: '';
   flex: 1;
-  height: 1px;
-  background: var(--border);
+  height: 0;
+  border-top: 1px dashed var(--border-strong);
 }
 
 .section-title {
-  font-family: var(--serif);
-  font-weight: 600;
-  font-size: 28px;
-  line-height: 1.1;
-  letter-spacing: -0.01em;
-  margin: 0 0 4px;
-  color: var(--fg);
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 36px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  margin: 0 0 6px;
+  color: var(--accent-live);
+  text-shadow: var(--crt-glow-strong);
 }
 .section-title em {
-  font-style: italic;
+  font-style: normal;
   color: var(--fg-soft);
+  text-shadow: none;
 }
 
 .section-sub {
-  font-size: 12px;
+  font-family: var(--mono);
+  font-size: 11px;
   color: var(--fg-dim);
-  margin: 0 0 28px;
-  max-width: 52ch;
+  margin: 0 0 24px;
+  max-width: 60ch;
+  letter-spacing: 0.04em;
 }
 
 /* ─── form ──────────────────────────────────────────────── */
@@ -966,6 +1247,91 @@ button.event-card-head-toggle:focus-visible {
   cursor: not-allowed;
 }
 
+/* Read-only "preview" input — used by the Working directory field, where
+ * the value is set exclusively via the Browse popover. Cursor + hover hint
+ * that the field is clickable to open the picker. */
+.field input.field-readonly {
+  cursor: pointer;
+  color: var(--fg-soft);
+}
+.field input.field-readonly:hover,
+.field input.field-readonly:focus {
+  color: var(--fg);
+  border-color: var(--border-bright);
+  background: var(--bg-input);
+  box-shadow: none;
+}
+
+/* CWD preview — rendered as a <div> styled like an input. Long paths are
+ * truncated in JavaScript (see ConfigPanel.tsx) so the visible label always
+ * shows the tail with a leading ellipsis. position: relative anchors the
+ * pseudo-element tooltip; NOTE we do NOT set overflow:hidden here because
+ * that would also clip the ::after tooltip. JS truncation guarantees the
+ * displayed string already fits. */
+.field .cwd-preview {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: calc(1.55em + 22px);   /* matches the standard .field input box */
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--fg-soft);
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+  /* Path is selectable so users can copy it — the click-to-open behaviour
+   * still works because click != drag-to-select. */
+  user-select: text;
+  -webkit-user-select: text;
+  white-space: nowrap;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+}
+.field .cwd-preview:hover,
+.field .cwd-preview:focus {
+  color: var(--fg);
+  border-color: var(--border-bright);
+  outline: none;
+}
+.field .cwd-preview:focus-visible {
+  border-color: var(--accent-live);
+  box-shadow: 0 0 0 1px var(--accent-live-glow);
+}
+.field .cwd-preview.is-empty { color: var(--fg-muted); }
+
+/* Hover tooltip — appears instantly (no native title-attr delay) showing
+ * the full untruncated path. CSS-only via `::after` + attr(data-tooltip).
+ * Hidden when the field is empty (no data-tooltip attribute → ::after
+ * content is the empty string, made invisible by `:not([data-tooltip])`). */
+.field .cwd-preview[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  max-width: min(560px, 80vw);
+  padding: 6px 10px;
+  background: var(--bg-elevated);
+  color: var(--fg);
+  border: 1px solid var(--border-strong);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 100ms ease, transform 100ms ease;
+}
+.field .cwd-preview[data-tooltip]:hover::after,
+.field .cwd-preview[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 /* segmented control replaces native <select> */
 .segmented {
   display: grid;
@@ -1014,6 +1380,186 @@ button.event-card-head-toggle:focus-visible {
 .segmented button:focus-visible {
   outline: 1px solid var(--accent-live);
   outline-offset: -2px;
+}
+
+/* Inline number-and-unit row used by the iteration timeout. The number takes
+ * the available width, the unit segmented control hugs the right edge. */
+.field-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.field-row > input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.field-row > .seg-tight {
+  flex: 0 0 auto;
+}
+
+/* Compact segmented variant — same look as .segmented but shorter padding,
+ * intended for inline unit selectors next to a number field. */
+.seg-tight {
+  display: inline-grid;
+  grid-auto-flow: column;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-input);
+}
+.seg-tight button {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  color: var(--fg-dim);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 0 10px;
+  min-width: 38px;
+  cursor: pointer;
+  border: 0;
+  border-right: 1px solid var(--border);
+  transition: color 120ms ease, background 120ms ease;
+}
+.seg-tight button:last-child { border-right: 0; }
+.seg-tight button:hover:not([data-active='true']) {
+  color: var(--fg-soft);
+  background: var(--hover-tint);
+}
+.seg-tight button[data-active='true'] {
+  color: var(--accent-on-live);
+  background: var(--accent-live);
+}
+.seg-tight button:focus-visible {
+  outline: 1px solid var(--accent-live);
+  outline-offset: -2px;
+}
+
+/* Hide the native number-input spinner arrows. Browsers render them
+ * inconsistently and they collide with our minimal field chrome — keyboard
+ * users still get full control via typing or the unit selector. */
+input[type='number'].no-spin::-webkit-inner-spin-button,
+input[type='number'].no-spin::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'].no-spin {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* ─── folder picker (server-backed dir browser) ─────────────── */
+/* Anchored popover that lists subdirectories from the server's filesystem
+ * — used by the agent's Working Directory field. Sits above the rest of the
+ * config panel content; outside-click and Escape close it (handled in the
+ * component). */
+.folder-picker {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  max-height: 360px;
+}
+
+.folder-picker-path {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-deep);
+}
+.folder-picker-path input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  padding: 0 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  outline: none;
+}
+.folder-picker-path input:focus {
+  border-color: var(--accent-live);
+  background: var(--bg-input-focus);
+}
+.folder-picker-up {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  background: transparent;
+  color: var(--fg-soft);
+  border: 1px solid var(--border-strong);
+  font-family: var(--mono);
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.folder-picker-up:hover:not(:disabled) {
+  color: var(--accent-live);
+  border-color: var(--accent-live);
+}
+.folder-picker-up:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.folder-picker-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 4px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.folder-picker-empty {
+  padding: 12px 16px;
+  color: var(--fg-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.folder-picker-error { color: var(--accent-err); }
+
+.folder-picker-row {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  color: var(--fg-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+.folder-picker-row:hover {
+  background: var(--hover-tint);
+  color: var(--accent-live);
+}
+.folder-picker-row-icon {
+  color: var(--fg-muted);
+  font-size: 10px;
+  text-align: center;
+}
+.folder-picker-row:hover .folder-picker-row-icon { color: var(--accent-live); }
+
+.folder-picker-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-deep);
 }
 
 .segmented .seg-label {
@@ -1077,47 +1623,40 @@ button.event-card-head-toggle:focus-visible {
 }
 
 /* ─── primary button ────────────────────────────────────── */
-/* Primary action button. Sized to sit level with the other top-bar controls
- * (theme toggle, History, status pills — all 24px). Filled with --accent-ok
- * (green) so the action stands out against those outlined/transparent
- * neighbours; .btn-stop swaps the fill to --accent-err (red) — same shape,
- * opposite intent. */
+/* Filled in --accent-live (peach) so it reads as the only saturated control
+ * in the action row. .btn-stop swaps to --accent-err (coral) for the same
+ * shape; .btn-toggle drops the fill and runs as a transparent chip. */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   height: 24px;
-  padding-inline: 10px;
-  background: var(--accent-ok);
+  padding-inline: 12px;
+  background: var(--accent-live);
   color: var(--accent-on-live);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  border: 1px solid var(--accent-ok);
+  border: 1px solid var(--accent-live);
   cursor: pointer;
   position: relative;
   transition: background 140ms ease, color 140ms ease, border-color 140ms ease,
     transform 80ms ease;
 }
-.btn::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  background: currentColor;
-  transform: rotate(45deg);
-}
+.btn::before,
+.btn::after { content: none; }
 .btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent-ok) 82%, white 18%);
-  border-color: color-mix(in srgb, var(--accent-ok) 82%, white 18%);
+  background: color-mix(in srgb, var(--accent-live) 84%, white 16%);
+  border-color: color-mix(in srgb, var(--accent-live) 84%, white 16%);
 }
 .btn:active:not(:disabled) {
   transform: translateY(1px);
 }
 .btn:disabled {
-  opacity: 0.35;
+  opacity: 0.4;
   cursor: not-allowed;
   background: transparent;
   border-color: var(--border-strong);
@@ -1129,33 +1668,27 @@ button.event-card-head-toggle:focus-visible {
   color: var(--accent-on-live);
   border-color: var(--accent-err);
 }
+.btn-stop:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-err) 84%, white 16%);
+  border-color: color-mix(in srgb, var(--accent-err) 84%, white 16%);
+}
 
-/* Secondary toggle — same geometry as the base .btn, but transparent fill
- * and a muted outline so it reads as a non-primary control (History). */
+/* Secondary toggle — transparent chip with a muted outline. Hover lifts to
+ * the live accent (peach) so the user gets visual feedback without committing
+ * to the filled-CTA treatment. */
 .btn-toggle {
   background: transparent;
-  border-color: var(--border-strong);
   color: var(--fg-soft);
-}
-.btn-toggle::before {
-  display: none;
+  border: 1px solid var(--border-strong);
 }
 .btn-toggle:hover:not(:disabled) {
-  background: transparent;
   color: var(--accent-live);
   border-color: var(--accent-live);
 }
 .btn-toggle[aria-pressed='true'] {
   background: transparent;
   color: var(--fg);
-  border-color: var(--fg);
-}
-.btn-stop::before {
-  transform: none;
-}
-.btn-stop:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent-err) 82%, white 18%);
-  border-color: color-mix(in srgb, var(--accent-err) 82%, white 18%);
+  border-color: var(--fg-soft);
 }
 
 /* ─── empty state ───────────────────────────────────────── */

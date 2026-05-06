@@ -1,9 +1,9 @@
 {
   "id": "loop-claude-until-condition",
   "name": "Loop Claude until condition",
-  "version": 6,
+  "version": 7,
   "createdAt": 1777359000000,
-  "updatedAt": 1777787905332,
+  "updatedAt": 1778047812451,
   "nodes": [
     {
       "id": "start-1",
@@ -36,7 +36,7 @@
           "config": {
             "providerId": "claude",
             "prompt": "Please use Chrome devtool mcp to test the project, all ui/ux to make sure they are not any ui/ux issue on it, if u find any issue just fix it and test again. DONT USE Playwright or others.\n\nIn this session u shouldn't ask any qeustion just YOLO ",
-            "cwd": "/Users/liyuqi/project/CodeCase/Infinite-Loop",
+            "cwd": "/Users/liyuqi/project/CodeCase/InfLoop",
             "timeoutMs": 1000000
           }
         }

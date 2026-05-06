@@ -143,12 +143,13 @@ export default function Palette() {
 const paletteCss = `
 .palette {
   border-right: 1px solid var(--border);
-  padding: 28px 20px 80px;
+  padding: 20px 14px 80px;
   height: calc(100vh - var(--top-bar-h));
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 20px;
+  background: var(--bg);
 }
 .palette-section {
   display: flex;
@@ -160,58 +161,73 @@ const paletteCss = `
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
 }
 .palette-empty {
-  font-family: var(--serif);
-  font-size: 11px;
+  font-family: var(--mono);
+  font-size: 10.5px;
   color: var(--fg-muted);
   padding: 6px 12px;
+  letter-spacing: 0.04em;
 }
+/* Each palette item reads like a shell-prompt row in a manifest:
+ * "› icon  NAME  description". No card chrome, no hover-fill — just a
+ * left-edge phosphor pip on hover that mimics a cursor stopping on the
+ * row. */
 .palette-item {
   appearance: none;
   -webkit-appearance: none;
   width: 100%;
   display: grid;
-  grid-template-columns: 22px 1fr;
-  gap: 12px;
+  grid-template-columns: 12px 22px 1fr;
+  gap: 10px;
   align-items: center;
   background: transparent;
-  border: 1px solid transparent;
-  padding: 10px 12px;
+  border: 0;
+  padding: 6px 10px 6px 6px;
   color: var(--fg-soft);
   font-family: var(--mono);
   cursor: grab;
   text-align: left;
-  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  transition: color 120ms ease, background 120ms ease;
+  position: relative;
+}
+.palette-item::before {
+  content: '·';
+  color: var(--fg-faint);
+  font-size: 10px;
+  text-align: center;
+  width: 12px;
 }
 .palette-item:hover {
+  color: var(--accent-live);
   background: var(--hover-tint);
-  border-color: var(--border);
-  color: var(--fg);
+  text-shadow: var(--crt-glow);
+}
+.palette-item:hover::before {
+  content: '›';
+  color: var(--accent-live);
+  text-shadow: var(--crt-glow);
 }
 .palette-item:active {
   cursor: grabbing;
 }
 .palette-item:focus-visible {
-  outline: 1px solid var(--accent-live);
+  outline: 1px dashed var(--accent-live);
   outline-offset: -2px;
 }
 .palette-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--serif);
-  font-size: 18px;
+  font-family: var(--mono);
+  font-size: 14px;
   line-height: 1;
   color: var(--fg-dim);
 }
 .palette-icon svg {
   display: block;
 }
-/* Raster brand asset rendered through a CSS mask so its silhouette is
- * painted in currentColor — keeps theme/hover tinting consistent with the
- * inline-SVG marks. */
 .provider-icon-mask {
   display: inline-block;
   background-color: currentColor;
@@ -228,21 +244,25 @@ const paletteCss = `
 .palette-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 .palette-name {
-  font-size: 11px;
+  font-family: var(--mono);
+  font-size: 10.5px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: inherit;
 }
 .palette-desc {
-  font-family: var(--serif);
-  font-style: italic;
-  font-size: 11px;
+  font-family: var(--mono);
+  font-style: normal;
+  font-size: 10px;
   color: var(--fg-muted);
-  letter-spacing: 0;
+  letter-spacing: 0.02em;
   text-transform: none;
+}
+.palette-item:hover .palette-desc {
+  color: var(--fg-soft);
 }
 `;

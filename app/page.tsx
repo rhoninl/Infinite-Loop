@@ -16,6 +16,7 @@ import WorkflowMenu from './components/WorkflowMenu';
 import ThemeToggle from './components/ThemeToggle';
 import { useEngineWebSocket } from '../lib/client/ws-client';
 import { useWorkflowStore } from '../lib/client/workflow-store-client';
+import { useAutoSave } from '../lib/client/use-auto-save';
 
 const DEFAULT_WORKFLOW_ID = 'loop-claude-until-condition';
 const RIGHT_WIDTH_STORAGE_KEY = 'infloop:right-width';
@@ -25,6 +26,7 @@ const CANVAS_MIN_WIDTH = 360;
 
 export default function Page() {
   useEngineWebSocket();
+  useAutoSave();
 
   const currentWorkflow = useWorkflowStore((s) => s.currentWorkflow);
   const runStatus = useWorkflowStore((s) => s.runStatus);
@@ -153,7 +155,13 @@ export default function Page() {
     <>
       <header className="top-bar">
         <div className="brand">
-          <span className="brand-mark" />
+          <span
+            className="brand-mark"
+            data-ws={wsStatus}
+            data-run={runStatus}
+            aria-label={`event stream ${wsStatus}, run ${runStatus}`}
+            title={`event stream ${wsStatus} · run ${runStatus}`}
+          />
           <span className="brand-text">
             Inf·Loop<em>Console</em>
           </span>
@@ -180,12 +188,6 @@ export default function Page() {
           >
             History
           </button>
-          <span
-            className="pill"
-            data-status={wsStatus === 'open' ? 'running' : 'idle'}
-          >
-            <span className="dot" /> Link · {wsStatus}
-          </span>
           <span className="pill" data-status={runStatus}>
             <span className="dot" /> {runStatus}
           </span>

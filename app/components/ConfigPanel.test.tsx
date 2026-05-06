@@ -75,7 +75,11 @@ describe('ConfigPanel', () => {
   it('renders the empty placeholder when nothing is selected', () => {
     render(<ConfigPanel />);
     expect(screen.getByLabelText('config panel')).toBeInTheDocument();
-    expect(screen.getByText('Select a node to configure')).toBeInTheDocument();
+    // Terminal-prompt placeholder: "› select a node to configure_". Match
+    // the meaningful inner text rather than the prompt + cursor decoration.
+    expect(
+      screen.getByText(/select a node to configure/i),
+    ).toBeInTheDocument();
   });
 
   it('renders Agent config fields when an Agent node is selected', () => {
@@ -89,7 +93,10 @@ describe('ConfigPanel', () => {
 
     expect(screen.getByLabelText('Prompt')).toBeInTheDocument();
     expect(screen.getByLabelText('Working directory')).toBeInTheDocument();
-    expect(screen.getByLabelText('Iteration timeout (ms)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Iteration timeout')).toBeInTheDocument();
+    expect(
+      screen.getByRole('group', { name: 'Iteration timeout unit' }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText('Provider')).toHaveTextContent('claude');
     // header shows id + type
     expect(screen.getByText(/agent-1/)).toBeInTheDocument();
@@ -240,6 +247,10 @@ describe('ConfigPanel', () => {
     render(<ConfigPanel />);
 
     expect(screen.getByLabelText('Prompt')).toHaveValue('inner');
-    expect(screen.getByLabelText('Working directory')).toHaveValue('/work');
+    // cwd field is a read-only div now (so CSS can truncate from the start
+    // and show the tail of long paths) — assert text content, not value.
+    expect(screen.getByLabelText('Working directory')).toHaveTextContent(
+      '/work',
+    );
   });
 });

@@ -34,11 +34,8 @@ const STATIC_GROUPS: Array<{ heading: string; items: ContextMenuItem[] }> = [
       { type: 'end', label: 'End' },
       { type: 'loop', label: 'Loop' },
       { type: 'branch', label: 'If' },
+      { type: 'condition', label: 'Condition' },
     ],
-  },
-  {
-    heading: 'I/O',
-    items: [{ type: 'condition', label: 'Condition' }],
   },
 ];
 
@@ -88,17 +85,24 @@ export default function CanvasContextMenu({ open, onClose, onPick }: Props) {
       }
     };
     const onMouseDown = (e: MouseEvent) => {
+      // Right-click is handled by the canvas's onContextMenu (it toggles
+      // the menu open ⇆ closed). Skip it here so the same right-click
+      // doesn't close-then-reopen the menu in two competing handlers.
+      if (e.button !== 0) return;
       const root = rootRef.current;
       if (!root) return;
       if (!root.contains(e.target as Node)) onClose();
     };
     document.addEventListener('keydown', onKey);
-    // mousedown so the menu can dismiss before downstream handlers (e.g.
-    // xyflow's pane click that would clear selection) react to the same gesture.
-    document.addEventListener('mousedown', onMouseDown);
+    // CAPTURE PHASE — xyflow's pane handlers call stopPropagation() on
+    // native mousedown, which would prevent a bubble-phase document listener
+    // from ever seeing the event. Listening in capture means we run BEFORE
+    // xyflow gets the chance to suppress the bubble. Clicks inside the menu
+    // are filtered by `root.contains(target)` below, so this is safe.
+    document.addEventListener('mousedown', onMouseDown, true);
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('mousedown', onMouseDown, true);
     };
   }, [open, onClose]);
 
