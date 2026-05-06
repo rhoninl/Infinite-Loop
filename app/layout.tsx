@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Newsreader, JetBrains_Mono } from 'next/font/google';
+import { Providers } from '@/providers/heroui-provider';
 import './globals.css';
 
 const newsreader = Newsreader({
@@ -50,7 +51,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
        */}
       <body suppressHydrationWarning>
         <div className="grain" aria-hidden="true" />
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

@@ -6,7 +6,23 @@
  * colors do the work. Light theme is a calmer Tokyo Day analogue.
  */
 
+/*
+ * @import must come before any non-`@charset`/`@layer` rule per the CSS
+ * spec — including `@tailwind` directives. xyflow's stylesheet is loaded
+ * first, then Tailwind's three layers.
+ */
 @import '@xyflow/react/dist/style.css';
+
+/*
+ * Tailwind v3 directives. Preflight (the `base` layer) resets element
+ * defaults, which previously came from our hand-rolled CSS below. The
+ * subsequent custom rules in this file are intentionally LEFT IN PLACE so
+ * non-migrated components keep rendering identically — each component
+ * migration unit will retire the rules it owns.
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root,
 [data-theme='dark'] {
