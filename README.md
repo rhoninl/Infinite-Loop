@@ -112,8 +112,13 @@ bun run start       # NODE_ENV=production bun server.ts
 | **Condition** | `kind: sentinel \| command \| judge`, `against?`, plus per-kind config | `met`, `detail` | `met` / `not_met` / `error` |
 | **Loop** | `maxIterations`, `mode: while-not-met \| unbounded` | `iterations`, `broke` | `next` |
 | **Branch** | `lhs`, `op: == \| != \| contains \| matches`, `rhs` | `result`, `lhs`, `rhs`, `op` | `true` / `false` / `error` |
+| **Parallel** | `mode: wait-all \| race \| quorum`, `quorumN?`, `onError: fail-fast \| best-effort` | `mode`, `completed`, `failed`, `children: { [branchId]: { status, outputs, error? } }`, `winner?`, `winners?` | `all_done` / `first_done` / `quorum_met` / `error` |
+| **Subworkflow** | `workflowId`, `inputs: Record<string,string>` (templated), `outputs: Record<string,string>` (dotted child paths) | declared output names mapped from child terminal scope, plus `status`, `errorMessage?` | `next` / `error` |
+| **Judge** | `criteria`, `candidates: string[]`, `judgePrompt?`, `model?`, `providerId?` | `winner_index`, `winner`, `scores`, `reasoning` | `next` / `error` |
 
 Both `lhs` and `rhs` of a Branch (and Claude's `prompt` and `cwd`, and Condition's `against`) are templating-aware. Write `{{claude-1.stdout}} contains "DONE"` and the engine resolves it against the run's flat scope before evaluating.
+
+**Multi-agent primitives.** `Parallel` is a container that runs N child branches concurrently with a configurable join (`wait-all`, `race`, or `quorum:N`) and error policy (`fail-fast` cancels siblings; `best-effort` lets them finish). `Subworkflow` calls another workflow as a single node with isolated I/O — declared `inputs` are templated from parent scope into the child's `__inputs`, and named `outputs` are copied back. `Judge` takes N candidate texts and asks a Claude judge to pick the best, exposing structured `winner_index`, `scores`, and `reasoning`.
 
 ### Sentinel vs Command vs Judge
 
@@ -191,6 +196,12 @@ Each workflow is one JSON file in `workflows/`:
 
 Edit by hand, drop in `workflows/`, refresh the page — the menu picks it up. Save from the top-bar menu to validate + bump version + atomic-rename.
 
+### Workflow library
+
+`workflows/library/` holds read-only repo-shipped presets. They appear in the workflow menu with a `[library]` tag and can be opened, run, or duplicated into your local `workflows/` for editing — but never overwritten in place.
+
+The `Team` preset fans three Claudes out in parallel and lets a Judge pick the winner. Open it from the workflow menu, set the `__inputs.task` and `__inputs.criteria`, and run.
+
 ## Configuration
 
 Environment variables:
@@ -211,10 +222,11 @@ Environment variables:
 
 ## Roadmap
 
-The current build ships **Phase 1** of the spec: 6 node types (Start, End, Claude, Condition, Loop, Branch) and the live SSE pipeline. Future phases:
+The current build ships **Phase 1** of the spec — 6 base node types (Start, End, Claude, Condition, Loop, Branch) and the live SSE pipeline — plus the Phase 1.5 multi-agent primitives. Future phases:
 
-- **Phase 2:** `Shell` (run arbitrary command), `Judge` as its own node type, `SetVar` (write a named variable), `Catch` (run a subgraph on error before settling), predicate DSL with `&&` / `||` / `!`.
-- **Phase 3:** `Parallel` (fan-out/fan-in), `Subworkflow` (call another workflow as a node), `Wait`, `HTTP`, `Switch` (multi-way).
+- **Phase 1.5 (current):** `Parallel`, `Subworkflow`, and `Judge` are now first-class node types; ships with a Team preset workflow. See [`docs/superpowers/specs/2026-05-06-multi-agent-orchestration-design.md`](docs/superpowers/specs/2026-05-06-multi-agent-orchestration-design.md).
+- **Phase 2:** `Shell` (run arbitrary command), `SetVar` (write a named variable), `Catch` (run a subgraph on error before settling), predicate DSL with `&&` / `||` / `!`.
+- **Phase 3:** `Wait`, `HTTP`, `Switch` (multi-way).
 
 See [`docs/superpowers/specs/2026-04-28-workflow-dag-design.md`](docs/superpowers/specs/2026-04-28-workflow-dag-design.md) for the full design.
 

@@ -3,11 +3,17 @@
  *
  * Phase 1 model:
  *  - Single active run.
- *  - BFS-style sequential walk along control edges (no Parallel yet).
+ *  - BFS-style sequential walk along control edges.
  *  - Loop is built-in: when the engine encounters a `loop` node it walks the
  *    container's children until a `break` edge fires; `continue` re-enters.
  *  - Cancellation: AbortController; engine kills the active executor and
  *    settles run as `cancelled`. Catch routing comes in Phase 2.
+ *
+ * Phase 2 / U1:
+ *  - `parallel` is built-in: branches walk concurrently with isolated scopes.
+ *  - `subworkflow` is built-in: child workflow walked in the same run context
+ *    with an isolated child scope; events tagged via `<subwf-id>/<child-id>`
+ *    nodeId namespacing so we do not need to add new event fields.
  *
  * Templating is delegated to lib/server/templating.ts; the engine resolves
  * each text-typed config field of every node before invoking the executor.
@@ -18,9 +24,11 @@ import type {
   LoopConfig,
   NodeExecutor,
   NodeExecutorContext,
+  ParallelConfig,
   RunSnapshot,
   RunStatus,
   Scope,
+  SubworkflowConfig,
   TerminalRunStatus,
   Workflow,
   WorkflowEdge,
@@ -31,6 +39,7 @@ import { eventBus } from './event-bus';
 import { nodeExecutors } from './nodes/index';
 import { saveRun } from './run-store';
 import { resolve as resolveTemplate } from './templating';
+import { getWorkflow } from './workflow-store';
 
 const TEXT_CONFIG_FIELDS: Partial<Record<string, string[]>> = {
   agent: ['prompt', 'cwd'],
@@ -43,11 +52,16 @@ interface ExecutionScope {
   parentNode?: WorkflowNode;
   /** Iteration index for the nearest enclosing Loop. */
   loopIteration?: number;
+  /** Stack of subworkflow node ids encountered on the way to here. Used to
+   * namespace event nodeIds so the UI can scope highlights per subworkflow.
+   * Empty for top-level runs. */
+  subworkflowStack?: string[];
 }
 
 /** Sliding-window cap so a chatty Claude run can't grow the live-rehydration
- * buffer unboundedly. Most events are tiny; 2k entries ≈ a few hundred kB. */
-const EVENT_HISTORY_CAP = 2000;
+ * buffer unboundedly. Most events are tiny; 5k entries ≈ a few hundred kB.
+ * Bumped from 2k → 5k to accommodate concurrent parallel branches. */
+const EVENT_HISTORY_CAP = 5000;
 
 /** Higher cap for the persistence buffer. The persisted log is the full run
  * history a user reviews after the fact; we want it as complete as possible
@@ -55,6 +69,10 @@ const EVENT_HISTORY_CAP = 2000;
  * exceeded, oldest events are dropped first and `truncated` is set on the
  * record so the UI can warn that earlier events are missing. */
 const PERSIST_EVENT_CAP = 50_000;
+
+/** Optional injection point for tests to substitute the workflow loader used
+ * by `walkSubworkflow`. The engine defaults to `workflow-store.getWorkflow`. */
+export type WorkflowLoader = (id: string) => Promise<Workflow>;
 
 export class WorkflowEngine {
   private snapshot: RunSnapshot = {
@@ -71,9 +89,14 @@ export class WorkflowEngine {
   private currentRunId?: string;
 
   private executors: Record<string, NodeExecutor>;
+  private loadWorkflow: WorkflowLoader;
 
-  constructor(executors: Record<string, NodeExecutor> = nodeExecutors) {
+  constructor(
+    executors: Record<string, NodeExecutor> = nodeExecutors,
+    loadWorkflow: WorkflowLoader = getWorkflow,
+  ) {
     this.executors = executors;
+    this.loadWorkflow = loadWorkflow;
   }
 
   getState(): RunSnapshot {
@@ -133,7 +156,7 @@ export class WorkflowEngine {
       const start = workflow.nodes.find((n) => n.type === 'start');
       if (!start) throw new Error("workflow has no 'start' node");
 
-      const result = await this.walkFrom(start, {});
+      const result = await this.walkFrom(start, {}, this.snapshot.scope, workflow);
       finalStatus = result;
     } catch (err) {
       if (this.abort.signal.aborted) {
@@ -249,13 +272,15 @@ export class WorkflowEngine {
     }
   }
 
-  private nodesById(): Map<string, { node: WorkflowNode; parent?: WorkflowNode }> {
+  private nodesById(
+    workflow: Workflow,
+  ): Map<string, { node: WorkflowNode; parent?: WorkflowNode }> {
     const map = new Map<string, { node: WorkflowNode; parent?: WorkflowNode }>();
     const visit = (n: WorkflowNode, parent?: WorkflowNode) => {
       map.set(n.id, { node: n, parent });
       for (const c of n.children ?? []) visit(c, n);
     };
-    for (const n of this.workflow!.nodes) visit(n);
+    for (const n of workflow.nodes) visit(n);
     return map;
   }
 
@@ -263,28 +288,52 @@ export class WorkflowEngine {
    * Walk forward from `node` until reaching an `end` node, exhausting all
    * outgoing edges of the active branch, or hitting a settle condition.
    * Returns the run's terminal status.
+   *
+   * `scope` is the active variable scope to read from / write into. Top-level
+   * walks pass `this.snapshot.scope`; parallel branches pass a branch-local
+   * scope; subworkflows pass a fresh child scope.
    */
   private async walkFrom(
     node: WorkflowNode,
     exec: ExecutionScope,
+    scope: Scope,
+    workflow: Workflow,
+    signal: AbortSignal = this.abort!.signal,
   ): Promise<Exclude<RunStatus, 'idle' | 'running'>> {
     let current: WorkflowNode | undefined = node;
-    const allNodes = this.nodesById();
+    const allNodes = this.nodesById(workflow);
 
     while (current) {
-      if (this.abort?.signal.aborted) return 'cancelled';
+      if (signal.aborted) return 'cancelled';
 
-      this.snapshot.currentNodeId = current.id;
+      this.snapshot.currentNodeId = this.namespaced(current.id, exec);
 
       if (current.type === 'loop') {
-        const loopOutcome = await this.walkLoop(current, exec, allNodes);
+        const loopOutcome = await this.walkLoop(
+          current,
+          exec,
+          scope,
+          workflow,
+          signal,
+        );
         if (loopOutcome.terminal) return loopOutcome.status!;
-        // After the loop body breaks, follow the loop node's `next` edge.
-        current = this.followBranch(current.id, 'next', allNodes);
+        current = this.followBranch(current.id, 'next', allNodes, workflow);
         continue;
       }
 
-      const branch = await this.executeNode(current, exec);
+      if (current.type === 'parallel' || current.type === 'subworkflow') {
+        const branch =
+          current.type === 'parallel'
+            ? await this.walkParallel(current, exec, scope, workflow, signal)
+            : await this.walkSubworkflow(current, exec, scope, signal);
+        if (branch === 'cancelled') return 'cancelled';
+        const next = this.followBranch(current.id, branch, allNodes, workflow);
+        if (!next) return branch === 'error' ? 'failed' : 'succeeded';
+        current = next;
+        continue;
+      }
+
+      const branch = await this.executeNode(current, exec, scope, signal);
 
       if (current.type === 'end') {
         const cfg = current.config as { outcome?: 'succeeded' | 'failed' };
@@ -292,8 +341,6 @@ export class WorkflowEngine {
       }
 
       // Inside a loop body, met/break exits the loop, not_met/continue re-enters.
-      // For other branches, try to follow an explicit edge; dangling means continue
-      // (so the body can fall off the end into a new iteration).
       if (exec.parentNode?.type === 'loop') {
         if (branch === 'met' || branch === 'break') {
           this.setLoopSignal('break');
@@ -304,14 +351,14 @@ export class WorkflowEngine {
           return 'succeeded';
         }
         if (branch === 'error') {
-          const errNext = this.followBranch(current.id, branch, allNodes);
+          const errNext = this.followBranch(current.id, branch, allNodes, workflow);
           if (errNext) {
             current = errNext;
             continue;
           }
           return 'failed';
         }
-        const next = this.followBranch(current.id, branch, allNodes);
+        const next = this.followBranch(current.id, branch, allNodes, workflow);
         if (!next) {
           this.setLoopSignal('continue');
           return 'succeeded';
@@ -321,7 +368,7 @@ export class WorkflowEngine {
       }
 
       // Top-level walk.
-      const next = this.followBranch(current.id, branch, allNodes);
+      const next = this.followBranch(current.id, branch, allNodes, workflow);
       if (!next) {
         if (branch === 'error') return 'failed';
         return 'succeeded';
@@ -333,18 +380,14 @@ export class WorkflowEngine {
   }
 
   /**
-   * Walk a Loop container's body. Each iteration starts at the first child
-   * reachable from the Loop's `next` edge into the body (i.e. the body's own
-   * top-level entry). The body runs until a node fires `break` or `continue`,
-   * or until maxIterations is hit, or the run is cancelled.
-   *
-   * When `cfg.infinite` is true the iteration cap is dropped: only `break`,
-   * a terminal `end` node, or run cancellation exits the loop.
+   * Walk a Loop container's body. Each iteration starts at the first child.
    */
   private async walkLoop(
     loopNode: WorkflowNode,
     exec: ExecutionScope,
-    allNodes: Map<string, { node: WorkflowNode; parent?: WorkflowNode }>,
+    scope: Scope,
+    workflow: Workflow,
+    signal: AbortSignal,
   ): Promise<{ terminal: boolean; status?: Exclude<RunStatus, 'idle' | 'running'> }> {
     const cfg = loopNode.config as LoopConfig;
     const max = cfg.maxIterations ?? 100;
@@ -352,45 +395,422 @@ export class WorkflowEngine {
     const children = loopNode.children ?? [];
     if (children.length === 0) return { terminal: false };
 
-    // The body's entry is the first child whose id has no inbound edge from
-    // any sibling child — i.e., the source of the body. Convention: callers
-    // mark it as the first item in `children`.
     const bodyEntry = children[0];
-    const bodyExec: ExecutionScope = { parentNode: loopNode };
+    const bodyExec: ExecutionScope = {
+      parentNode: loopNode,
+      subworkflowStack: exec.subworkflowStack,
+    };
 
     for (let i = 1; infinite || i <= max; i++) {
-      if (this.abort?.signal.aborted) return { terminal: true, status: 'cancelled' };
+      if (signal.aborted) return { terminal: true, status: 'cancelled' };
 
       this.snapshot.iterationByLoopId[loopNode.id] = i;
       bodyExec.loopIteration = i;
 
-      // Reset the loop-signal slot before walking the body.
       (this.snapshot as unknown as { _loopSignal?: EdgeHandle })._loopSignal = undefined;
 
-      // Walk the body. The walkFrom call returns when:
-      // - it hits a node that fires `break`/`continue` (signal stored)
-      // - it dead-ends with no outgoing edge (treated as `continue`)
-      // - it hits an `end` node (terminal — no signal set)
-      // - it errors out (terminal failure — no signal set)
-      let bodyStatus: Exclude<RunStatus, 'idle' | 'running'>;
-      try {
-        bodyStatus = await this.walkFrom(bodyEntry, bodyExec);
-      } catch (err) {
-        // bubble up — outer try/catch in start() handles
-        throw err;
-      }
+      const bodyStatus = await this.walkFrom(bodyEntry, bodyExec, scope, workflow, signal);
 
-      const signal = this.readLoopSignal();
-      if (signal === 'break') return { terminal: false };
-      if (signal === 'continue') continue;
-      // No loop signal: the body terminated the whole run (end node or
-      // unrecoverable error). Propagate up so the engine settles. Without
-      // this, an infinite loop containing an `end` node would never exit.
+      const loopSig = this.readLoopSignal();
+      if (loopSig === 'break') return { terminal: false };
+      if (loopSig === 'continue') continue;
       return { terminal: true, status: bodyStatus };
     }
-    // Hit the cap — fall through (no break fired). Treat as "loop exhausted":
-    // we still continue past the loop node; outputs reflect maxIterations.
     return { terminal: false };
+  }
+
+  /**
+   * Walk a Parallel container. Branch identification: each direct child of
+   * the parallel node whose id is NOT the target of any edge whose source is
+   * also a child of the same parallel container is a "branch root." That
+   * branch's sub-DAG is the branch root + everything reachable inside the
+   * container along edges whose source AND target are children.
+   *
+   * Each branch:
+   *   - receives a frozen snapshot copy of the parent scope
+   *   - runs in its own `walkFrom` task with its own scope object
+   *   - gets a per-branch AbortController chained off the run signal
+   *
+   * Mode → success branch handle:
+   *   wait-all → 'all_done', race → 'first_done', quorum → 'quorum_met'
+   */
+  private async walkParallel(
+    parallelNode: WorkflowNode,
+    exec: ExecutionScope,
+    parentScope: Scope,
+    workflow: Workflow,
+    signal: AbortSignal,
+  ): Promise<EdgeHandle | 'cancelled'> {
+    const cfg = parallelNode.config as ParallelConfig;
+    const children = parallelNode.children ?? [];
+    if (children.length === 0) {
+      // Empty container → success-by-default.
+      parentScope[parallelNode.id] = {
+        mode: cfg.mode,
+        completed: 0,
+        failed: 0,
+        children: {},
+      };
+      return successHandleFor(cfg.mode);
+    }
+
+    const childIds = new Set(children.map((c) => c.id));
+    const branchRoots = identifyBranchRoots(children, workflow.edges, childIds);
+
+    // Snapshot the parent scope at parallel-entry time. Each branch gets a
+    // shallow per-key copy so it can write its own outputs without colliding
+    // with siblings. Inputs read from the snapshot's frozen view.
+    const parentSnapshot = snapshotScope(parentScope);
+
+    type BranchResult = {
+      branchId: string;
+      status: 'succeeded' | 'failed' | 'cancelled';
+      outputs: Record<string, unknown>;
+      error?: string;
+    };
+
+    // Each branch has its own AbortController, chained off the parent signal.
+    const branchControllers = new Map<string, AbortController>();
+    const branchScopes = new Map<string, Scope>();
+    for (const root of branchRoots) {
+      const ctrl = new AbortController();
+      const onParentAbort = () => ctrl.abort();
+      if (signal.aborted) ctrl.abort();
+      else signal.addEventListener('abort', onParentAbort, { once: true });
+      branchControllers.set(root.id, ctrl);
+      branchScopes.set(root.id, { ...parentSnapshot });
+    }
+
+    const need = cfg.mode === 'quorum' ? Math.max(1, cfg.quorumN ?? 1) : 0;
+    const onError = cfg.onError;
+    const winners: string[] = []; // branch ids that succeeded, in completion order
+    const completedFailures: string[] = []; // branch ids that failed (non-cancelled)
+
+    const branchPromise = async (root: WorkflowNode): Promise<BranchResult> => {
+      const branchScope = branchScopes.get(root.id)!;
+      const branchCtrl = branchControllers.get(root.id)!;
+      const branchExec: ExecutionScope = {
+        parentNode: parallelNode,
+        loopIteration: exec.loopIteration,
+        subworkflowStack: exec.subworkflowStack,
+      };
+      try {
+        const status = await this.walkFrom(
+          root,
+          branchExec,
+          branchScope,
+          workflow,
+          branchCtrl.signal,
+        );
+        if (branchCtrl.signal.aborted) {
+          return { branchId: root.id, status: 'cancelled', outputs: {} };
+        }
+        // Branch outputs: everything the branch wrote that wasn't already in
+        // the parent snapshot. We expose the branch root's own outputs plus
+        // anything written by descendants reachable inside the container.
+        const outputs = collectBranchOutputs(branchScope, parentSnapshot);
+        if (status === 'succeeded') {
+          return { branchId: root.id, status: 'succeeded', outputs };
+        }
+        return {
+          branchId: root.id,
+          status: 'failed',
+          outputs,
+          error: typeof outputs.errorMessage === 'string' ? outputs.errorMessage : status,
+        };
+      } catch (err) {
+        if (branchCtrl.signal.aborted) {
+          return { branchId: root.id, status: 'cancelled', outputs: {} };
+        }
+        return {
+          branchId: root.id,
+          status: 'failed',
+          outputs: {},
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    };
+
+    // We resolve `done` once we know the parallel's outcome. After that we
+    // abort any still-running siblings; their final result still streams in
+    // via Promise.all so we can record `cancelled` status accurately.
+    let resolveOutcome!: (v: 'success' | 'error' | 'cancelled') => void;
+    const outcomePromise = new Promise<'success' | 'error' | 'cancelled'>((r) => {
+      resolveOutcome = r;
+    });
+    let outcomeSettled = false;
+    const settleOutcome = (v: 'success' | 'error' | 'cancelled') => {
+      if (outcomeSettled) return;
+      outcomeSettled = true;
+      resolveOutcome(v);
+    };
+
+    const cancelAllSiblings = () => {
+      for (const c of branchControllers.values()) c.abort();
+    };
+
+    // Track each branch's completion individually so we can settle early.
+    const all = branchRoots.map((root) =>
+      branchPromise(root).then((res) => {
+        if (res.status === 'succeeded') {
+          winners.push(res.branchId);
+          if (cfg.mode === 'race') {
+            settleOutcome('success');
+            cancelAllSiblings();
+          } else if (cfg.mode === 'quorum' && winners.length >= need) {
+            settleOutcome('success');
+            cancelAllSiblings();
+          }
+        } else if (res.status === 'failed') {
+          completedFailures.push(res.branchId);
+          if (onError === 'fail-fast') {
+            settleOutcome('error');
+            cancelAllSiblings();
+          }
+        }
+        return res;
+      }),
+    );
+
+    // When all branches resolve, settle if we haven't already.
+    void Promise.all(all).then(() => {
+      if (signal.aborted) {
+        settleOutcome('cancelled');
+        return;
+      }
+      // best-effort or wait-all: decide based on surviving counts.
+      if (cfg.mode === 'wait-all') {
+        if (completedFailures.length === 0) settleOutcome('success');
+        else settleOutcome('error');
+        return;
+      }
+      if (cfg.mode === 'race') {
+        if (winners.length > 0) settleOutcome('success');
+        else settleOutcome('error');
+        return;
+      }
+      // quorum
+      if (winners.length >= need) settleOutcome('success');
+      else settleOutcome('error');
+    });
+
+    const outcome = await outcomePromise;
+    // Always wait for branches to actually settle (so we can record
+    // cancelled-status entries) before writing scope.
+    const results = await Promise.all(all);
+
+    // Build outputs.
+    const childrenOut: Record<
+      string,
+      { status: 'succeeded' | 'failed' | 'cancelled'; outputs: Record<string, unknown>; error?: string }
+    > = {};
+    let completed = 0;
+    let failed = 0;
+    // race: only the winner; quorum: only winners; wait-all/best-effort: all.
+    const includeAll = cfg.mode === 'wait-all' || onError === 'best-effort';
+    for (const r of results) {
+      if (
+        includeAll ||
+        (cfg.mode === 'race' && r.branchId === winners[0]) ||
+        (cfg.mode === 'quorum' && winners.includes(r.branchId))
+      ) {
+        childrenOut[r.branchId] = {
+          status: r.status,
+          outputs: r.outputs,
+          ...(r.error !== undefined ? { error: r.error } : {}),
+        };
+      }
+      if (r.status === 'succeeded') completed++;
+      else if (r.status === 'failed') failed++;
+    }
+
+    const out: Record<string, unknown> = {
+      mode: cfg.mode,
+      completed,
+      failed,
+      children: childrenOut,
+    };
+    if (cfg.mode === 'race' && winners.length > 0) out.winner = winners[0];
+    if (cfg.mode === 'quorum') out.winners = winners.slice(0, need);
+
+    parentScope[parallelNode.id] = out;
+
+    if (signal.aborted) return 'cancelled';
+    if (outcome === 'cancelled') return 'cancelled';
+    if (outcome === 'success') return successHandleFor(cfg.mode);
+
+    // error path
+    const offending = completedFailures[0];
+    eventBus.emit({
+      type: 'error',
+      nodeId: this.namespaced(parallelNode.id, exec),
+      message: offending
+        ? `parallel branch "${offending}" failed`
+        : 'parallel: success criterion not met',
+    });
+    return 'error';
+  }
+
+  /**
+   * Walk a Subworkflow node:
+   *  1. Resolve `inputs` against parent scope.
+   *  2. Load child workflow via the configured loader.
+   *  3. Run child with a fresh `{ __inputs: ... }` scope, reusing this run's
+   *     signal and event bus.
+   *  4. On success: copy declared `outputs` into the parent scope under the
+   *     subworkflow node's id; route 'next'.
+   *  5. On failure: write status/errorMessage; route 'error'.
+   *
+   * We DO NOT call `engine.start(...)` (which rejects when a run is active);
+   * the child workflow walks inside the parent run context. We tag emitted
+   * events by namespacing nodeIds as `<subwf-id>/<child-id>` so the UI can
+   * scope highlights without us adding new fields to WorkflowEvent.
+   */
+  private async walkSubworkflow(
+    node: WorkflowNode,
+    exec: ExecutionScope,
+    parentScope: Scope,
+    signal: AbortSignal,
+  ): Promise<EdgeHandle | 'cancelled'> {
+    const cfg = node.config as SubworkflowConfig;
+
+    // 1. Resolve inputs.
+    const resolvedInputs: Record<string, unknown> = {};
+    for (const [name, template] of Object.entries(cfg.inputs ?? {})) {
+      if (typeof template === 'string') {
+        const { text } = resolveTemplate(template, parentScope);
+        resolvedInputs[name] = text;
+      } else {
+        resolvedInputs[name] = template;
+      }
+    }
+
+    eventBus.emit({
+      type: 'node_started',
+      nodeId: this.namespaced(node.id, exec),
+      nodeType: 'subworkflow',
+      resolvedConfig: { workflowId: cfg.workflowId, inputs: resolvedInputs },
+      loopIteration: exec.loopIteration,
+    });
+
+    const startedAt = Date.now();
+
+    // 2. Load child workflow.
+    let child: Workflow;
+    try {
+      child = await this.loadWorkflow(cfg.workflowId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const out = { status: 'failed', errorMessage: `subworkflow load failed: ${message}` };
+      parentScope[node.id] = out;
+      eventBus.emit({
+        type: 'error',
+        nodeId: this.namespaced(node.id, exec),
+        message: out.errorMessage,
+      });
+      eventBus.emit({
+        type: 'node_finished',
+        nodeId: this.namespaced(node.id, exec),
+        nodeType: 'subworkflow',
+        branch: 'error',
+        outputs: out,
+        durationMs: Date.now() - startedAt,
+      });
+      return 'error';
+    }
+
+    // 3. Build child scope and walk.
+    const childScope: Scope = { __inputs: resolvedInputs };
+    const childExec: ExecutionScope = {
+      subworkflowStack: [...(exec.subworkflowStack ?? []), node.id],
+    };
+    const childStart = child.nodes.find((n) => n.type === 'start');
+    if (!childStart) {
+      const out = {
+        status: 'failed',
+        errorMessage: `subworkflow "${cfg.workflowId}" has no start node`,
+      };
+      parentScope[node.id] = out;
+      eventBus.emit({
+        type: 'error',
+        nodeId: this.namespaced(node.id, exec),
+        message: out.errorMessage,
+      });
+      eventBus.emit({
+        type: 'node_finished',
+        nodeId: this.namespaced(node.id, exec),
+        nodeType: 'subworkflow',
+        branch: 'error',
+        outputs: out,
+        durationMs: Date.now() - startedAt,
+      });
+      return 'error';
+    }
+
+    let childStatus: Exclude<RunStatus, 'idle' | 'running'>;
+    try {
+      childStatus = await this.walkFrom(childStart, childExec, childScope, child, signal);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const out = { status: 'failed', errorMessage: message };
+      parentScope[node.id] = out;
+      eventBus.emit({
+        type: 'error',
+        nodeId: this.namespaced(node.id, exec),
+        message,
+      });
+      eventBus.emit({
+        type: 'node_finished',
+        nodeId: this.namespaced(node.id, exec),
+        nodeType: 'subworkflow',
+        branch: 'error',
+        outputs: out,
+        durationMs: Date.now() - startedAt,
+      });
+      return 'error';
+    }
+
+    // 4 / 5. Settle.
+    if (childStatus === 'cancelled') return 'cancelled';
+
+    if (childStatus !== 'succeeded') {
+      const out: Record<string, unknown> = { status: 'failed' };
+      out.errorMessage = `subworkflow "${cfg.workflowId}" finished as ${childStatus}`;
+      parentScope[node.id] = out;
+      eventBus.emit({
+        type: 'node_finished',
+        nodeId: this.namespaced(node.id, exec),
+        nodeType: 'subworkflow',
+        branch: 'error',
+        outputs: out,
+        durationMs: Date.now() - startedAt,
+      });
+      return 'error';
+    }
+
+    // Output copy. Each value of cfg.outputs is a dotted path into childScope.
+    const out: Record<string, unknown> = { status: 'succeeded' };
+    for (const [parentName, childPath] of Object.entries(cfg.outputs ?? {})) {
+      const value = lookupDotted(childScope, childPath);
+      out[parentName] = value;
+    }
+    parentScope[node.id] = out;
+
+    eventBus.emit({
+      type: 'node_finished',
+      nodeId: this.namespaced(node.id, exec),
+      nodeType: 'subworkflow',
+      branch: 'next',
+      outputs: out,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return 'next';
+  }
+
+  private namespaced(id: string, exec: ExecutionScope): string {
+    if (!exec.subworkflowStack || exec.subworkflowStack.length === 0) return id;
+    return `${exec.subworkflowStack.join('/')}/${id}`;
   }
 
   private setLoopSignal(signal: 'break' | 'continue'): void {
@@ -405,8 +825,15 @@ export class WorkflowEngine {
     sourceId: string,
     branch: EdgeHandle,
     allNodes: Map<string, { node: WorkflowNode; parent?: WorkflowNode }>,
+    workflow: Workflow,
   ): WorkflowNode | undefined {
-    const edges = this.edgesBySource.get(sourceId) ?? [];
+    // Edges live on the workflow that contains the node. For top-level we use
+    // the cached engine index; for child workflows (subworkflow) we need
+    // per-workflow edge indexing. Rebuild on demand for non-top-level walks.
+    const edges =
+      workflow === this.workflow
+        ? this.edgesBySource.get(sourceId) ?? []
+        : workflow.edges.filter((e) => e.source === sourceId);
     const edge = edges.find((e) => e.sourceHandle === branch);
     if (!edge) return undefined;
     return allNodes.get(edge.target)?.node;
@@ -415,15 +842,18 @@ export class WorkflowEngine {
   private async executeNode(
     node: WorkflowNode,
     exec: ExecutionScope,
+    scope: Scope,
+    signal: AbortSignal,
   ): Promise<EdgeHandle> {
     const executor = this.executors[node.type];
     if (!executor) throw new Error(`unknown node type: ${node.type}`);
 
-    const resolvedConfig = this.resolveConfigTemplates(node);
+    const resolvedConfig = this.resolveConfigTemplates(node, scope, exec);
+    const namespacedId = this.namespaced(node.id, exec);
 
     eventBus.emit({
       type: 'node_started',
-      nodeId: node.id,
+      nodeId: namespacedId,
       nodeType: node.type,
       resolvedConfig,
       loopIteration: exec.loopIteration,
@@ -437,14 +867,14 @@ export class WorkflowEngine {
     const startedAt = Date.now();
     const ctx: NodeExecutorContext = {
       config: resolvedConfig,
-      scope: this.snapshot.scope,
+      scope,
       defaultCwd: cwd,
-      signal: this.abort!.signal,
+      signal,
       loopIteration: exec.loopIteration,
       emitStdoutChunk: (line: string) => {
         eventBus.emit({
           type: 'stdout_chunk',
-          nodeId: node.id,
+          nodeId: namespacedId,
           line,
           loopIteration: exec.loopIteration,
         });
@@ -455,16 +885,19 @@ export class WorkflowEngine {
     try {
       result = await executor.execute(ctx);
     } catch (err) {
+      if (signal.aborted) {
+        // Re-throw abort so callers can settle as cancelled.
+        throw err;
+      }
       const message = err instanceof Error ? err.message : String(err);
-      eventBus.emit({ type: 'error', nodeId: node.id, message });
-      // The executor threw — treat as `error` branch.
+      eventBus.emit({ type: 'error', nodeId: namespacedId, message });
       result = { outputs: { errorMessage: message }, branch: 'error' as EdgeHandle };
     }
 
-    this.snapshot.scope[node.id] = result.outputs;
+    scope[node.id] = result.outputs;
     eventBus.emit({
       type: 'node_finished',
-      nodeId: node.id,
+      nodeId: namespacedId,
       nodeType: node.type,
       branch: result.branch,
       outputs: result.outputs,
@@ -475,7 +908,7 @@ export class WorkflowEngine {
       const out = result.outputs as { met?: boolean; detail?: string };
       eventBus.emit({
         type: 'condition_checked',
-        nodeId: node.id,
+        nodeId: namespacedId,
         met: Boolean(out.met),
         detail: typeof out.detail === 'string' ? out.detail : '',
       });
@@ -484,19 +917,23 @@ export class WorkflowEngine {
     return result.branch;
   }
 
-  private resolveConfigTemplates(node: WorkflowNode): Record<string, unknown> {
+  private resolveConfigTemplates(
+    node: WorkflowNode,
+    scope: Scope,
+    exec: ExecutionScope,
+  ): Record<string, unknown> {
     const fields = TEXT_CONFIG_FIELDS[node.type] ?? [];
     const cfg = node.config as Record<string, unknown>;
     const resolved: Record<string, unknown> = { ...cfg };
     for (const field of fields) {
       const raw = cfg[field];
       if (typeof raw === 'string') {
-        const { text, warnings } = resolveTemplate(raw, this.snapshot.scope);
+        const { text, warnings } = resolveTemplate(raw, scope);
         resolved[field] = text;
         for (const w of warnings) {
           eventBus.emit({
             type: 'template_warning',
-            nodeId: node.id,
+            nodeId: this.namespaced(node.id, exec),
             field,
             missingKey: w.missingKey,
           });
@@ -507,6 +944,78 @@ export class WorkflowEngine {
   }
 }
 
+/* ─── module-private helpers ──────────────────────────────────────────────── */
+
+function successHandleFor(mode: ParallelConfig['mode']): EdgeHandle {
+  if (mode === 'race') return 'first_done';
+  if (mode === 'quorum') return 'quorum_met';
+  return 'all_done';
+}
+
+function snapshotScope(scope: Scope): Scope {
+  // Per-key shallow clone is enough: branches write under their own node ids
+  // (new keys), and templating only reads from the snapshot's pre-existing
+  // entries. Frozen at the top level so a stray write to a sibling's key
+  // throws loudly in dev (silently ignored in prod, which is fine).
+  const copy: Scope = {};
+  for (const [k, v] of Object.entries(scope)) copy[k] = v;
+  return copy;
+}
+
+/**
+ * Inside a parallel container, identify branch roots: every direct child whose
+ * id is NOT the target of any container-internal edge (an edge whose source is
+ * also a child of this container). External edges (e.g. start → first child)
+ * don't count for branch-root identification — they enter the container, so
+ * the child they point at is exactly one of the branch roots.
+ */
+function identifyBranchRoots(
+  children: WorkflowNode[],
+  edges: WorkflowEdge[],
+  childIds: Set<string>,
+): WorkflowNode[] {
+  const targetsOfInternalEdges = new Set<string>();
+  for (const e of edges) {
+    if (childIds.has(e.source) && childIds.has(e.target)) {
+      targetsOfInternalEdges.add(e.target);
+    }
+  }
+  return children.filter((c) => !targetsOfInternalEdges.has(c.id));
+}
+
+/**
+ * Given a branch's terminal scope and the parent snapshot it started from,
+ * extract just the keys the branch wrote (i.e. anything not present in the
+ * snapshot, plus the branch root's own outputs if mutated). Best-effort: we
+ * can't distinguish "wrote the same value" from "didn't write at all," but
+ * that's fine for downstream consumption.
+ */
+function collectBranchOutputs(
+  branchScope: Scope,
+  parentSnapshot: Scope,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(branchScope)) {
+    if (parentSnapshot[k] !== v) {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+/** Walk a dotted path through nested objects. Returns undefined on miss. */
+function lookupDotted(scope: Scope, path: string): unknown {
+  if (!path) return undefined;
+  const segments = path.split('.');
+  let cursor: unknown = scope;
+  for (const segment of segments) {
+    if (cursor == null || typeof cursor !== 'object') return undefined;
+    cursor = (cursor as Record<string, unknown>)[segment];
+    if (cursor === undefined) return undefined;
+  }
+  return cursor;
+}
+
 // Pin the singleton across Next.js dev module reloads (see event-bus.ts).
 //
 // IMPORTANT: bump ENGINE_VERSION whenever behavior of WorkflowEngine changes
@@ -514,13 +1023,7 @@ export class WorkflowEngine {
 // HMR will pick up the new file but the cached instance under
 // `globalThis.__infloopWorkflowEngine` was constructed with the old class
 // definition and behaves the old way for the rest of the dev server's life.
-// IMPORTANT: only bump this when the engine class itself changes shape.
-// The runner is a separate module that HMR re-evaluates independently — it
-// does NOT need an engine bump. Bumping the engine while a run is in
-// flight strands the running task: route handlers (Stop, GET state) start
-// resolving to a fresh idle engine, while the in-flight claude child
-// process is still owned by the cached older instance.
-const ENGINE_VERSION = 8; // v8: register parallel/subworkflow/judge stubs (foundation)
+const ENGINE_VERSION = 9; // v9: parallel + subworkflow walkers
 
 declare global {
   // eslint-disable-next-line no-var

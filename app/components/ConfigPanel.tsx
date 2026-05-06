@@ -10,6 +10,7 @@ import {
   type ChangeEvent,
 } from 'react';
 import {
+  Button,
   Checkbox,
   Input,
   Radio,
@@ -28,9 +29,12 @@ import type {
   JudgeNodeConfig,
   LoopConfig,
   ParallelConfig,
+  ParallelMode,
+  ParallelOnError,
   SubworkflowConfig,
   Workflow,
   WorkflowNode,
+  WorkflowSummary,
 } from '@/lib/shared/workflow';
 
 const DEBOUNCE_MS = 200;
@@ -708,45 +712,551 @@ function BranchForm({
   );
 }
 
-/* ─── multi-agent stubs (filled in by U4) ──────────────────── */
+/* ─── multi-agent forms (U4) ───────────────────────────────── */
 
 function ParallelForm({
   config,
+  onPatch,
 }: {
   config: ParallelConfig;
   onPatch: (next: ParallelConfig) => void;
 }) {
+  const mode: ParallelMode = config.mode ?? 'wait-all';
+  const onError: ParallelOnError = config.onError ?? 'fail-fast';
+
+  // QuorumN's wire format is `number | undefined`. We carry a debounced string
+  // mirror so the user can clear / edit without us snapping their cursor.
+  const [quorumStr, setQuorumStr] = useDebouncedString(
+    config.quorumN != null ? String(config.quorumN) : '',
+    (next) => {
+      const trimmed = next.trim();
+      if (trimmed === '') {
+        onPatch({ ...config, quorumN: undefined });
+        return;
+      }
+      const parsed = Number(trimmed);
+      if (Number.isFinite(parsed) && parsed >= 1) {
+        onPatch({ ...config, quorumN: Math.floor(parsed) });
+      }
+    },
+  );
+
   return (
-    <p className="serif-italic" style={{ color: 'var(--fg-dim)' }}>
-      Parallel · mode={config.mode ?? 'wait-all'} · onError=
-      {config.onError ?? 'fail-fast'} (form coming)
-    </p>
+    <>
+      <Segmented<ParallelMode>
+        label="Mode"
+        value={mode}
+        options={[
+          { value: 'wait-all', label: 'Wait all' },
+          { value: 'race', label: 'Race' },
+          { value: 'quorum', label: 'Quorum' },
+        ]}
+        onChange={(next) => onPatch({ ...config, mode: next })}
+      />
+
+      {mode === 'quorum' && (
+        <Input
+          label="Quorum N"
+          labelPlacement="outside"
+          type="number"
+          min={1}
+          value={quorumStr}
+          onValueChange={setQuorumStr}
+          description="1 ≤ quorumN ≤ children.length"
+        />
+      )}
+
+      <Segmented<ParallelOnError>
+        label="On error"
+        value={onError}
+        options={[
+          { value: 'fail-fast', label: 'Fail-fast' },
+          { value: 'best-effort', label: 'Best-effort' },
+        ]}
+        onChange={(next) => onPatch({ ...config, onError: next })}
+      />
+    </>
+  );
+}
+
+/* ── shared dynamic key/value row helpers ─────────────────────
+ * SubworkflowForm needs two near-identical "name → templated string" grids
+ * (inputs and outputs). They differ only in the label/description on the
+ * value field. We keep a local rowId so React can identify rows across
+ * renames without re-mounting their inputs (which would lose focus). */
+interface KvRowData {
+  rowId: string;
+  name: string;
+  value: string;
+}
+
+function recordToRows(
+  rec: Record<string, string> | undefined,
+): KvRowData[] {
+  if (!rec) return [];
+  return Object.entries(rec).map(([name, value], i) => ({
+    rowId: `r-${i}-${name}`,
+    name,
+    value,
+  }));
+}
+
+/** Drop empty-name rows on commit and let later duplicates win — matches the
+ * normal "last write wins" Record semantics so renames behave predictably. */
+function rowsToRecord(rows: KvRowData[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const row of rows) {
+    const key = row.name.trim();
+    if (!key) continue;
+    out[key] = row.value;
+  }
+  return out;
+}
+
+function nextRowId(): string {
+  // Date.now is fine — rows are appended one at a time on user click.
+  return `r-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+interface KvRowsEditorProps {
+  rows: KvRowData[];
+  onChange: (next: KvRowData[]) => void;
+  nameLabel: string;
+  valueLabel: string;
+  valuePlaceholder?: string;
+  valueDescription?: string;
+  addLabel: string;
+}
+
+/* Per-row component so each cell carries its own debounced text buffer —
+ * keystrokes don't slam the workflow store / undo history. */
+function KvRow({
+  row,
+  index,
+  isLast,
+  nameLabel,
+  valueLabel,
+  valuePlaceholder,
+  valueDescription,
+  onCommit,
+  onRemove,
+}: {
+  row: KvRowData;
+  index: number;
+  isLast: boolean;
+  nameLabel: string;
+  valueLabel: string;
+  valuePlaceholder?: string;
+  valueDescription?: string;
+  onCommit: (patch: Partial<KvRowData>) => void;
+  onRemove: () => void;
+}) {
+  const [name, setName] = useDebouncedString(row.name, (next) =>
+    onCommit({ name: next }),
+  );
+  const [value, setValue] = useDebouncedString(row.value, (next) =>
+    onCommit({ value: next }),
+  );
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '120px 1fr auto',
+        gap: 8,
+        alignItems: 'flex-start',
+      }}
+    >
+      <Input
+        aria-label={`${nameLabel} ${index}`}
+        type="text"
+        size="sm"
+        value={name}
+        onValueChange={setName}
+        placeholder={nameLabel}
+      />
+      <Input
+        aria-label={`${valueLabel} ${index}`}
+        type="text"
+        size="sm"
+        value={value}
+        onValueChange={setValue}
+        placeholder={valuePlaceholder}
+        description={isLast ? valueDescription : undefined}
+      />
+      <Button
+        size="sm"
+        variant="light"
+        onPress={onRemove}
+        aria-label={`remove ${nameLabel} ${index}`}
+      >
+        ✕
+      </Button>
+    </div>
+  );
+}
+
+function KvRowsEditor({
+  rows,
+  onChange,
+  nameLabel,
+  valueLabel,
+  valuePlaceholder,
+  valueDescription,
+  addLabel,
+}: KvRowsEditorProps) {
+  const updateRow = (rowId: string, patch: Partial<KvRowData>) => {
+    onChange(
+      rows.map((r) => (r.rowId === rowId ? { ...r, ...patch } : r)),
+    );
+  };
+  const removeRow = (rowId: string) => {
+    onChange(rows.filter((r) => r.rowId !== rowId));
+  };
+  const addRow = () => {
+    onChange([...rows, { rowId: nextRowId(), name: '', value: '' }]);
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {rows.map((row, i) => (
+        <KvRow
+          key={row.rowId}
+          row={row}
+          index={i}
+          isLast={i === rows.length - 1}
+          nameLabel={nameLabel}
+          valueLabel={valueLabel}
+          valuePlaceholder={valuePlaceholder}
+          valueDescription={valueDescription}
+          onCommit={(patch) => updateRow(row.rowId, patch)}
+          onRemove={() => removeRow(row.rowId)}
+        />
+      ))}
+      <Button
+        size="sm"
+        variant="flat"
+        onPress={addRow}
+        style={{ alignSelf: 'flex-start' }}
+      >
+        + {addLabel}
+      </Button>
+    </div>
   );
 }
 
 function SubworkflowForm({
   config,
+  onPatch,
 }: {
   config: SubworkflowConfig;
   onPatch: (next: SubworkflowConfig) => void;
 }) {
+  const currentWorkflowId = useWorkflowStore(
+    (s) => s.currentWorkflow?.id ?? null,
+  );
+
+  const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/workflows')
+      .then((r) => r.json())
+      .then((data: { workflows?: WorkflowSummary[] }) => {
+        if (!cancelled && Array.isArray(data.workflows)) {
+          setWorkflows(data.workflows);
+        }
+      })
+      .catch((err: unknown) => {
+        console.warn('[subworkflow-form] failed to load workflows:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Local rows carry stable rowIds so cell text edits don't re-key the entry
+  // on every keystroke. We re-sync from upstream when the parent-provided
+  // record reference changes (only happens on node-switch / undo / external
+  // mutation — our own commits assign the ref ourselves so we skip).
+  const [inputRows, setInputRows] = useState<KvRowData[]>(() =>
+    recordToRows(config.inputs),
+  );
+  const [outputRows, setOutputRows] = useState<KvRowData[]>(() =>
+    recordToRows(config.outputs),
+  );
+  const lastInputs = useRef(config.inputs);
+  const lastOutputs = useRef(config.outputs);
+  useEffect(() => {
+    if (config.inputs !== lastInputs.current) {
+      lastInputs.current = config.inputs;
+      setInputRows(recordToRows(config.inputs));
+    }
+  }, [config.inputs]);
+  useEffect(() => {
+    if (config.outputs !== lastOutputs.current) {
+      lastOutputs.current = config.outputs;
+      setOutputRows(recordToRows(config.outputs));
+    }
+  }, [config.outputs]);
+
+  const commitInputs = (rows: KvRowData[]) => {
+    setInputRows(rows);
+    const rec = rowsToRecord(rows);
+    lastInputs.current = rec;
+    onPatch({ ...config, inputs: rec });
+  };
+  const commitOutputs = (rows: KvRowData[]) => {
+    setOutputRows(rows);
+    const rec = rowsToRecord(rows);
+    lastOutputs.current = rec;
+    onPatch({ ...config, outputs: rec });
+  };
+
+  const onWorkflowChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    onPatch({ ...config, workflowId: e.target.value });
+  };
+
+  // Hide self-reference; cycle detection beyond direct self lives in the
+  // engine. If currentWorkflowId is null (e.g. unsaved), just show all.
+  const choices = workflows.filter((w) => w.id !== currentWorkflowId);
+
   return (
-    <p className="serif-italic" style={{ color: 'var(--fg-dim)' }}>
-      Subworkflow · target={config.workflowId || '(none)'} (form coming)
-    </p>
+    <>
+      <div className="field">
+        <span className="field-label">Workflow</span>
+        <select value={config.workflowId ?? ''} onChange={onWorkflowChange}>
+          <option value="">(none — pick a workflow)</option>
+          {choices.map((w) => (
+            <option key={w.id} value={w.id}>
+              {w.id} ({w.name})
+              {w.source === 'library' ? ' [library]' : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="field">
+        <span className="field-label">Inputs</span>
+        <KvRowsEditor
+          rows={inputRows}
+          onChange={commitInputs}
+          nameLabel="name"
+          valueLabel="value template"
+          valuePlaceholder="{{claude-1.stdout}}"
+          addLabel="add input"
+        />
+      </div>
+
+      <div className="field">
+        <span className="field-label">Outputs</span>
+        <KvRowsEditor
+          rows={outputRows}
+          onChange={commitOutputs}
+          nameLabel="name"
+          valueLabel="child path"
+          valuePlaceholder="judge-1.winner"
+          valueDescription={
+            'dotted path into the child workflow\'s terminal scope, e.g. "judge-1.winner"'
+          }
+          addLabel="add output"
+        />
+      </div>
+    </>
+  );
+}
+
+/* ── one judge-candidate textarea row ──────────────────────────
+ * Pulled out so each candidate's debounced string state stays anchored to
+ * its own row identity — otherwise reordering or removing a row would
+ * scramble the in-flight buffers. */
+function CandidateRow({
+  index,
+  value,
+  onCommit,
+  onRemove,
+}: {
+  index: number;
+  value: string;
+  onCommit: (next: string) => void;
+  onRemove: () => void;
+}) {
+  const [v, setV] = useDebouncedString(value, onCommit);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'var(--mono)',
+            fontSize: 11,
+            color: 'var(--fg-soft)',
+            letterSpacing: '0.1em',
+          }}
+        >
+          [{index}]
+        </span>
+        <Button
+          type="button"
+          size="sm"
+          variant="light"
+          onPress={onRemove}
+          aria-label={`remove candidate ${index}`}
+        >
+          remove
+        </Button>
+      </div>
+      <Textarea
+        aria-label={`candidate ${index}`}
+        minRows={2}
+        value={v}
+        onValueChange={setV}
+      />
+    </div>
   );
 }
 
 function JudgeForm({
   config,
+  refs,
+  onPatch,
 }: {
   config: JudgeNodeConfig;
+  refs: string[];
   onPatch: (next: JudgeNodeConfig) => void;
 }) {
+  const [criteria, setCriteria] = useDebouncedString(
+    config.criteria ?? '',
+    (next) => onPatch({ ...config, criteria: next }),
+  );
+  const [judgePrompt, setJudgePrompt] = useDebouncedString(
+    config.judgePrompt ?? '',
+    (next) =>
+      onPatch({
+        ...config,
+        judgePrompt: next.length > 0 ? next : undefined,
+      }),
+  );
+  const [model, setModel] = useDebouncedString(config.model ?? '', (next) =>
+    onPatch({ ...config, model: next.length > 0 ? next : undefined }),
+  );
+  const [providerId, setProviderId] = useDebouncedString(
+    config.providerId ?? '',
+    (next) =>
+      onPatch({
+        ...config,
+        providerId: next.length > 0 ? next : undefined,
+      }),
+  );
+
+  // judgePrompt is collapsed by default; the checkbox is the user-facing
+  // commit point. Toggling off clears the override; toggling on opens an
+  // empty textarea (the user-typed value is lost on collapse — that's
+  // intentional, since "override off" means "use the default").
+  const [overridePrompt, setOverridePrompt] = useState<boolean>(
+    () => (config.judgePrompt ?? '').length > 0,
+  );
+
+  const candidates = config.candidates ?? [];
+
+  const updateCandidate = (idx: number, next: string) => {
+    const arr = candidates.slice();
+    arr[idx] = next;
+    onPatch({ ...config, candidates: arr });
+  };
+  const removeCandidate = (idx: number) => {
+    const arr = candidates.slice();
+    arr.splice(idx, 1);
+    onPatch({ ...config, candidates: arr });
+  };
+  const addCandidate = () => {
+    onPatch({ ...config, candidates: [...candidates, ''] });
+  };
+
   return (
-    <p className="serif-italic" style={{ color: 'var(--fg-dim)' }}>
-      Judge · {config.candidates?.length ?? 0} candidates (form coming)
-    </p>
+    <>
+      <Textarea
+        label="Criteria"
+        labelPlacement="outside"
+        minRows={4}
+        value={criteria}
+        onValueChange={setCriteria}
+        description={refsHint(refs)}
+      />
+
+      <div className="field">
+        <span className="field-label">Candidates</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {candidates.map((c, i) => (
+            // Index-keyed: useDebouncedString re-syncs when the upstream
+            // value reference changes, so focus on unaffected rows is
+            // preserved when another row is added or removed.
+            <CandidateRow
+              key={i}
+              index={i}
+              value={c}
+              onCommit={(next) => updateCandidate(i, next)}
+              onRemove={() => removeCandidate(i)}
+            />
+          ))}
+          <Button
+            type="button"
+            size="sm"
+            variant="flat"
+            onPress={addCandidate}
+            style={{ alignSelf: 'flex-start' }}
+          >
+            + add candidate
+          </Button>
+        </div>
+      </div>
+
+      <Checkbox
+        isSelected={overridePrompt}
+        onValueChange={(checked) => {
+          setOverridePrompt(checked);
+          if (!checked) {
+            // Clear both the local buffer and the stored override so the
+            // engine falls back to the provider default.
+            setJudgePrompt('');
+            onPatch({ ...config, judgePrompt: undefined });
+          }
+        }}
+      >
+        Override judge prompt
+      </Checkbox>
+
+      {overridePrompt && (
+        <Textarea
+          label="Judge prompt"
+          labelPlacement="outside"
+          minRows={4}
+          value={judgePrompt}
+          onValueChange={setJudgePrompt}
+        />
+      )}
+
+      <Input
+        label="Model"
+        labelPlacement="outside"
+        type="text"
+        value={model}
+        onValueChange={setModel}
+        description="blank = provider default"
+      />
+
+      <Input
+        label="Provider"
+        labelPlacement="outside"
+        type="text"
+        value={providerId}
+        placeholder="claude"
+        onValueChange={setProviderId}
+      />
+    </>
   );
 }
 
@@ -864,6 +1374,7 @@ export default function ConfigPanel() {
         {node.type === 'judge' && (
           <JudgeForm
             config={node.config as JudgeNodeConfig}
+            refs={refs}
             onPatch={patchConfig}
           />
         )}
