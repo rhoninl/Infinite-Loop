@@ -8,6 +8,8 @@ import {
   type Mock,
 } from 'bun:test';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { Providers } from '@/providers/heroui-provider';
 import CanvasContextMenu, {
   type ContextMenuItem,
   type ContextMenuOpenAt,
@@ -47,16 +49,22 @@ const at: ContextMenuOpenAt = {
   flowY: 25,
 };
 
+// HeroUI listbox items rely on the HeroUIProvider for keyboard nav + portal
+// targets, so every test renders through the same Providers boundary used by
+// the live app.
+const renderWithProviders = (ui: ReactElement) =>
+  render(<Providers>{ui}</Providers>);
+
 describe('CanvasContextMenu', () => {
   it('renders nothing when `open` is null', () => {
-    const { container } = render(
+    const { container } = renderWithProviders(
       <CanvasContextMenu open={null} onClose={() => {}} onPick={() => {}} />,
     );
     expect(container.querySelector('[aria-label="canvas context menu"]')).toBeNull();
   });
 
   it('lists static groups + provider-driven model runners', async () => {
-    render(
+    renderWithProviders(
       <CanvasContextMenu open={at} onClose={() => {}} onPick={() => {}} />,
     );
     // Static items render synchronously.
@@ -74,7 +82,7 @@ describe('CanvasContextMenu', () => {
   });
 
   it('positions itself at the supplied client coordinates', () => {
-    render(
+    renderWithProviders(
       <CanvasContextMenu open={at} onClose={() => {}} onPick={() => {}} />,
     );
     const root = screen.getByLabelText('canvas context menu') as HTMLElement;
@@ -82,16 +90,16 @@ describe('CanvasContextMenu', () => {
     expect(root.style.top).toBe(`${at.clientY}px`);
   });
 
-  it('calls onPick with the item + at-position then onClose when an item is clicked', async () => {
+  it('calls onPick with the item + at-position then onClose when an item is clicked', () => {
     const onPick = mock<(item: ContextMenuItem, at: ContextMenuOpenAt) => void>(() => {});
     const onClose = mock<() => void>(() => {});
 
-    render(
+    renderWithProviders(
       <CanvasContextMenu open={at} onClose={onClose} onPick={onPick} />,
     );
 
-    const loopBtn = screen.getByLabelText('add loop node');
-    fireEvent.click(loopBtn);
+    const loopItem = screen.getByLabelText('add loop node');
+    fireEvent.click(loopItem);
 
     expect(onPick).toHaveBeenCalledTimes(1);
     const [item, posAt] = (onPick as Mock<(...a: unknown[]) => unknown>).mock.calls[0];
@@ -102,7 +110,7 @@ describe('CanvasContextMenu', () => {
 
   it('passes providerId for agent items', async () => {
     const onPick = mock<(item: ContextMenuItem, at: ContextMenuOpenAt) => void>(() => {});
-    render(
+    renderWithProviders(
       <CanvasContextMenu open={at} onClose={() => {}} onPick={onPick} />,
     );
     const claude = await screen.findByLabelText('add claude agent node');
@@ -118,7 +126,7 @@ describe('CanvasContextMenu', () => {
 
   it('dismisses on Escape', () => {
     const onClose = mock<() => void>(() => {});
-    render(
+    renderWithProviders(
       <CanvasContextMenu open={at} onClose={onClose} onPick={() => {}} />,
     );
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -127,7 +135,7 @@ describe('CanvasContextMenu', () => {
 
   it('dismisses on outside mousedown but not on inside click', () => {
     const onClose = mock<() => void>(() => {});
-    render(
+    renderWithProviders(
       <div>
         <button type="button" data-testid="outside">outside</button>
         <CanvasContextMenu open={at} onClose={onClose} onPick={() => {}} />
@@ -148,7 +156,7 @@ describe('CanvasContextMenu', () => {
       new Response('boom', { status: 500 }),
     ) as unknown as typeof fetch;
 
-    render(
+    renderWithProviders(
       <CanvasContextMenu open={at} onClose={() => {}} onPick={() => {}} />,
     );
     await waitFor(() =>

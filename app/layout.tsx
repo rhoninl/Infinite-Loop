@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Newsreader, JetBrains_Mono } from 'next/font/google';
+import { Providers } from '@/providers/heroui-provider';
 import './globals.css';
 
 const newsreader = Newsreader({
@@ -29,28 +30,19 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       className={`${newsreader.variable} ${jetbrains.variable}`}
       suppressHydrationWarning
     >
-      <head>
-        {/*
-         * Pre-paint theme application — must run before <body> renders to
-         * avoid a flash of the wrong theme. Reads the user's saved choice
-         * (`infloop:theme`), falling back to OS preference.
-         */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=localStorage.getItem('infloop:theme');var t=s||(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t;}catch(e){document.documentElement.dataset.theme='dark';}})();`,
-          }}
-        />
-      </head>
       {/*
+       * `next-themes` injects its own pre-paint script via <Providers>,
+       * so we no longer need a hand-rolled <script> in <head>.
+       *
        * Browser extensions like ColorZilla inject attributes such as
        * `cz-shortcut-listen="true"` onto <body> before React hydrates,
-       * which causes a benign-but-noisy hydration warning. We don't
-       * render any attribute-sensitive content on these elements, so
-       * suppressing the warning here is the canonical React fix.
+       * which causes a benign-but-noisy hydration warning. next-themes
+       * also requires `suppressHydrationWarning` on the element it
+       * mutates (<html>), so we keep both in place.
        */}
       <body suppressHydrationWarning>
         <div className="grain" aria-hidden="true" />
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

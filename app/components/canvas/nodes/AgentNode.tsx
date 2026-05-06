@@ -1,11 +1,21 @@
 'use client';
 
+import { Card, CardBody, CardHeader, Chip } from '@heroui/react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import ProviderIcon from '../../icons/ProviderIcon';
 
 const NODE_TYPE = 'agent';
 const PREVIEW_MAX = 40;
 const TITLE_ICON_SIZE = 16;
+
+type ChipColor = 'default' | 'success' | 'danger' | 'warning';
+
+function chipColor(state: string): ChipColor {
+  if (state === 'live') return 'warning';
+  if (state === 'succeeded') return 'success';
+  if (state === 'failed') return 'danger';
+  return 'default';
+}
 
 interface AgentData {
   _state?: string;
@@ -30,15 +40,17 @@ export default function AgentNode({ data, selected }: NodeProps) {
   const customLabel = d.label?.trim();
 
   return (
-    <div
+    <Card
       className="wf-node"
+      shadow="none"
+      radius="none"
       data-node-type={NODE_TYPE}
       data-state={state}
       data-selected={selected ? 'true' : 'false'}
       aria-label="agent node"
     >
       <Handle type="target" position={Position.Left} id="in" />
-      <div className="wf-node-head">
+      <CardHeader className="wf-node-head !p-0">
         {/* Brand icon takes the title slot. When a custom display name is
          * set on the node, it sits to the right of the icon; without one,
          * the icon stands alone. We keep .wf-node-title on the wrapper so
@@ -53,11 +65,20 @@ export default function AgentNode({ data, selected }: NodeProps) {
             <span className="wf-node-title-text">{customLabel}</span>
           ) : null}
         </span>
-        <span className="wf-node-state-dot" data-state={state} aria-hidden="true" />
-      </div>
-      <div className="wf-node-body wf-node-body-italic" title={bodyTitle}>
+        <Chip
+          size="sm"
+          variant="dot"
+          color={chipColor(state)}
+          aria-label={`state ${state}`}
+          data-state={state}
+          className="wf-node-state-chip h-auto border-0 px-0"
+        >
+          {state}
+        </Chip>
+      </CardHeader>
+      <CardBody className="wf-node-body wf-node-body-italic !p-0" title={bodyTitle}>
         {preview}
-      </div>
+      </CardBody>
       <Handle
         type="source"
         position={Position.Right}
@@ -70,6 +91,6 @@ export default function AgentNode({ data, selected }: NodeProps) {
         id="error"
         style={{ top: '72%' }}
       />
-    </div>
+    </Card>
   );
 }

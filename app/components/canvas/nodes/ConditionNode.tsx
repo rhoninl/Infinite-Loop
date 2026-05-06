@@ -1,9 +1,19 @@
 'use client';
 
+import { Card, CardBody, CardHeader, Chip } from '@heroui/react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 
 const NODE_TYPE = 'condition';
 const PREVIEW_MAX = 40;
+
+type ChipColor = 'default' | 'success' | 'danger' | 'warning';
+
+function chipColor(state: string): ChipColor {
+  if (state === 'live') return 'warning';
+  if (state === 'succeeded') return 'success';
+  if (state === 'failed') return 'danger';
+  return 'default';
+}
 
 interface ConditionData {
   _state?: string;
@@ -45,21 +55,32 @@ export default function ConditionNode({ data, selected }: NodeProps) {
   const title = d.label?.trim() || 'CONDITION';
 
   return (
-    <div
+    <Card
       className="wf-node"
+      shadow="none"
+      radius="none"
       data-node-type={NODE_TYPE}
       data-state={state}
       data-selected={selected ? 'true' : 'false'}
       aria-label="condition node"
     >
       <Handle type="target" position={Position.Left} id="in" />
-      <div className="wf-node-head">
+      <CardHeader className="wf-node-head !p-0">
         <span className="wf-node-title">{title}</span>
-        <span className="wf-node-state-dot" data-state={state} aria-hidden="true" />
-      </div>
-      <div className="wf-node-body wf-node-body-italic" title={bodyTitle}>
+        <Chip
+          size="sm"
+          variant="dot"
+          color={chipColor(state)}
+          aria-label={`state ${state}`}
+          data-state={state}
+          className="wf-node-state-chip h-auto border-0 px-0"
+        >
+          {state}
+        </Chip>
+      </CardHeader>
+      <CardBody className="wf-node-body wf-node-body-italic !p-0" title={bodyTitle}>
         {preview}
-      </div>
+      </CardBody>
       <Handle
         type="source"
         position={Position.Right}
@@ -78,6 +99,6 @@ export default function ConditionNode({ data, selected }: NodeProps) {
         id="error"
         style={{ top: '80%' }}
       />
-    </div>
+    </Card>
   );
 }

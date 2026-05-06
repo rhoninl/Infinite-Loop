@@ -1,12 +1,25 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Chip, Spinner } from '@heroui/react';
 import { useWorkflowStore } from '../../lib/client/workflow-store-client';
 import { GroupedEventLog } from './RunLog';
 import type {
   NodeStartedEvent,
+  RunStatus,
   WorkflowEvent,
 } from '../../lib/shared/workflow';
+
+// Map run status onto HeroUI semantic colors. `running` is warning (warm) so
+// it reads as "in flight" rather than success or failure; cancelled stays
+// neutral because the user chose to stop, not because anything went wrong.
+const STATUS_COLOR: Record<RunStatus, 'warning' | 'success' | 'danger' | 'default'> = {
+  idle: 'default',
+  running: 'warning',
+  succeeded: 'success',
+  failed: 'danger',
+  cancelled: 'default',
+};
 
 /**
  * Walk events to find each `node_started` not yet matched by a `node_finished`
@@ -89,9 +102,14 @@ export default function RunView() {
   return (
     <aside aria-label="run view" className="run-view">
       <header className="run-view-head">
-        <span className="pill" aria-label="run status" data-status={runStatus}>
-          <span className="dot" /> {runStatus}
-        </span>
+        <Chip
+          aria-label="run status"
+          variant="dot"
+          size="sm"
+          color={STATUS_COLOR[runStatus]}
+        >
+          {runStatus}
+        </Chip>
         <span className="run-view-ws" aria-label="event stream status">
           SSE: {connectionStatus}
         </span>
@@ -104,6 +122,11 @@ export default function RunView() {
             const elapsed = Date.now() - since;
             return (
               <div key={ev.nodeId} className="run-view-current-row">
+                <Spinner
+                  aria-label={`running ${ev.nodeId}`}
+                  size="sm"
+                  color="warning"
+                />
                 <span className="tag" data-kind="live">
                   <span className="dot" /> {ev.nodeType}
                 </span>
