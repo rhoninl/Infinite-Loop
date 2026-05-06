@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Accordion, AccordionItem, Chip } from '@heroui/react';
 import type { WorkflowEvent } from '../../lib/shared/workflow';
 import { groupEventsByNode, type NodeCard } from '../../lib/client/group-events';
 
@@ -44,6 +45,16 @@ export function EventRow({ ev }: { ev: WorkflowEvent }) {
   );
 }
 
+const STATUS_CHIP_COLOR: Record<
+  NodeCard['status'],
+  'default' | 'warning' | 'success' | 'danger'
+> = {
+  pending: 'default',
+  running: 'warning',
+  finished: 'success',
+  errored: 'danger',
+};
+
 export function NodeCardView({ card }: { card: NodeCard }) {
   const body = renderCardEvents(card);
   const hasBody = body.length > 0;
@@ -54,50 +65,88 @@ export function NodeCardView({ card }: { card: NodeCard }) {
   // a card that reaches `finished` while the user is reading it stays open.
   const [open, setOpen] = useState(() => card.status !== 'finished');
 
+  const statusLabel = `${card.status}${card.branch ? ` → ${card.branch}` : ''}${
+    typeof card.durationMs === 'number'
+      ? ` · ${(card.durationMs / 1000).toFixed(2)}s`
+      : ''
+  }`;
+
   const head = (
-    <>
+    <span className="event-card-head">
       <span className="event-card-id">{card.nodeId}</span>
       {card.nodeType ? (
         <span className="event-card-kind">{card.nodeType}</span>
       ) : null}
-      <span className="event-card-status" data-state={card.status}>
-        {card.status}
-        {card.branch ? ` → ${card.branch}` : ''}
-        {typeof card.durationMs === 'number'
-          ? ` · ${(card.durationMs / 1000).toFixed(2)}s`
-          : ''}
-      </span>
-    </>
+      <Chip
+        size="sm"
+        variant="dot"
+        color={STATUS_CHIP_COLOR[card.status]}
+        className="ml-auto"
+      >
+        {statusLabel}
+      </Chip>
+    </span>
   );
+
+  // HeroUI's AccordionItem renders its trigger as a `<button data-slot="trigger">`
+  // we don't get to author, and its own `aria-label` prop lands on the base
+  // wrapper rather than the button. Patch the rendered button so screen
+  // readers (and the existing tests) find the trigger by an aria-label that
+  // describes the next action ("expand" / "collapse node card <id>").
+  const sectionRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!hasBody) return;
+    const btn = sectionRef.current?.querySelector<HTMLButtonElement>(
+      'button[data-slot="trigger"]',
+    );
+    btn?.setAttribute(
+      'aria-label',
+      `${open ? 'collapse' : 'expand'} node card ${card.nodeId}`,
+    );
+  }, [open, hasBody, card.nodeId]);
+
+  if (!hasBody) {
+    return (
+      <section
+        className="event-card"
+        data-state={card.status}
+        aria-label={`node card ${card.nodeId}`}
+      >
+        {head}
+      </section>
+    );
+  }
 
   return (
     <section
+      ref={sectionRef}
       className="event-card"
       data-state={card.status}
       aria-label={`node card ${card.nodeId}`}
     >
-      {hasBody ? (
-        <button
-          type="button"
-          className="event-card-head event-card-head-toggle"
-          aria-expanded={open}
-          aria-controls={`card-body-${card.nodeId}`}
-          aria-label={`${open ? 'collapse' : 'expand'} node card ${card.nodeId}`}
-          onClick={() => setOpen((v) => !v)}
+      <Accordion
+        isCompact
+        showDivider={false}
+        selectedKeys={open ? new Set(['body']) : new Set()}
+        onSelectionChange={(keys) => {
+          const next = keys === 'all' ? new Set(['body']) : (keys as Set<React.Key>);
+          setOpen(next.has('body'));
+        }}
+        className="px-0"
+      >
+        <AccordionItem
+          key="body"
+          textValue={`node card ${card.nodeId}`}
+          title={head}
+          classNames={{
+            trigger: 'event-card-head-toggle py-0',
+            content: 'event-card-body',
+            titleWrapper: 'flex-1',
+          }}
         >
-          {head}
-          <span className="event-card-fold" aria-hidden="true">
-            {open ? '▾' : '▸'}
-          </span>
-        </button>
-      ) : (
-        <header className="event-card-head">{head}</header>
-      )}
-      {hasBody && open ? (
-        <div className="event-card-body" id={`card-body-${card.nodeId}`}>
           {body}
-        </div>
-      ) : null}
+        </AccordionItem>
+      </Accordion>
     </section>
   );
 }
