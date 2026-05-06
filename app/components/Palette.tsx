@@ -170,7 +170,7 @@ const paletteCss = `
 }
 .palette-empty {
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 13px;
   color: var(--fg-muted);
   padding: 6px 12px;
   letter-spacing: 0.04em;
@@ -205,7 +205,7 @@ const paletteCss = `
 .palette-item::before {
   content: '·';
   color: var(--fg-faint);
-  font-size: 10px;
+  font-size: 12.5px;
   text-align: center;
   width: 12px;
 }
@@ -231,7 +231,7 @@ const paletteCss = `
   align-items: center;
   justify-content: center;
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: 17px;
   line-height: 1;
   color: var(--fg-dim);
 }
@@ -259,7 +259,7 @@ const paletteCss = `
 }
 .palette-name {
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 13px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: inherit;
@@ -267,8 +267,8 @@ const paletteCss = `
 .palette-desc {
   font-family: var(--mono);
   font-style: normal;
-  font-size: 10px;
-  color: var(--fg-muted);
+  font-size: 12.5px;
+  color: var(--fg-dim);
   letter-spacing: 0.02em;
   text-transform: none;
 }

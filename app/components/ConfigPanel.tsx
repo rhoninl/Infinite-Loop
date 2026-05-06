@@ -153,7 +153,7 @@ function Segmented<T extends string>({
       classNames={{
         base: 'gap-1',
         label: 'text-fg-soft text-xs uppercase tracking-wider',
-        wrapper: 'gap-0 rounded-md border border-border bg-bg-input p-0.5',
+        wrapper: 'flex w-full gap-0 rounded-md border border-border bg-bg-deep p-0.5',
       }}
     >
       {options.map((opt) => (
@@ -162,11 +162,13 @@ function Segmented<T extends string>({
           value={opt.value}
           classNames={{
             base: [
-              'm-0 max-w-none',
+              'm-0 max-w-none flex-1 justify-center',
               'cursor-pointer rounded px-3 py-1.5',
               'data-[selected=true]:bg-bg-elevated',
               'data-[selected=true]:text-fg',
-              'text-fg-soft hover:text-fg',
+              'data-[selected=true]:shadow-sm',
+              'text-fg-dim hover:text-fg',
+              'transition-colors',
             ].join(' '),
             wrapper: 'hidden',
             labelWrapper: 'm-0 p-0',
