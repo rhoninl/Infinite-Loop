@@ -1,11 +1,32 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { RunRecord, RunSummary } from '../../lib/shared/workflow';
+import { Button, Card, CardBody, Chip } from '@heroui/react';
+import type {
+  RunRecord,
+  RunStatus,
+  RunSummary,
+} from '../../lib/shared/workflow';
 import { GroupedEventLog } from './RunLog';
 
 interface Props {
   workflowId: string | undefined;
+}
+
+type ChipColor = 'default' | 'success' | 'warning' | 'danger';
+
+function statusChipColor(status: RunStatus): ChipColor {
+  switch (status) {
+    case 'running':
+      return 'warning';
+    case 'succeeded':
+      return 'success';
+    case 'failed':
+      return 'danger';
+    case 'cancelled':
+    default:
+      return 'default';
+  }
 }
 
 function fmtTime(ms: number): string {
@@ -105,22 +126,26 @@ export default function RunHistory({ workflowId }: Props) {
     return (
       <aside aria-label="run history detail" className="run-view">
         <header className="run-view-head">
-          <button
+          <Button
             type="button"
-            className="wf-menu-action"
+            variant="light"
+            size="sm"
             aria-label="back to history list"
-            onClick={() => setSelectedRunId(null)}
+            onPress={() => setSelectedRunId(null)}
+            startContent={<span aria-hidden="true">←</span>}
           >
-            ← back
-          </button>
+            back
+          </Button>
           {record ? (
-            <span
-              className="pill"
+            <Chip
+              size="sm"
+              variant="flat"
+              color={statusChipColor(record.status)}
               aria-label="recorded run status"
               data-status={record.status}
             >
-              <span className="dot" /> {record.status}
-            </span>
+              {record.status}
+            </Chip>
           ) : null}
         </header>
 
@@ -199,20 +224,30 @@ export default function RunHistory({ workflowId }: Props) {
 
       <div className="run-view-log" aria-label="run history list">
         {summaries.map((s) => (
-          <button
+          <Card
             key={s.runId}
-            type="button"
+            isPressable
+            shadow="none"
+            radius="sm"
             aria-label={`run ${s.runId}`}
-            className="run-history-row"
             data-status={s.status}
-            onClick={() => setSelectedRunId(s.runId)}
+            onPress={() => setSelectedRunId(s.runId)}
+            className="w-full bg-bg-elevated border border-border hover:border-border-bright"
           >
-            <span className="run-history-row-status">{s.status}</span>
-            <span className="run-history-row-meta">
-              {fmtTime(s.startedAt)} · {fmtDuration(s.durationMs)} ·{' '}
-              {s.eventCount} ev
-            </span>
-          </button>
+            <CardBody className="flex flex-row items-center gap-2 py-2 px-3">
+              <Chip
+                size="sm"
+                variant="flat"
+                color={statusChipColor(s.status)}
+              >
+                {s.status}
+              </Chip>
+              <span className="text-xs text-fg-muted">
+                {fmtTime(s.startedAt)} · {fmtDuration(s.durationMs)} ·{' '}
+                {s.eventCount} ev
+              </span>
+            </CardBody>
+          </Card>
         ))}
       </div>
     </aside>
