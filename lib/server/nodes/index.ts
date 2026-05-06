@@ -5,6 +5,9 @@ import { agentExecutor } from './agent';
 import { conditionExecutor } from './condition';
 import { loopExecutor } from './loop';
 import { branchExecutor } from './branch';
+import { parallelExecutor } from './parallel';
+import { subworkflowExecutor } from './subworkflow';
+import { judgeExecutor } from './judge';
 
 export const nodeExecutors: Record<NodeType, NodeExecutor> = {
   start: startExecutor,
@@ -13,4 +16,7 @@ export const nodeExecutors: Record<NodeType, NodeExecutor> = {
   condition: conditionExecutor,
   loop: loopExecutor,
   branch: branchExecutor,
+  parallel: parallelExecutor,
+  subworkflow: subworkflowExecutor,
+  judge: judgeExecutor,
 };

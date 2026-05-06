@@ -1,6 +1,9 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type {
+  JudgeNodeConfig,
+  ParallelConfig,
+  SubworkflowConfig,
   Workflow,
   WorkflowEdge,
   WorkflowNode,
@@ -38,8 +41,22 @@ function storageDir(): string {
   );
 }
 
+/**
+ * Read-only library directory shipped with the repo. Lives next to the user
+ * storage dir so dev runs (which use the default `cwd/workflows`) pick it up
+ * automatically. If the user overrides INFLOOP_WORKFLOWS_DIR the library
+ * follows along — they can either copy team.json over or symlink.
+ */
+function libraryDir(): string {
+  return path.join(storageDir(), 'library');
+}
+
 function fileFor(id: string): string {
   return path.join(storageDir(), `${id}.json`);
+}
+
+function libraryFileFor(id: string): string {
+  return path.join(libraryDir(), `${id}.json`);
 }
 
 function collectNodeIds(nodes: WorkflowNode[]): Set<string> {
@@ -52,6 +69,49 @@ function collectNodeIds(nodes: WorkflowNode[]): Set<string> {
   };
   walk(nodes);
   return ids;
+}
+
+function walkAllNodes(nodes: WorkflowNode[], fn: (n: WorkflowNode) => void): void {
+  for (const n of nodes) {
+    fn(n);
+    if (n.children && n.children.length > 0) walkAllNodes(n.children, fn);
+  }
+}
+
+function validateNodeConfig(n: WorkflowNode): void {
+  if (n.type === 'parallel') {
+    const cfg = n.config as ParallelConfig;
+    if (cfg.mode === 'quorum') {
+      const childCount = n.children?.length ?? 0;
+      const q = cfg.quorumN ?? 0;
+      if (q < 1 || q > childCount) {
+        throw new Error(
+          `invalid workflow: parallel node "${n.id}" mode=quorum requires 1 ≤ quorumN ≤ children.length (got ${q}, ${childCount} children)`,
+        );
+      }
+    }
+    if (cfg.onError !== 'fail-fast' && cfg.onError !== 'best-effort') {
+      throw new Error(
+        `invalid workflow: parallel node "${n.id}" onError must be 'fail-fast' or 'best-effort'`,
+      );
+    }
+  }
+  if (n.type === 'subworkflow') {
+    const cfg = n.config as SubworkflowConfig;
+    if (typeof cfg.workflowId !== 'string' || cfg.workflowId.length === 0) {
+      throw new Error(
+        `invalid workflow: subworkflow node "${n.id}" workflowId must be a non-empty string`,
+      );
+    }
+  }
+  if (n.type === 'judge') {
+    const cfg = n.config as JudgeNodeConfig;
+    if (!Array.isArray(cfg.candidates) || cfg.candidates.length < 2) {
+      throw new Error(
+        `invalid workflow: judge node "${n.id}" requires at least 2 candidates`,
+      );
+    }
+  }
 }
 
 function validateWorkflow(wf: Workflow): void {
@@ -88,18 +148,30 @@ function validateWorkflow(wf: Workflow): void {
       );
     }
   }
+
+  // Per-node config validation for new multi-agent node types. Subworkflow
+  // cycle detection is intentionally deferred to unit U1 (engine walkers)
+  // since it requires reading other workflows from disk.
+  walkAllNodes(wf.nodes, validateNodeConfig);
 }
 
 async function readWorkflowFile(id: string): Promise<Workflow> {
-  const file = fileFor(id);
+  const userFile = fileFor(id);
+  const libraryFile = libraryFileFor(id);
   let raw: string;
   try {
-    raw = await fs.readFile(file, 'utf8');
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new Error(`workflow not found: ${id}`);
+    raw = await fs.readFile(userFile, 'utf8');
+  } catch (userErr) {
+    if ((userErr as NodeJS.ErrnoException).code !== 'ENOENT') throw userErr;
+    // Fall through to the library directory.
+    try {
+      raw = await fs.readFile(libraryFile, 'utf8');
+    } catch (libErr) {
+      if ((libErr as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new Error(`workflow not found: ${id}`);
+      }
+      throw libErr;
     }
-    throw err;
   }
 
   let parsed: unknown;
@@ -123,15 +195,22 @@ async function readWorkflowFile(id: string): Promise<Workflow> {
   return migrateWorkflow(wf);
 }
 
-export async function listWorkflows(): Promise<WorkflowSummary[]> {
-  const dir = storageDir();
-  await fs.mkdir(dir, { recursive: true });
-
-  const entries = await fs.readdir(dir);
+async function readSummariesFromDir(
+  dir: string,
+  source: 'user' | 'library',
+): Promise<WorkflowSummary[]> {
+  let entries: string[];
+  try {
+    entries = await fs.readdir(dir);
+  } catch (err) {
+    // Library dir may not exist; user dir is created upstream. Either way an
+    // ENOENT here just means "no summaries from this source".
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw err;
+  }
   const jsonFiles = entries.filter(
     (e) => e.endsWith('.json') && !e.endsWith('.json.tmp'),
   );
-
   const summaries = await Promise.all(
     jsonFiles.map(async (entry): Promise<WorkflowSummary | null> => {
       try {
@@ -152,16 +231,33 @@ export async function listWorkflows(): Promise<WorkflowSummary[]> {
           name: parsed.name,
           version: parsed.version,
           updatedAt: parsed.updatedAt,
+          source,
         };
       } catch {
         return null;
       }
     }),
   );
+  return summaries.filter((s): s is WorkflowSummary => s !== null);
+}
 
-  return summaries
-    .filter((s): s is WorkflowSummary => s !== null)
-    .sort((a, b) => b.updatedAt - a.updatedAt);
+export async function listWorkflows(): Promise<WorkflowSummary[]> {
+  const dir = storageDir();
+  await fs.mkdir(dir, { recursive: true });
+
+  const [userSummaries, librarySummaries] = await Promise.all([
+    readSummariesFromDir(dir, 'user'),
+    readSummariesFromDir(libraryDir(), 'library'),
+  ]);
+
+  // User dir wins on id collision (lets users duplicate-and-edit a library
+  // preset without the read-only original shadowing the edited copy).
+  const userIds = new Set(userSummaries.map((s) => s.id));
+  const merged = [
+    ...userSummaries,
+    ...librarySummaries.filter((s) => !userIds.has(s.id)),
+  ];
+  return merged.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export async function getWorkflow(id: string): Promise<Workflow> {

@@ -1,0 +1,74 @@
+'use client';
+
+import { Card, CardBody, CardHeader, Chip } from '@heroui/react';
+import { Handle, Position, type NodeProps } from '@xyflow/react';
+
+const NODE_TYPE = 'judge';
+
+type ChipColor = 'default' | 'success' | 'danger' | 'warning';
+
+function chipColor(state: string): ChipColor {
+  if (state === 'live') return 'warning';
+  if (state === 'succeeded') return 'success';
+  if (state === 'failed') return 'danger';
+  return 'default';
+}
+
+interface JudgeData {
+  _state?: string;
+  label?: string;
+  config?: {
+    criteria?: string;
+    candidates?: string[];
+    providerId?: string;
+  };
+}
+
+/**
+ * Foundation stub for the judge node. Final visual treatment (criteria
+ * preview, candidate count badge) lands in unit U3.
+ */
+export default function JudgeNode({ data, selected }: NodeProps) {
+  const d = (data ?? {}) as JudgeData;
+  const state = d._state ?? 'idle';
+  const title = d.label?.trim() || 'JUDGE';
+  const n = (d.config?.candidates ?? []).length;
+  const provider = d.config?.providerId ?? 'claude';
+
+  return (
+    <Card
+      className="wf-node"
+      shadow="none"
+      radius="none"
+      data-node-type={NODE_TYPE}
+      data-state={state}
+      data-selected={selected ? 'true' : 'false'}
+      aria-label="judge node"
+    >
+      <Handle type="target" position={Position.Left} id="in" />
+      <CardHeader className="wf-node-head !p-0">
+        <span className="wf-node-title">{title}</span>
+        <Chip
+          size="sm"
+          variant="dot"
+          color={chipColor(state)}
+          aria-label={`state ${state}`}
+          data-state={state}
+          className="wf-node-state-chip h-auto border-0 px-0"
+        >
+          {state}
+        </Chip>
+      </CardHeader>
+      <CardBody className="wf-node-body !p-0">
+        ⚖ {n} candidates · {provider}
+      </CardBody>
+      <Handle type="source" position={Position.Right} id="next" />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="error"
+        style={{ top: '75%' }}
+      />
+    </Card>
+  );
+}

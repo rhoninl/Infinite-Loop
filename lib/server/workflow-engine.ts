@@ -520,7 +520,7 @@ export class WorkflowEngine {
 // flight strands the running task: route handlers (Stop, GET state) start
 // resolving to a fresh idle engine, while the in-flight claude child
 // process is still owned by the cached older instance.
-const ENGINE_VERSION = 7; // v7: persist run history at settle
+const ENGINE_VERSION = 8; // v8: register parallel/subworkflow/judge stubs (foundation)
 
 declare global {
   // eslint-disable-next-line no-var
