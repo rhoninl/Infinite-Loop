@@ -178,11 +178,9 @@ body {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
 }
 
-/* CRT primitives retired. Kept as no-op shells so any consumer still
- * referencing them by class name renders cleanly with no decoration. */
+/* CRT primitives retired. Kept as no-op shell so any consumer still
+ * referencing it by class name renders cleanly with no decoration. */
 .crt-cursor::after { content: ''; }
-.crt-glow,
-.crt-glow-strong { text-shadow: none; }
 
 /* ─── headlines ─────────────────────────────────────────── */
 .serif {
@@ -449,26 +447,12 @@ body {
   outline: none;
 }
 
-.canvas-stub,
-.palette-stub,
-.config-stub,
-.run-view-stub {
+.config-stub {
   border: 1px dashed var(--border);
   padding: 28px 22px;
   color: var(--fg-dim);
   height: calc(100vh - var(--top-bar-h));
   font-family: var(--mono);
-}
-.canvas-stub {
-  border-left: none;
-  border-right: none;
-}
-.palette-stub {
-  border-left: none;
-  border-right: 1px solid var(--border);
-}
-.config-stub,
-.run-view-stub {
   border-left: 1px solid var(--border);
   border-right: none;
   border-top: 0;
@@ -634,16 +618,6 @@ body {
 }
 .run-view-log-row.is-stdout .stdout-line {
   color: var(--fg);
-}
-
-.node-stub {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--fg-soft);
-  padding: 8px 12px;
-  border: 1px solid var(--border-strong);
-  background: var(--bg-elevated);
-  display: inline-block;
 }
 
 /* ─── per-node event cards (log panel) ───────────────────── */
@@ -917,12 +891,6 @@ button.event-card-head-toggle:focus-visible {
   letter-spacing: 0;
 }
 
-.workflow-menu-stub {
-  font-size: 12px;
-  color: var(--fg-dim);
-  padding-inline: 16px;
-}
-
 /* ─── workflow menu ─────────────────────────────────────── */
 .wf-menu {
   position: relative;
@@ -1183,39 +1151,6 @@ button.event-card-head-toggle:focus-visible {
   outline: 1px solid var(--accent-live);
   outline-offset: -2px;
 }
-.wf-menu-action-danger:hover:not(:disabled) {
-  background: rgba(215, 106, 91, 0.1);
-  color: var(--accent-err);
-}
-
-.rail {
-  border-right: 1px solid var(--border);
-  padding: 28px 28px 80px;
-  position: sticky;
-  top: var(--top-bar-h);
-  align-self: start;
-  max-height: calc(100vh - var(--top-bar-h));
-  overflow-y: auto;
-  animation: fade-up 600ms 80ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
-}
-
-.main {
-  padding: 28px 36px 80px;
-  min-width: 0;
-  animation: fade-up 600ms 200ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
-}
-
-@keyframes fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
 /* ─── section heading (used in form + main) ─────────────── */
 /* Reads as a terminal section label: small phosphor block, label, then a
  * dashed line out to the panel edge. Replaces the cleanly-typeset eyebrow. */
@@ -1244,31 +1179,6 @@ button.event-card-head-toggle:focus-visible {
   flex: 1;
   height: 0;
   border-top: 1px dashed var(--border-strong);
-}
-
-.section-title {
-  font-family: var(--display);
-  font-weight: 400;
-  font-size: 36px;
-  line-height: 1;
-  letter-spacing: 0.02em;
-  margin: 0 0 6px;
-  color: var(--accent-live);
-  text-shadow: var(--crt-glow-strong);
-}
-.section-title em {
-  font-style: normal;
-  color: var(--fg-soft);
-  text-shadow: none;
-}
-
-.section-sub {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--fg-dim);
-  margin: 0 0 24px;
-  max-width: 60ch;
-  letter-spacing: 0.04em;
 }
 
 /* ─── form ──────────────────────────────────────────────── */
@@ -1657,29 +1567,6 @@ input[type='number'].no-spin {
   background: var(--bg-deep);
 }
 
-.segmented .seg-label {
-  display: block;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.18em;
-}
-
-.segmented .seg-sub {
-  display: block;
-  font-family: var(--serif);
-  font-style: italic;
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 11px;
-  color: var(--fg-muted);
-  margin-top: 2px;
-}
-
-.segmented button[data-active='true'] .seg-sub {
-  color: var(--accent-on-live-soft);
-}
-
 .checkbox-row {
   display: flex;
   align-items: center;
@@ -1786,115 +1673,10 @@ input[type='number'].no-spin {
   border-color: var(--fg-soft);
 }
 
-/* ─── empty state ───────────────────────────────────────── */
-.empty {
-  border: 1px dashed var(--border);
-  padding: 64px 28px;
-  text-align: center;
-  position: relative;
-}
-.empty-num {
-  font-family: var(--serif);
-  font-style: italic;
-  font-size: 100px;
-  color: var(--fg-faint);
-  line-height: 1;
-}
-.empty-text {
-  margin-top: 16px;
-  font-size: 11px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--fg-dim);
-}
-
-/* ─── iteration timeline ─────────────────────────────────── */
-.timeline {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.iter-card {
-  position: relative;
-  display: grid;
-  grid-template-columns: 96px 1fr;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  overflow: hidden;
-  animation: card-in 480ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
-}
-
-@keyframes card-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-    border-color: transparent;
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.iter-num-rail {
-  border-right: 1px solid var(--border);
-  background: linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-elevated) 100%);
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 22px 0 16px;
-}
-.iter-num {
-  font-family: var(--serif);
-  font-style: italic;
-  font-weight: 400;
-  font-size: 56px;
-  line-height: 0.9;
-  color: var(--fg);
-  letter-spacing: -0.02em;
-}
-.iter-num-label {
-  font-size: 9px;
-  letter-spacing: 0.32em;
-  text-transform: uppercase;
-  color: var(--fg-muted);
-  margin-top: 8px;
-}
-.iter-card[data-state='running'] .iter-num,
-.iter-card[data-state='live'] .iter-num {
-  color: var(--accent-live);
-  text-shadow: 0 0 14px var(--accent-live-glow);
-}
-.iter-card[data-state='succeeded'] .iter-num {
-  color: var(--accent-ok);
-}
-.iter-card[data-state='failed'] .iter-num {
-  color: var(--accent-err);
-}
-
-.iter-body {
-  padding: 18px 22px 18px 22px;
-  min-width: 0;
-}
-
-.iter-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-}
-.iter-head-left {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-}
+/* ─── live tag (RunView "currently running" row) ─────────── */
+/* Small inline chip that prefixes the running node with its node-type. The
+ * `[data-kind='live']` variant is the only one currently rendered; the
+ * generic `.tag` base is kept for the styling shared with the dot child. */
 .tag {
   display: inline-flex;
   align-items: center;
@@ -1906,14 +1688,6 @@ input[type='number'].no-spin {
   text-transform: uppercase;
   color: var(--fg-dim);
   border: 1px solid var(--border);
-}
-.tag[data-kind='ok'] {
-  color: var(--accent-ok);
-  border-color: color-mix(in srgb, var(--accent-ok) 55%, transparent);
-}
-.tag[data-kind='err'] {
-  color: var(--accent-err);
-  border-color: color-mix(in srgb, var(--accent-err) 55%, transparent);
 }
 .tag[data-kind='live'] {
   color: var(--accent-live);
@@ -1927,184 +1701,6 @@ input[type='number'].no-spin {
 }
 .tag[data-kind='live'] .dot {
   animation: pulse 1.4s infinite;
-}
-
-.metric-row {
-  display: flex;
-  gap: 18px;
-  flex-wrap: wrap;
-  font-size: 11px;
-  color: var(--fg-soft);
-  letter-spacing: 0.04em;
-}
-.metric-row > span {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-}
-.metric-row var {
-  font-style: normal;
-  color: var(--fg);
-}
-.metric-row .label {
-  font-size: 9px;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  color: var(--fg-muted);
-}
-
-.stdout {
-  position: relative;
-  background: var(--bg-deep);
-  border: 1px solid var(--border);
-  margin-top: 10px;
-  font-size: 12px;
-  font-family: var(--mono);
-  color: var(--fg-soft);
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 320px;
-  overflow: auto;
-}
-.stdout summary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  font-size: 10px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--fg-muted);
-  cursor: pointer;
-  user-select: none;
-  position: sticky;
-  top: 0;
-  background: var(--bg-deep);
-  border-bottom: 1px solid var(--border);
-  list-style: none;
-}
-.stdout summary::-webkit-details-marker {
-  display: none;
-}
-.stdout summary::before {
-  content: '▸';
-  display: inline-block;
-  transition: transform 140ms;
-  color: var(--fg-dim);
-}
-.stdout[open] summary::before {
-  transform: rotate(90deg);
-}
-.stdout pre {
-  margin: 0;
-  padding: 14px 18px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.5;
-}
-.stdout pre::before {
-  content: '';
-  display: block;
-  height: 0;
-}
-
-.condition-line {
-  margin-top: 12px;
-  padding: 10px 14px;
-  border-left: 2px solid var(--border-strong);
-  background: var(--bg-elevated);
-  font-size: 12px;
-}
-.condition-line[data-met='true'] {
-  border-left-color: var(--accent-ok);
-}
-.condition-line[data-met='false'] {
-  border-left-color: var(--accent-err);
-}
-.condition-line .verdict {
-  font-family: var(--serif);
-  font-style: italic;
-  font-size: 16px;
-  margin-right: 10px;
-  color: var(--fg);
-}
-.condition-line[data-met='true'] .verdict {
-  color: var(--accent-ok);
-}
-.condition-line[data-met='false'] .verdict {
-  color: var(--accent-err);
-}
-.condition-line .detail {
-  color: var(--fg-soft);
-  font-size: 12px;
-}
-
-/* ─── error block ───────────────────────────────────────── */
-.errors {
-  margin-top: 18px;
-  border: 1px solid rgba(215, 106, 91, 0.3);
-  background: linear-gradient(0deg, rgba(215, 106, 91, 0.04), rgba(215, 106, 91, 0.04));
-  padding: 16px 20px;
-}
-.errors h3 {
-  font-family: var(--serif);
-  font-style: italic;
-  font-weight: 400;
-  font-size: 18px;
-  margin: 0 0 10px;
-  color: var(--accent-err);
-}
-.errors ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.errors li > div {
-  font-size: 12px;
-  color: var(--fg);
-}
-.errors pre {
-  margin: 6px 0 0;
-  padding: 10px 12px;
-  background: var(--bg-deep);
-  border: 1px solid var(--border);
-  font-size: 11px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--fg-soft);
-}
-
-/* ─── decoration ────────────────────────────────────────── */
-.crosshair {
-  position: relative;
-}
-.crosshair::before,
-.crosshair::after {
-  content: '';
-  position: absolute;
-  background: var(--border-bright);
-}
-.crosshair::before {
-  top: -4px;
-  left: -4px;
-  width: 9px;
-  height: 1px;
-}
-.crosshair::after {
-  top: -4px;
-  left: -4px;
-  width: 1px;
-  height: 9px;
-}
-
-.cipher {
-  font-family: var(--serif);
-  font-style: italic;
-  color: var(--fg-muted);
-  font-size: 13px;
 }
 
 /* ─── small screens ─────────────────────────────────────── */
@@ -2144,18 +1740,6 @@ input[type='number'].no-spin {
     grid-template-columns: var(--palette-w) minmax(360px, 1fr) 5px var(--right-w);
     overflow-x: auto;
     overflow-y: hidden;
-  }
-  .rail {
-    position: static;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
-    max-height: none;
-  }
-  .iter-card {
-    grid-template-columns: 64px 1fr;
-  }
-  .iter-num {
-    font-size: 36px;
   }
 }
 
