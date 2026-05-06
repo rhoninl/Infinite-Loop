@@ -3,7 +3,16 @@
  * All node executors, the engine, the canvas, and the API talk through these types.
  */
 
-export type NodeType = 'start' | 'end' | 'agent' | 'condition' | 'loop' | 'branch';
+export type NodeType =
+  | 'start'
+  | 'end'
+  | 'agent'
+  | 'condition'
+  | 'loop'
+  | 'branch'
+  | 'parallel'
+  | 'subworkflow'
+  | 'judge';
 
 /** Edge handles. Workers MUST emit one of these from a node executor. */
 export type EdgeHandle =
@@ -14,7 +23,10 @@ export type EdgeHandle =
   | 'false'
   | 'error'
   | 'continue'
-  | 'break';
+  | 'break'
+  | 'all_done'
+  | 'first_done'
+  | 'quorum_met';
 
 export type ConditionKind = 'sentinel' | 'command' | 'judge';
 
@@ -79,6 +91,47 @@ export interface BranchConfig {
   rhs: string;
 }
 
+export type ParallelMode = 'wait-all' | 'race' | 'quorum';
+export type ParallelOnError = 'fail-fast' | 'best-effort';
+
+export interface ParallelConfig {
+  /** wait-all → 'all_done' on success. race → 'first_done' on first success
+   * (siblings cancel). quorum → 'quorum_met' once `quorumN` branches finish
+   * successfully (rest cancel). All modes route 'error' on failure. */
+  mode: ParallelMode;
+  /** Required when mode === 'quorum'. Must satisfy 1 ≤ quorumN ≤ children.length. */
+  quorumN?: number;
+  /** fail-fast: any branch error cancels siblings and routes 'error'.
+   * best-effort: collect per-branch errors; route success handle if mode's
+   * success criterion is still met by surviving branches; otherwise 'error'. */
+  onError: ParallelOnError;
+}
+
+export interface SubworkflowConfig {
+  /** Workflow id (filename stem) of the child workflow to run. */
+  workflowId: string;
+  /** Input bindings: each value is a templated string evaluated against parent
+   * scope. Inside the child run, these surface under scope.__inputs.<name>. */
+  inputs: Record<string, string>;
+  /** Output bindings: parentName → dotted child-scope path (e.g.
+   * "judge-1.winner"). Each value is copied from the child's terminal scope
+   * back into parent scope under this subworkflow node's id. */
+  outputs: Record<string, string>;
+}
+
+export interface JudgeNodeConfig {
+  /** Templated rubric / criteria text shown to the judge. */
+  criteria: string;
+  /** Templated candidate texts. Resolved per-call. */
+  candidates: string[];
+  /** Optional override of the judge's system prompt. */
+  judgePrompt?: string;
+  /** Optional model override; defaults to the provider's default model. */
+  model?: string;
+  /** Optional provider id (defaults to 'claude'). */
+  providerId?: string;
+}
+
 export type NodeConfigByType = {
   start: StartConfig;
   end: EndConfig;
@@ -86,6 +139,9 @@ export type NodeConfigByType = {
   condition: ConditionConfig;
   loop: LoopConfig;
   branch: BranchConfig;
+  parallel: ParallelConfig;
+  subworkflow: SubworkflowConfig;
+  judge: JudgeNodeConfig;
 };
 
 export interface WorkflowNode<T extends NodeType = NodeType> {
@@ -131,6 +187,10 @@ export interface WorkflowSummary {
   name: string;
   version: number;
   updatedAt: number;
+  /** Where the file lives. 'library' = repo-shipped read-only preset; 'user'
+   * = user-editable workflow under the storage dir. Optional for back-compat
+   * with older clients that ignore the field. */
+  source?: 'user' | 'library';
 }
 
 /* ─── runtime state ───────────────────────────────────────────────────────── */

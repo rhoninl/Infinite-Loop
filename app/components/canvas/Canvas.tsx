@@ -21,10 +21,13 @@ import type {
   ConditionConfig,
   EdgeHandle,
   EndConfig,
+  JudgeNodeConfig,
   LoopConfig,
   NodeConfigByType,
   NodeType,
+  ParallelConfig,
   StartConfig,
+  SubworkflowConfig,
   Workflow,
   WorkflowEdge,
   WorkflowEvent,
@@ -34,8 +37,11 @@ import AgentNode from './nodes/AgentNode';
 import BranchNode from './nodes/BranchNode';
 import ConditionNode from './nodes/ConditionNode';
 import EndNode from './nodes/EndNode';
+import JudgeNode from './nodes/JudgeNode';
 import LoopNode from './nodes/LoopNode';
+import ParallelNode from './nodes/ParallelNode';
 import StartNode from './nodes/StartNode';
+import SubworkflowNode from './nodes/SubworkflowNode';
 import CanvasContextMenu, {
   type ContextMenuItem,
   type ContextMenuOpenAt,
@@ -75,6 +81,17 @@ const DEFAULT_CONFIG: { [K in NodeType]: () => NodeConfigByType[K] } = {
   }),
   loop: (): LoopConfig => ({ maxIterations: 5, mode: 'while-not-met' }),
   branch: (): BranchConfig => ({ lhs: '', op: '==', rhs: '' }),
+  parallel: (): ParallelConfig => ({ mode: 'wait-all', onError: 'fail-fast' }),
+  subworkflow: (): SubworkflowConfig => ({
+    workflowId: '',
+    inputs: {},
+    outputs: {},
+  }),
+  judge: (): JudgeNodeConfig => ({
+    criteria: '',
+    candidates: [],
+    providerId: 'claude',
+  }),
 };
 
 /** Default config object for a fresh node of a given type. */
@@ -426,6 +443,9 @@ const NODE_TYPES = {
   condition: ConditionNode,
   loop: LoopNode,
   branch: BranchNode,
+  parallel: ParallelNode,
+  subworkflow: SubworkflowNode,
+  judge: JudgeNode,
 } as const;
 
 function CanvasInner() {

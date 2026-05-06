@@ -25,7 +25,10 @@ import type {
   ConditionConfig,
   ConditionKind,
   EndConfig,
+  JudgeNodeConfig,
   LoopConfig,
+  ParallelConfig,
+  SubworkflowConfig,
   Workflow,
   WorkflowNode,
 } from '@/lib/shared/workflow';
@@ -704,6 +707,48 @@ function BranchForm({
   );
 }
 
+/* ─── multi-agent stubs (filled in by U4) ──────────────────── */
+
+function ParallelForm({
+  config,
+}: {
+  config: ParallelConfig;
+  onPatch: (next: ParallelConfig) => void;
+}) {
+  return (
+    <p className="serif-italic" style={{ color: 'var(--fg-dim)' }}>
+      Parallel · mode={config.mode ?? 'wait-all'} · onError=
+      {config.onError ?? 'fail-fast'} (form coming)
+    </p>
+  );
+}
+
+function SubworkflowForm({
+  config,
+}: {
+  config: SubworkflowConfig;
+  onPatch: (next: SubworkflowConfig) => void;
+}) {
+  return (
+    <p className="serif-italic" style={{ color: 'var(--fg-dim)' }}>
+      Subworkflow · target={config.workflowId || '(none)'} (form coming)
+    </p>
+  );
+}
+
+function JudgeForm({
+  config,
+}: {
+  config: JudgeNodeConfig;
+  onPatch: (next: JudgeNodeConfig) => void;
+}) {
+  return (
+    <p className="serif-italic" style={{ color: 'var(--fg-dim)' }}>
+      Judge · {config.candidates?.length ?? 0} candidates (form coming)
+    </p>
+  );
+}
+
 /* ─── main component ───────────────────────────────────────── */
 
 export default function ConfigPanel() {
@@ -800,6 +845,24 @@ export default function ConfigPanel() {
           <BranchForm
             config={node.config as BranchConfig}
             refs={refs}
+            onPatch={patchConfig}
+          />
+        )}
+        {node.type === 'parallel' && (
+          <ParallelForm
+            config={node.config as ParallelConfig}
+            onPatch={patchConfig}
+          />
+        )}
+        {node.type === 'subworkflow' && (
+          <SubworkflowForm
+            config={node.config as SubworkflowConfig}
+            onPatch={patchConfig}
+          />
+        )}
+        {node.type === 'judge' && (
+          <JudgeForm
+            config={node.config as JudgeNodeConfig}
             onPatch={patchConfig}
           />
         )}

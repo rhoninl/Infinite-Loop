@@ -38,6 +38,14 @@ const STATIC_CATEGORIES: PaletteCategory[] = [
       { type: 'condition', name: 'Condition', glyph: '◷', description: 'evaluate a condition' },
     ],
   },
+  {
+    heading: 'Multi-agent',
+    items: [
+      { type: 'parallel', name: 'Parallel', glyph: '⫲', description: 'fan out concurrent branches' },
+      { type: 'subworkflow', name: 'Subworkflow', glyph: '⊞', description: 'call another workflow' },
+      { type: 'judge', name: 'Judge', glyph: '⚖', description: 'pick best of N candidates' },
+    ],
+  },
 ];
 
 function modelRunnerCategory(providers: ProviderInfo[]): PaletteCategory {
