@@ -4,12 +4,14 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  type ColorMode,
   type Connection,
   type Edge as XyEdge,
   type EdgeChange,
   type Node as XyNode,
   type NodeChange,
 } from '@xyflow/react';
+import { useTheme } from 'next-themes';
 import '@xyflow/react/dist/style.css';
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { useWorkflowStore } from '../../../lib/client/workflow-store-client';
@@ -444,6 +446,15 @@ function CanvasInner() {
 
   const { screenToFlowPosition, fitView } = useReactFlow();
 
+  // Sync xyflow's color mode with the app theme. xyflow puts a `light` /
+  // `dark` class on its root container — and HeroUI's design tokens key off
+  // those exact class names, so HeroUI components rendered inside the canvas
+  // (e.g. node status Chips) would otherwise pick up the *wrong* token set
+  // whenever xyflow's class disagreed with our `<html>` class. Reading the
+  // resolved theme from `next-themes` keeps them in lockstep.
+  const { resolvedTheme } = useTheme();
+  const colorMode: ColorMode = resolvedTheme === 'light' ? 'light' : 'dark';
+
   // Fit the viewport to the workflow once per loaded workflow. Without this
   // an opened workflow whose nodes sit at large x/y may render partially
   // behind the palette or off the right edge.
@@ -740,6 +751,7 @@ function CanvasInner() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        colorMode={colorMode}
         fitView
         fitViewOptions={{ padding: 0.18, maxZoom: 1, minZoom: 0.4 }}
         proOptions={{ hideAttribution: true }}

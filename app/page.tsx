@@ -205,6 +205,10 @@ export default function Page() {
             variant="dot"
             color={RUN_STATUS_COLOR[runStatus]}
             aria-label={`run ${runStatus}`}
+            classNames={{
+              base: 'bg-bg-elevated border-border-strong',
+              content: 'text-fg font-medium',
+            }}
           >
             {runStatus}
           </Chip>
@@ -267,7 +271,7 @@ function clampRightWidth(n: number): number {
     RIGHT_WIDTH_MIN,
     (typeof window !== 'undefined' ? window.innerWidth : 1600) -
       CANVAS_MIN_WIDTH -
-      220, // palette width
+      240, // palette width
   );
   return Math.min(max, Math.max(RIGHT_WIDTH_MIN, Math.floor(n)));
 }

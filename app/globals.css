@@ -88,7 +88,7 @@
 
   --top-bar-h: 48px;
   --rail-w: 380px;
-  --palette-w: 220px;
+  --palette-w: 240px;
   --right-w: 440px;
 }
 
@@ -152,7 +152,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 500;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
@@ -242,7 +242,7 @@ body {
 }
 .brand-text {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -268,7 +268,7 @@ body {
   gap: 14px;
   padding-inline: 22px;
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 13px;
   color: var(--fg-dim);
   text-transform: uppercase;
   letter-spacing: 0.22em;
@@ -283,7 +283,7 @@ body {
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: none;
-  font-size: 12px;
+  font-size: 15px;
 }
 
 .actions {
@@ -309,7 +309,7 @@ body {
   background: transparent;
   color: var(--fg-soft);
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -352,7 +352,7 @@ body {
   color: var(--accent-live);
 }
 .theme-toggle-label {
-  font-size: 10px;
+  font-size: 12.5px;
 }
 
 /* ─── workspace ─────────────────────────────────────────── */
@@ -400,7 +400,7 @@ body {
  * Replaces the previous serif-italic "select a node to configure" text. */
 .config-empty {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 13.5px;
   letter-spacing: 0.04em;
   color: var(--fg-dim);
   margin: 0;
@@ -437,7 +437,7 @@ body {
 
 .run-view-ws {
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 12px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--fg-dim);
@@ -460,7 +460,7 @@ body {
   align-items: center;
   gap: 10px;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 13.5px;
   color: var(--accent-live);
   text-shadow: var(--crt-glow);
 }
@@ -474,7 +474,7 @@ body {
 .run-view-current-elapsed {
   margin-left: auto;
   font-family: var(--display);
-  font-size: 18px;
+  font-size: 22px;
   color: var(--accent-live);
   letter-spacing: 0.02em;
   line-height: 1;
@@ -501,7 +501,7 @@ body {
   gap: 10px;
   padding: 3px 14px;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 13.5px;
   color: var(--fg-soft);
   align-items: baseline;
 }
@@ -515,7 +515,7 @@ body {
   letter-spacing: 0.18em;
   color: var(--fg-dim);
   font-weight: 600;
-  font-size: 9px;
+  font-size: 11.5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -537,7 +537,7 @@ body {
   display: block;
   padding: 1px 14px;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 14px;
   line-height: 1.5;
   color: var(--fg);
   border-bottom: 0;
@@ -587,7 +587,7 @@ body {
   gap: 10px;
   padding: 5px 12px;
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 13px;
   letter-spacing: 0.04em;
   background: transparent;
   border-bottom: 1px dashed var(--border);
@@ -621,7 +621,7 @@ button.event-card-head-toggle:focus-visible {
 .event-card-kind {
   text-transform: uppercase;
   letter-spacing: 0.22em;
-  font-size: 9px;
+  font-size: 11.5px;
   color: var(--fg-muted);
 }
 
@@ -642,7 +642,7 @@ button.event-card-head-toggle:focus-visible {
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 15px;
   color: var(--fg-soft);
   transition: border-color 120ms ease, box-shadow 140ms ease;
 }
@@ -703,7 +703,7 @@ button.event-card-head-toggle:focus-visible {
 }
 .wf-node-title {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12.5px;
   font-weight: 700;
   letter-spacing: 0.28em;
   text-transform: uppercase;
@@ -725,7 +725,7 @@ button.event-card-head-toggle:focus-visible {
  * .wf-node-title so it matches the icon and the per-state tints. */
 .wf-node-title-text {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12.5px;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -758,7 +758,7 @@ button.event-card-head-toggle:focus-visible {
 .wf-node[data-state='failed'] .wf-node-title { color: var(--accent-err); }
 
 .wf-node-body {
-  font-size: 11px;
+  font-size: 13.5px;
   color: var(--fg);
   line-height: 1.5;
   word-break: break-word;
@@ -775,7 +775,7 @@ button.event-card-head-toggle:focus-visible {
   font-family: var(--mono);
   font-style: normal;
   color: var(--fg-soft);
-  font-size: 11px;
+  font-size: 13.5px;
   letter-spacing: 0;
 }
 
@@ -785,7 +785,7 @@ button.event-card-head-toggle:focus-visible {
  * of the legacy .wf-menu-* cluster retired with the HeroUI Dropdown migration. */
 .wf-menu-empty {
   padding: 14px 16px;
-  font-size: 12px;
+  font-size: 15px;
   color: var(--fg-dim);
 }
 .wf-menu-error {
@@ -797,7 +797,7 @@ button.event-card-head-toggle:focus-visible {
  * dashed line out to the panel edge. Replaces the cleanly-typeset eyebrow. */
 .section-eyebrow {
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.34em;
   text-transform: uppercase;
@@ -843,7 +843,7 @@ button.event-card-head-toggle:focus-visible {
 }
 
 .field-label {
-  font-size: 10px;
+  font-size: 12.5px;
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -851,7 +851,7 @@ button.event-card-head-toggle:focus-visible {
 }
 
 .field-hint {
-  font-size: 10px;
+  font-size: 12.5px;
   letter-spacing: 0.04em;
   text-transform: none;
   color: var(--fg-muted);
@@ -864,7 +864,7 @@ button.event-card-head-toggle:focus-visible {
 .field textarea,
 .field select {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 16px;
   color: var(--fg);
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
@@ -922,7 +922,7 @@ button.event-card-head-toggle:focus-visible {
   min-height: calc(1.55em + 22px);   /* matches the standard .field input box */
   padding: 10px 12px;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1.55;
   color: var(--fg-soft);
   background: var(--bg-input);
@@ -962,7 +962,7 @@ button.event-card-head-toggle:focus-visible {
   color: var(--fg);
   border: 1px solid var(--border-strong);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 13.5px;
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-all;
@@ -1023,7 +1023,7 @@ input[type='number'].no-spin {
   height: 28px;
   padding: 0 10px;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 13.5px;
   color: var(--fg);
   background: var(--bg-input);
   border: 1px solid var(--border);
@@ -1057,14 +1057,14 @@ input[type='number'].no-spin {
   overflow-y: auto;
   padding: 4px 0;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 13.5px;
 }
 
 .folder-picker-empty {
   padding: 12px 16px;
   color: var(--fg-dim);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 13.5px;
 }
 .folder-picker-error { color: var(--accent-err); }
 
@@ -1082,7 +1082,7 @@ input[type='number'].no-spin {
   padding: 5px 12px;
   color: var(--fg-soft);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 13.5px;
   cursor: pointer;
 }
 .folder-picker-row:hover {
@@ -1091,7 +1091,7 @@ input[type='number'].no-spin {
 }
 .folder-picker-row-icon {
   color: var(--fg-muted);
-  font-size: 10px;
+  font-size: 12.5px;
   text-align: center;
 }
 .folder-picker-row:hover .folder-picker-row-icon { color: var(--accent-live); }
@@ -1120,7 +1120,7 @@ input[type='number'].no-spin {
   background: var(--accent-live);
   color: var(--accent-on-live);
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -1170,7 +1170,7 @@ input[type='number'].no-spin {
   gap: 6px;
   height: 22px;
   padding-inline: 8px;
-  font-size: 10px;
+  font-size: 12.5px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--fg-dim);
@@ -1262,7 +1262,7 @@ input[type='number'].no-spin {
 }
 .wf-node-group-meta {
   color: var(--fg-dim);
-  font-size: 11px;
+  font-size: 13.5px;
 }
 
 /* ─── handles (xyflow source/target dots) ────────────────── */
@@ -1344,7 +1344,7 @@ input[type='number'].no-spin {
   top: 50%;
   transform: translateY(-50%);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11.5px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--fg);
