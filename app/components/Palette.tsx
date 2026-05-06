@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Button } from '@heroui/react';
 import type { NodeType } from '@/lib/shared/workflow';
 import type { ProviderInfo } from '@/lib/server/providers/types';
 import ProviderIcon from './icons/ProviderIcon';
@@ -104,8 +105,12 @@ export default function Palette() {
             ) : (
               category.items.map((item) => (
                 <li key={`${item.type}:${item.providerId ?? ''}:${item.name}`}>
-                  <button
+                  <Button
                     type="button"
+                    variant="light"
+                    radius="none"
+                    disableRipple
+                    disableAnimation
                     className="palette-item"
                     draggable
                     aria-label={
@@ -129,7 +134,7 @@ export default function Palette() {
                       <span className="palette-name">{item.name}</span>
                       <span className="palette-desc">{item.description}</span>
                     </span>
-                  </button>
+                  </Button>
                 </li>
               ))
             )}
@@ -171,13 +176,17 @@ const paletteCss = `
   letter-spacing: 0.04em;
 }
 /* Each palette item reads like a shell-prompt row in a manifest:
- * "› icon  NAME  description". No card chrome, no hover-fill — just a
- * left-edge phosphor pip on hover that mimics a cursor stopping on the
- * row. */
-.palette-item {
+ * "› icon  NAME  description". HeroUI Button gives us the press/focus
+ * plumbing; the className below keeps the bespoke shell-row look (no
+ * card chrome, just a left-edge phosphor pip on hover) and overrides
+ * HeroUI's default min-width / min-height / centered flex layout. */
+.palette-item.palette-item {
   appearance: none;
   -webkit-appearance: none;
   width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 0;
   display: grid;
   grid-template-columns: 12px 22px 1fr;
   gap: 10px;
@@ -191,6 +200,7 @@ const paletteCss = `
   text-align: left;
   transition: color 120ms ease, background 120ms ease;
   position: relative;
+  border-radius: 0;
 }
 .palette-item::before {
   content: '·';
