@@ -355,69 +355,6 @@ body {
   font-size: 10px;
 }
 
-/* ─── status pill (top bar + RunPanel header) ──────────── */
-/* Hard-cornered status block with a square phosphor LED on the left. No
- * rounded radius, no cards-everywhere look — reads like a relay panel. */
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 24px;
-  padding-inline: 10px;
-  border: 1px solid var(--border-strong);
-  background: transparent;
-  font-family: var(--mono);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--fg-soft);
-}
-.pill .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 0;
-  background: var(--fg-muted);
-}
-.pill[data-status='running'] .dot,
-.pill[data-state='running'] .dot {
-  background: var(--accent-live);
-  box-shadow: 0 0 6px var(--accent-live-glow), 0 0 14px var(--accent-live-glow);
-  animation: crt-blink 1.05s step-end infinite;
-}
-.pill[data-status='succeeded'] .dot {
-  background: var(--accent-ok);
-  box-shadow: var(--crt-glow-ok);
-}
-.pill[data-status='failed'] .dot,
-.pill[data-status='exhausted'] .dot {
-  background: var(--accent-err);
-  box-shadow: var(--crt-glow-err);
-}
-.pill[data-status='cancelled'] .dot {
-  background: var(--accent-warn);
-}
-.pill[data-status='running'] {
-  color: var(--accent-live);
-  border-color: var(--accent-live);
-  text-shadow: var(--crt-glow);
-}
-.pill[data-status='succeeded'] {
-  color: var(--accent-ok);
-  border-color: var(--accent-ok);
-  text-shadow: var(--crt-glow-ok);
-}
-.pill[data-status='failed'],
-.pill[data-status='exhausted'] {
-  color: var(--accent-err);
-  border-color: var(--accent-err);
-  text-shadow: var(--crt-glow-err);
-}
-.pill[data-status='cancelled'] {
-  color: var(--accent-warn);
-  border-color: var(--accent-warn);
-}
-
 /* ─── workspace ─────────────────────────────────────────── */
 .workspace {
   display: grid;
@@ -670,14 +607,6 @@ button.event-card-head-toggle:focus-visible {
   outline: 1px solid var(--accent-live);
   outline-offset: -1px;
 }
-.event-card-fold {
-  margin-left: 6px;
-  color: var(--fg-muted);
-  font-size: 10px;
-  width: 10px;
-  text-align: center;
-  user-select: none;
-}
 /* Pseudo-prompt before the node id, so each card head reads like a shell
  * prompt in the log (`> claude-1 agent  RUNNING ...`). */
 .event-card-id {
@@ -694,26 +623,6 @@ button.event-card-head-toggle:focus-visible {
   letter-spacing: 0.22em;
   font-size: 9px;
   color: var(--fg-muted);
-}
-.event-card-status {
-  margin-left: auto;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  font-size: 9px;
-  color: var(--fg-dim);
-}
-.event-card-status[data-state='running'] {
-  color: var(--accent-live);
-  text-shadow: var(--crt-glow);
-  animation: crt-blink 1.05s step-end infinite;
-}
-.event-card-status[data-state='finished'] {
-  color: var(--accent-ok);
-  text-shadow: var(--crt-glow-ok);
-}
-.event-card-status[data-state='errored'] {
-  color: var(--accent-err);
-  text-shadow: var(--crt-glow-err);
 }
 
 .event-card-body {
@@ -848,27 +757,6 @@ button.event-card-head-toggle:focus-visible {
 .wf-node[data-state='succeeded'] .wf-node-title { color: var(--accent-ok); }
 .wf-node[data-state='failed'] .wf-node-title { color: var(--accent-err); }
 
-/* Square phosphor LED, not a round dot — feels like a relay panel. */
-.wf-node-state-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 0;
-  background: var(--fg-faint);
-}
-.wf-node-state-dot[data-state='live'] {
-  background: var(--accent-live);
-  box-shadow: 0 0 6px var(--accent-live-glow), 0 0 14px var(--accent-live-glow);
-  animation: crt-blink 1.05s step-end infinite;
-}
-.wf-node-state-dot[data-state='succeeded'] {
-  background: var(--accent-ok);
-  box-shadow: 0 0 6px var(--accent-ok-glow);
-}
-.wf-node-state-dot[data-state='failed'] {
-  background: var(--accent-err);
-  box-shadow: 0 0 6px var(--accent-err-glow);
-}
-
 .wf-node-body {
   font-size: 11px;
   color: var(--fg);
@@ -891,78 +779,10 @@ button.event-card-head-toggle:focus-visible {
   letter-spacing: 0;
 }
 
-/* ─── workflow menu ─────────────────────────────────────── */
-.wf-menu {
-  position: relative;
-  display: inline-block;
-}
-
-.wf-menu-trigger {
-  appearance: none;
-  background: transparent;
-  color: var(--fg-soft);
-  font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  border: 1px dashed var(--border-strong);
-  height: 26px;
-  padding: 0 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  transition: border-color 120ms ease, color 120ms ease, border-style 120ms ease,
-    text-shadow 120ms ease;
-}
-.wf-menu-trigger::before {
-  content: '◇';
-  color: var(--fg-dim);
-  font-size: 11px;
-  margin-right: 2px;
-}
-.wf-menu-trigger:hover {
-  color: var(--accent-live);
-  border-color: var(--accent-live);
-  border-style: solid;
-  text-shadow: var(--crt-glow);
-}
-.wf-menu-trigger:hover::before {
-  color: var(--accent-live);
-}
-.wf-menu-trigger-name {
-  max-width: 24ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wf-menu-trigger-caret {
-  font-size: 9px;
-  color: var(--fg-muted);
-}
-.wf-menu-trigger:hover .wf-menu-trigger-caret {
-  color: var(--accent-live);
-}
-
-.wf-menu-panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  min-width: 280px;
-  background: var(--bg-deep);
-  border: 1px solid var(--accent-live);
-  box-shadow: 0 0 12px var(--accent-live-glow);
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-}
-
-.wf-menu-list {
-  max-height: 320px;
-  overflow-y: auto;
-  border-bottom: 1px solid var(--border);
-}
-
+/* ─── workflow-menu / history empty state ─────────────────── */
+/* Single shared style for the "loading…" / "no items" / error message that
+ * still renders inside RunHistory and a couple of empty-list spots. The rest
+ * of the legacy .wf-menu-* cluster retired with the HeroUI Dropdown migration. */
 .wf-menu-empty {
   padding: 14px 16px;
   font-size: 12px;
@@ -972,185 +792,6 @@ button.event-card-head-toggle:focus-visible {
   color: var(--accent-err);
 }
 
-/* Workflow rows: each row is a flex wrapper holding a "pick" button (the
- * full-width click target — name + id) and a "delete" button (× shown on
- * hover only). Name + id stack so the headline dominates, the id reads as
- * a quiet annotation. Active row gets a full-height left-edge stripe in
- * the accent color, plus a light background tint. */
-.wf-menu-row {
-  display: flex;
-  align-items: stretch;
-  border-bottom: 1px solid var(--border);
-  border-left: 2px solid transparent;
-  background: transparent;
-  transition: background 120ms ease, border-color 120ms ease;
-}
-.wf-menu-row:last-child { border-bottom: 0; }
-.wf-menu-row:hover {
-  background: var(--hover-tint);
-  border-left-color: var(--border-strong);
-}
-.wf-menu-row[aria-current='true'] {
-  background: rgba(255, 158, 100, 0.08);
-  border-left-color: var(--accent-live);
-}
-
-.wf-menu-row-pick {
-  flex: 1 1 auto;
-  min-width: 0;
-  appearance: none;
-  background: transparent;
-  border: 0;
-  text-align: left;
-  padding: 10px 14px;
-  display: grid;
-  grid-template-columns: 1fr;
-  row-gap: 2px;
-  cursor: pointer;
-  font-family: var(--mono);
-  color: var(--fg-soft);
-  transition: color 120ms ease;
-}
-.wf-menu-row:hover .wf-menu-row-pick { color: var(--fg); }
-.wf-menu-row-pick:focus-visible {
-  outline: 1px solid var(--accent-live);
-  outline-offset: -2px;
-}
-
-/* Per-row delete: a × glyph that appears only when the row is hovered or
- * keyboard-focused. Keeps the rest list calm — no permanent destructive
- * affordance. confirm() prompt fires on click. */
-.wf-menu-row-delete {
-  appearance: none;
-  background: transparent;
-  border: 0;
-  align-self: stretch;
-  width: 32px;
-  flex: 0 0 32px;
-  font-family: var(--mono);
-  font-size: 16px;
-  line-height: 1;
-  color: var(--fg-muted);
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
-}
-.wf-menu-row:hover .wf-menu-row-delete { opacity: 1; }
-.wf-menu-row-delete:hover {
-  color: var(--accent-err);
-  background: rgba(247, 118, 142, 0.08);
-}
-.wf-menu-row-delete:focus-visible {
-  opacity: 1;
-  outline: 1px solid var(--accent-err);
-  outline-offset: -2px;
-}
-
-/* Hierarchy — name is the headline, id is the subtitle. */
-.wf-menu-row-name {
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--fg);
-  line-height: 1.3;
-}
-.wf-menu-row[aria-current='true'] .wf-menu-row-name {
-  color: var(--accent-live);
-}
-.wf-menu-row-id {
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  color: var(--fg-muted);
-  line-height: 1.2;
-}
-.wf-menu-row-id::before {
-  content: 'id › ';
-  color: var(--fg-faint);
-}
-
-/* ─── run history rows ──────────────────────────────────── */
-/* The History panel's list of past runs. Distinct from .wf-menu-row (which
- * is now a flex wrapper with inner pick/delete buttons + an "id › " prefix
- * that doesn't make sense here). Status drives the left-edge stripe color
- * and the status-text tint; the meta line carries timestamp + duration +
- * event count. */
-.run-history-row {
-  appearance: none;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  border-left: 2px solid transparent;
-  width: 100%;
-  text-align: left;
-  padding: 8px 14px;
-  display: grid;
-  grid-template-columns: 1fr;
-  row-gap: 2px;
-  cursor: pointer;
-  font-family: var(--mono);
-  color: var(--fg-soft);
-  transition: background 120ms ease, border-color 120ms ease;
-}
-.run-history-row:last-child { border-bottom: 0; }
-.run-history-row:hover {
-  background: var(--hover-tint);
-  border-left-color: var(--border-strong);
-}
-.run-history-row[data-status='succeeded'] { border-left-color: var(--accent-ok); }
-.run-history-row[data-status='failed'],
-.run-history-row[data-status='exhausted'] { border-left-color: var(--accent-err); }
-.run-history-row[data-status='cancelled'] { border-left-color: var(--accent-warn); }
-
-.run-history-row-status {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--fg);
-  line-height: 1.3;
-}
-.run-history-row[data-status='succeeded'] .run-history-row-status { color: var(--accent-ok); }
-.run-history-row[data-status='failed'] .run-history-row-status,
-.run-history-row[data-status='exhausted'] .run-history-row-status { color: var(--accent-err); }
-.run-history-row[data-status='cancelled'] .run-history-row-status { color: var(--accent-warn); }
-
-.run-history-row-meta {
-  font-size: 10px;
-  color: var(--fg-muted);
-  letter-spacing: 0.04em;
-  line-height: 1.2;
-}
-
-/* Footer "+" button to create a new workflow. Single full-width tap target
- * since the previous SAVE / DUPLICATE / DELETE row is gone (save is now
- * automatic, delete moved per-row, duplicate retired). */
-.wf-menu-new {
-  appearance: none;
-  background: transparent;
-  border: 0;
-  border-top: 1px solid var(--border);
-  width: 100%;
-  padding: 10px;
-  font-family: var(--mono);
-  font-size: 18px;
-  font-weight: 400;
-  line-height: 1;
-  color: var(--fg-dim);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 120ms ease, background 120ms ease;
-}
-.wf-menu-new:hover {
-  color: var(--accent-live);
-  background: var(--hover-tint);
-}
-.wf-menu-new:focus-visible {
-  outline: 1px solid var(--accent-live);
-  outline-offset: -2px;
-}
 /* ─── section heading (used in form + main) ─────────────── */
 /* Reads as a terminal section label: small phosphor block, label, then a
  * dashed line out to the panel edge. Replaces the cleanly-typeset eyebrow. */
@@ -1337,109 +978,6 @@ button.event-card-head-toggle:focus-visible {
   transform: translateY(0);
 }
 
-/* segmented control replaces native <select> */
-.segmented {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
-  border: 1px solid var(--border-strong);
-  background: var(--bg-input);
-}
-
-.segmented button {
-  appearance: none;
-  -webkit-appearance: none;
-  background: transparent;
-  color: var(--fg-dim);
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  padding: 12px 8px;
-  cursor: pointer;
-  border: 0;
-  border-right: 1px solid var(--border);
-  position: relative;
-  transition: color 120ms ease, background 120ms ease;
-}
-
-.segmented button:last-child {
-  border-right: 0;
-}
-
-.segmented button:hover:not(:disabled):not([data-active='true']) {
-  color: var(--fg-soft);
-  background: rgba(255, 239, 200, 0.02);
-}
-
-.segmented button[data-active='true'] {
-  color: var(--accent-on-live);
-  background: var(--accent-live);
-}
-
-.segmented button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.segmented button:focus-visible {
-  outline: 1px solid var(--accent-live);
-  outline-offset: -2px;
-}
-
-/* Inline number-and-unit row used by the iteration timeout. The number takes
- * the available width, the unit segmented control hugs the right edge. */
-.field-row {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-}
-.field-row > input {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.field-row > .seg-tight {
-  flex: 0 0 auto;
-}
-
-/* Compact segmented variant — same look as .segmented but shorter padding,
- * intended for inline unit selectors next to a number field. */
-.seg-tight {
-  display: inline-grid;
-  grid-auto-flow: column;
-  border: 1px solid var(--border-strong);
-  background: var(--bg-input);
-}
-.seg-tight button {
-  appearance: none;
-  -webkit-appearance: none;
-  background: transparent;
-  color: var(--fg-dim);
-  font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  padding: 0 10px;
-  min-width: 38px;
-  cursor: pointer;
-  border: 0;
-  border-right: 1px solid var(--border);
-  transition: color 120ms ease, background 120ms ease;
-}
-.seg-tight button:last-child { border-right: 0; }
-.seg-tight button:hover:not([data-active='true']) {
-  color: var(--fg-soft);
-  background: var(--hover-tint);
-}
-.seg-tight button[data-active='true'] {
-  color: var(--accent-on-live);
-  background: var(--accent-live);
-}
-.seg-tight button:focus-visible {
-  outline: 1px solid var(--accent-live);
-  outline-offset: -2px;
-}
-
 /* Hide the native number-input spinner arrows. Browsers render them
  * inconsistently and they collide with our minimal field chrome — keyboard
  * users still get full control via typing or the unit selector. */
@@ -1567,47 +1105,11 @@ input[type='number'].no-spin {
   background: var(--bg-deep);
 }
 
-.checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: var(--fg-soft);
-  cursor: pointer;
-  user-select: none;
-}
-.checkbox-row input {
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  border: 1px solid var(--border-strong);
-  background: var(--bg-input);
-  cursor: pointer;
-  position: relative;
-  transition: border-color 120ms;
-}
-.checkbox-row input:checked {
-  border-color: var(--accent-live);
-  background: var(--accent-live);
-}
-.checkbox-row input:checked::after {
-  content: '';
-  position: absolute;
-  inset: 2px;
-  background: var(--bg-deep);
-}
-
-.field-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-
-/* ─── primary button ────────────────────────────────────── */
+/* ─── primary / secondary buttons (FolderPicker only) ─────── */
 /* Filled in --accent-live (peach) so it reads as the only saturated control
- * in the action row. .btn-stop swaps to --accent-err (coral) for the same
- * shape; .btn-toggle drops the fill and runs as a transparent chip. */
+ * in the action row. .btn-toggle drops the fill and runs as a transparent
+ * chip. Used by FolderPicker's Cancel / Use-this-folder buttons; the rest
+ * of the app's buttons migrated to HeroUI. */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -1645,16 +1147,6 @@ input[type='number'].no-spin {
   color: var(--fg-dim);
 }
 
-.btn-stop {
-  background: var(--accent-err);
-  color: var(--accent-on-live);
-  border-color: var(--accent-err);
-}
-.btn-stop:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent-err) 84%, white 16%);
-  border-color: color-mix(in srgb, var(--accent-err) 84%, white 16%);
-}
-
 /* Secondary toggle — transparent chip with a muted outline. Hover lifts to
  * the live accent (peach) so the user gets visual feedback without committing
  * to the filled-CTA treatment. */
@@ -1666,11 +1158,6 @@ input[type='number'].no-spin {
 .btn-toggle:hover:not(:disabled) {
   color: var(--accent-live);
   border-color: var(--accent-live);
-}
-.btn-toggle[aria-pressed='true'] {
-  background: transparent;
-  color: var(--fg);
-  border-color: var(--fg-soft);
 }
 
 /* ─── live tag (RunView "currently running" row) ─────────── */
@@ -1893,54 +1380,3 @@ input[type='number'].no-spin {
   border-radius: 0 !important;
 }
 
-/* ─── canvas right-click menu ─────────────────────────────────────────── */
-.canvas-context-menu {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
-  min-width: 200px;
-  padding: 6px 0;
-  font-family: var(--mono);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-}
-.ccm-section + .ccm-section {
-  border-top: 1px solid var(--border);
-}
-.ccm-heading {
-  margin: 0;
-  padding: 8px 14px 4px;
-  font-size: 9px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--fg-muted);
-  font-weight: 600;
-}
-.ccm-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.ccm-empty {
-  padding: 6px 14px 10px;
-  font-size: 11px;
-  color: var(--fg-muted);
-}
-.ccm-item {
-  appearance: none;
-  -webkit-appearance: none;
-  background: transparent;
-  border: 0;
-  width: 100%;
-  text-align: left;
-  padding: 6px 14px;
-  font-family: inherit;
-  font-size: 12px;
-  color: var(--fg-soft);
-  cursor: pointer;
-  transition: background 100ms ease, color 100ms ease;
-}
-.ccm-item:hover,
-.ccm-item:focus-visible {
-  background: var(--hover-tint);
-  color: var(--accent-live);
-  outline: none;
-}
