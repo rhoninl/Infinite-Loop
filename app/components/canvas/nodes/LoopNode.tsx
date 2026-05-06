@@ -1,5 +1,6 @@
 'use client';
 
+import { Card, CardHeader } from '@heroui/react';
 import {
   Handle,
   NodeResizer,
@@ -31,8 +32,10 @@ export default function LoopNode({ data, selected }: NodeProps) {
   const title = d.label?.trim() || 'LOOP';
 
   return (
-    <div
+    <Card
       className="wf-node wf-node-group"
+      shadow="none"
+      radius="none"
       data-node-type={NODE_TYPE}
       data-state={state}
       data-selected={selected ? 'true' : 'false'}
@@ -46,14 +49,14 @@ export default function LoopNode({ data, selected }: NodeProps) {
         handleClassName="wf-resize-handle"
       />
       <Handle type="target" position={Position.Left} id="in" />
-      <div className="wf-node-group-head">
+      <CardHeader className="wf-node-group-head !p-0">
         <span className="wf-node-title">{title}</span>
         <span className="wf-node-group-meta wf-node-body-italic">
           ×{iterLabel} · {mode}
         </span>
-      </div>
+      </CardHeader>
       {/* Children are rendered by xyflow as separate sub-nodes via parentId. */}
       <Handle type="source" position={Position.Right} id="next" />
-    </div>
+    </Card>
   );
 }
