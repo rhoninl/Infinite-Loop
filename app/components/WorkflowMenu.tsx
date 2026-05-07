@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Button,
   Dropdown,
@@ -52,11 +52,32 @@ export default function WorkflowMenu() {
   const currentWorkflow = useWorkflowStore((s) => s.currentWorkflow);
   const loadWorkflow = useWorkflowStore((s) => s.loadWorkflow);
   const saveCurrentWorkflow = useWorkflowStore((s) => s.saveCurrentWorkflow);
+  const renameCurrentWorkflow = useWorkflowStore((s) => s.renameCurrentWorkflow);
   const isDirty = useWorkflowStore((s) => s.isDirty);
 
   const [summaries, setSummaries] = useState<WorkflowSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  // When Escape cancels an edit, the input unmounts in the same tick. Some
+  // browsers fire blur on removed-from-DOM focused elements with the
+  // pre-cancel onBlur closure (where `editing` was still true), which would
+  // re-trigger commitEdit and race the cancel. The ref short-circuits that.
+  const cancelledRef = useRef(false);
+
+  // Drop edit mode if the current workflow disappears or swaps under us.
+  useEffect(() => {
+    if (!currentWorkflow) setEditing(false);
+  }, [currentWorkflow]);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
 
   const refreshList = async () => {
     setLoading(true);
@@ -157,10 +178,36 @@ export default function WorkflowMenu() {
     }
   };
 
-  // Trigger shows a small "•" while there are unsaved edits. Mostly informational.
-  const triggerLabel = currentWorkflow
-    ? `${currentWorkflow.name}${isDirty ? ' •' : ''}`
-    : '(no workflow)';
+  const startEdit = () => {
+    if (!currentWorkflow) return;
+    setError(null);
+    cancelledRef.current = false;
+    setDraft(currentWorkflow.name);
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    cancelledRef.current = true;
+    setEditing(false);
+    setDraft('');
+  };
+
+  const commitEdit = async () => {
+    if (cancelledRef.current) {
+      cancelledRef.current = false;
+      return;
+    }
+    if (!editing) return;
+    const next = draft.trim();
+    setEditing(false);
+    setDraft('');
+    if (!currentWorkflow || !next || next === currentWorkflow.name) return;
+    try {
+      await renameCurrentWorkflow(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to rename');
+    }
+  };
 
   // The workflows section needs at least one child, so when there's nothing
   // real to show we render a single non-selectable placeholder.
@@ -191,66 +238,104 @@ export default function WorkflowMenu() {
     else if (k.startsWith(WF_KEY_PREFIX)) void onPickRow(k.slice(WF_KEY_PREFIX.length));
   };
 
+  const nameLabel = currentWorkflow
+    ? `${currentWorkflow.name}${isDirty ? ' •' : ''}`
+    : '(no workflow)';
+
   return (
-    <Dropdown
-      placement="bottom-start"
-      onOpenChange={(open) => {
-        if (open) {
-          setError(null);
-          void refreshList();
-        }
-      }}
-    >
-      <DropdownTrigger>
-        <Button
-          variant="light"
-          size="sm"
-          aria-label="workflow menu"
-          className="font-mono"
+    <div className="inline-flex items-center gap-0">
+      {editing && currentWorkflow ? (
+        <input
+          ref={inputRef}
+          type="text"
+          aria-label="workflow name"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => void commitEdit()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void commitEdit();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              cancelEdit();
+            }
+          }}
+          className="font-mono text-sm bg-transparent outline-none border-b border-default-400 focus:border-primary px-2 py-1 max-w-[28ch]"
+        />
+      ) : currentWorkflow ? (
+        <button
+          type="button"
+          aria-label="rename workflow"
+          onClick={startEdit}
+          className="font-mono text-sm px-2 py-1 rounded hover:bg-default-100 truncate max-w-[28ch]"
         >
-          <span className="truncate max-w-[28ch]">{triggerLabel}</span>
-          <span aria-hidden="true">▼</span>
-        </Button>
-      </DropdownTrigger>
-      <DropdownMenu
-        aria-label="workflow list"
-        disabledKeys={disabledKeys}
-        onAction={onAction}
-      >
-        <DropdownSection title="Workflows" showDivider items={workflowItems}>
-          {(item) =>
-            item.isPlaceholder ? (
-              <DropdownItem key={item.key} className="serif-italic opacity-70">
-                {item.label}
-              </DropdownItem>
-            ) : (
-              // `textValue` powers typeahead (so two workflows with the same
-              // name remain distinguishable when users type to focus).
-              <DropdownItem
-                key={item.key}
-                textValue={`${item.label} ${item.id}`}
-                description={item.id}
-                className={item.isCurrent ? 'text-primary' : undefined}
-                endContent={item.isCurrent ? <span aria-hidden="true">●</span> : null}
-              >
-                {item.label}
-              </DropdownItem>
-            )
+          {nameLabel}
+        </button>
+      ) : (
+        <span className="font-mono text-sm px-2 py-1 opacity-70">
+          {nameLabel}
+        </span>
+      )}
+      <Dropdown
+        placement="bottom-start"
+        onOpenChange={(open) => {
+          if (open) {
+            setError(null);
+            void refreshList();
           }
-        </DropdownSection>
-        <DropdownSection title="Actions">
-          <DropdownItem key={ACTION_KEYS.save}>Save</DropdownItem>
-          <DropdownItem key={ACTION_KEYS.new}>New</DropdownItem>
-          <DropdownItem key={ACTION_KEYS.duplicate}>Duplicate</DropdownItem>
-          <DropdownItem
-            key={ACTION_KEYS.delete}
-            color="danger"
-            className="text-danger"
+        }}
+      >
+        <DropdownTrigger>
+          <Button
+            variant="light"
+            size="sm"
+            aria-label="workflow menu"
+            className="font-mono min-w-0 px-2"
           >
-            Delete
-          </DropdownItem>
-        </DropdownSection>
-      </DropdownMenu>
-    </Dropdown>
+            <span aria-hidden="true">▼</span>
+          </Button>
+        </DropdownTrigger>
+        <DropdownMenu
+          aria-label="workflow list"
+          disabledKeys={disabledKeys}
+          onAction={onAction}
+        >
+          <DropdownSection title="Workflows" showDivider items={workflowItems}>
+            {(item) =>
+              item.isPlaceholder ? (
+                <DropdownItem key={item.key} className="serif-italic opacity-70">
+                  {item.label}
+                </DropdownItem>
+              ) : (
+                // `textValue` powers typeahead (so two workflows with the same
+                // name remain distinguishable when users type to focus).
+                <DropdownItem
+                  key={item.key}
+                  textValue={`${item.label} ${item.id}`}
+                  description={item.id}
+                  className={item.isCurrent ? 'text-primary' : undefined}
+                  endContent={item.isCurrent ? <span aria-hidden="true">●</span> : null}
+                >
+                  {item.label}
+                </DropdownItem>
+              )
+            }
+          </DropdownSection>
+          <DropdownSection title="Actions">
+            <DropdownItem key={ACTION_KEYS.save}>Save</DropdownItem>
+            <DropdownItem key={ACTION_KEYS.new}>New</DropdownItem>
+            <DropdownItem key={ACTION_KEYS.duplicate}>Duplicate</DropdownItem>
+            <DropdownItem
+              key={ACTION_KEYS.delete}
+              color="danger"
+              className="text-danger"
+            >
+              Delete
+            </DropdownItem>
+          </DropdownSection>
+        </DropdownMenu>
+      </Dropdown>
+    </div>
   );
 }

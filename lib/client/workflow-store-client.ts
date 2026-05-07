@@ -43,6 +43,11 @@ export interface WorkflowStoreState {
   removeEdge: (id: string) => void;
   selectNode: (id: string | null) => void;
   saveCurrentWorkflow: () => Promise<void>;
+  /** Rename the current workflow and immediately persist via PUT. The full
+   * workflow body is sent, so any pending edits are flushed alongside the
+   * rename — this matches the "save immediately" semantics for inline rename
+   * in the top menu. No-op when name is empty/unchanged. */
+  renameCurrentWorkflow: (name: string) => Promise<void>;
 
   /** Restore the previous workflow snapshot. No-op if nothing to undo. */
   undo: () => void;
@@ -437,6 +442,28 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
       body: JSON.stringify(wf),
     });
     if (!res.ok) throw new Error(`save failed: ${res.status}`);
+    set({ isDirty: false });
+  },
+
+  renameCurrentWorkflow: async (name) => {
+    const wf = get().currentWorkflow;
+    if (!wf) return;
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === wf.name) return;
+    const next: Workflow = { ...wf, name: trimmed, updatedAt: Date.now() };
+    // Optimistic update + dirty marker. If the PUT fails the dirty flag
+    // stays on so the user sees "•" and can retry via Save.
+    set((s) => ({
+      currentWorkflow: next,
+      isDirty: true,
+      ...pushPast(s, wf),
+    }));
+    const res = await fetch(`/api/workflows/${encodeURIComponent(next.id)}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(next),
+    });
+    if (!res.ok) throw new Error(`rename failed: ${res.status}`);
     set({ isDirty: false });
   },
 
