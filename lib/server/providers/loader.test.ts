@@ -124,7 +124,102 @@ describe('providers/loader', () => {
     const list = await loadProviders();
     expect(list).toHaveLength(1);
     // Sorted reads `a.json` before `b.json`; first-wins keeps `bin: 'a-bin'`.
-    expect(list[0].bin).toBe('a-bin');
+    const winner = list[0];
+    if (winner.transport !== 'cli') throw new Error('expected cli transport');
+    expect(winner.bin).toBe('a-bin');
+  });
+
+  it('loads an http-transport manifest with auth + profiles', async () => {
+    writeManifest('hermes.json', {
+      id: 'hermes',
+      label: 'Hermes',
+      description: 'd',
+      transport: 'http',
+      baseUrl: 'https://hermes.example/v1/',
+      endpoint: '/chat/completions',
+      profilesEndpoint: '/models',
+      auth: { type: 'bearer', envVar: 'INFLOOP_HERMES_TOKEN' },
+      profiles: [{ id: 'hermes-3', label: 'Hermes 3' }],
+      defaultProfile: 'hermes-3',
+    });
+    const { loadProviders } = await import('./loader');
+    const list = await loadProviders();
+    expect(list).toHaveLength(1);
+    const m = list[0];
+    expect(m.transport).toBe('http');
+    if (m.transport !== 'http') throw new Error('unreachable'); // type narrow
+    // Trailing slash should be stripped from baseUrl.
+    expect(m.baseUrl).toBe('https://hermes.example/v1');
+    expect(m.endpoint).toBe('/chat/completions');
+    expect(m.auth?.envVar).toBe('INFLOOP_HERMES_TOKEN');
+    expect(m.profiles).toEqual([{ id: 'hermes-3', label: 'Hermes 3' }]);
+    expect(m.defaultProfile).toBe('hermes-3');
+  });
+
+  it('rejects an http manifest whose endpoint omits the leading slash', async () => {
+    writeManifest('bad.json', {
+      id: 'bad',
+      label: 'Bad',
+      description: 'd',
+      transport: 'http',
+      baseUrl: 'https://x/v1',
+      endpoint: 'chat/completions',
+    });
+    const { loadProviders } = await import('./loader');
+    expect(await loadProviders()).toEqual([]);
+  });
+
+  it('rejects an http manifest whose profilesEndpoint omits the leading slash', async () => {
+    writeManifest('bad.json', {
+      id: 'bad',
+      label: 'Bad',
+      description: 'd',
+      transport: 'http',
+      baseUrl: 'https://x/v1',
+      endpoint: '/chat/completions',
+      profilesEndpoint: 'models',
+    });
+    const { loadProviders } = await import('./loader');
+    expect(await loadProviders()).toEqual([]);
+  });
+
+  it('rejects an http manifest missing baseUrl', async () => {
+    writeManifest('bad.json', {
+      id: 'bad',
+      label: 'Bad',
+      description: 'd',
+      transport: 'http',
+      endpoint: '/x',
+    });
+    const { loadProviders } = await import('./loader');
+    expect(await loadProviders()).toEqual([]);
+  });
+
+  it('rejects an http manifest with non-bearer auth.type', async () => {
+    writeManifest('bad.json', {
+      id: 'bad',
+      label: 'Bad',
+      description: 'd',
+      transport: 'http',
+      baseUrl: 'https://x',
+      endpoint: '/c',
+      auth: { type: 'basic', envVar: 'X' },
+    });
+    const { loadProviders } = await import('./loader');
+    expect(await loadProviders()).toEqual([]);
+  });
+
+  it('rejects a manifest with an unknown transport', async () => {
+    writeManifest('bad.json', {
+      id: 'bad',
+      label: 'Bad',
+      description: 'd',
+      transport: 'grpc',
+      baseUrl: 'https://x',
+      endpoint: '/c',
+    });
+    const { loadProviders } = await import('./loader');
+    expect(await loadProviders()).toEqual([]);
   });
 
   it('resolveBin honors INFLOOP_PROVIDER_BIN_<ID> and INFLOOP_CLAUDE_BIN alias', async () => {
@@ -133,9 +228,11 @@ describe('providers/loader', () => {
       id: 'claude',
       label: 'Claude',
       description: 'd',
+      transport: 'cli' as const,
       bin: 'claude',
       args: ['{prompt}'],
       outputFormat: 'plain',
+      promptVia: 'arg' as const,
     };
     const otherManifest = {
       ...claudeManifest,

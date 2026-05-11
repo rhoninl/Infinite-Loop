@@ -1,6 +1,15 @@
 // Order matters: @testing-library/dom captures `document.body` at import time
 // (it returns an error-throwing `screen` if the global isn't there yet). So we
 // register happy-dom FIRST, then load anything that pulls in RTL.
+
+// Stash the native fetch before happy-dom overrides it with a CORS-enforcing
+// shim. Tests that exercise real Node-side HTTP code (e.g. the http-runner's
+// fetch against a node:http stub server) should use this to bypass the DOM
+// polyfill — in production those code paths run on the Next.js server with
+// no CORS layer at all.
+(globalThis as { __infloopNativeFetch?: typeof fetch }).__infloopNativeFetch =
+  globalThis.fetch;
+
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
 

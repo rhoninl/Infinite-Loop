@@ -1,0 +1,15 @@
+{
+  "id": "hermes",
+  "label": "Hermes",
+  "description": "Nous Hermes via OpenAI-compatible HTTP",
+  "glyph": "☿",
+  "transport": "http",
+  "baseUrl": "https://inference-api.nousresearch.com/v1",
+  "endpoint": "/chat/completions",
+  "profilesEndpoint": "/models",
+  "auth": {
+    "type": "bearer",
+    "envVar": "INFLOOP_HERMES_TOKEN"
+  },
+  "defaultProfile": "Hermes-3-Llama-3.1-70B"
+}

@@ -20,6 +20,10 @@ import {
 import { useWorkflowStore } from '@/lib/client/workflow-store-client';
 import FolderPicker from './FolderPicker';
 import type {
+  HttpProviderProfile,
+  ProviderInfo,
+} from '@/lib/server/providers/types';
+import type {
   AgentConfig,
   BranchConfig,
   BranchOp,
@@ -258,10 +262,15 @@ function EndForm({
 function AgentForm({
   config,
   refs,
+  providerInfo,
   onPatch,
 }: {
   config: AgentConfig;
   refs: string[];
+  /** Provider metadata for `config.providerId`, fetched once at the panel
+   * level. `null` while the panel-level fetch is in flight, or if the id
+   * doesn't match any known provider. */
+  providerInfo: ProviderInfo | null;
   onPatch: (next: AgentConfig) => void;
 }) {
   const [prompt, setPrompt] = useDebouncedString(
@@ -324,6 +333,51 @@ function AgentForm({
 
   const cwdInvalid = cwd.length > 0 && !cwd.startsWith('/');
   const providerId = config.providerId ?? 'claude';
+  const isHttpProvider = providerInfo?.transport === 'http';
+
+  // Profiles are only fetched for http providers. Live failures surface as
+  // an inline note; the dropdown also always includes the currently-saved
+  // profile so an unknown stored value doesn't silently revert to default.
+  const [profiles, setProfiles] = useState<HttpProviderProfile[] | null>(null);
+  const [profilesError, setProfilesError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isHttpProvider) {
+      setProfiles(null);
+      setProfilesError(null);
+      return;
+    }
+    let cancelled = false;
+    setProfiles(null);
+    setProfilesError(null);
+    fetch(`/api/providers/${encodeURIComponent(providerId)}/profiles`)
+      .then(async (r) => {
+        const body = (await r.json()) as {
+          profiles?: HttpProviderProfile[];
+          error?: string;
+        };
+        if (cancelled) return;
+        if (!r.ok) {
+          setProfilesError(body.error ?? `HTTP ${r.status}`);
+          setProfiles([]);
+          return;
+        }
+        setProfiles(Array.isArray(body.profiles) ? body.profiles : []);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setProfilesError((err as Error).message);
+        setProfiles([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isHttpProvider, providerId]);
+
+  const profileValue = config.profile ?? '';
+  const onProfileChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    const next = e.target.value;
+    onPatch({ ...config, profile: next.length > 0 ? next : undefined });
+  };
 
   // Timeout: millisecond is the wire format (kept as `timeoutMs` on the
   // workflow), but a human entering "60000" was a paper cut. We let the
@@ -364,6 +418,42 @@ function AgentForm({
         isReadOnly
         classNames={{ input: 'font-mono text-fg-soft' }}
       />
+
+      {/* Profile dropdown only for HTTP-transport providers (Hermes etc.).
+       * Plain <select> to match the SubworkflowForm workflow picker styling.
+       * Empty value = "use the manifest's defaultProfile at run time". */}
+      {isHttpProvider && (
+        <div className="field">
+          <span className="field-label">Profile</span>
+          <select
+            aria-label="Profile"
+            value={profileValue}
+            onChange={onProfileChange}
+            disabled={profiles === null}
+          >
+            <option value="">
+              {profiles === null ? 'loading…' : '(use provider default)'}
+            </option>
+            {/* Always include the currently-selected profile, even if the
+             * live list doesn't (or hasn't yet) returned it — so an unknown
+             * value saved earlier doesn't silently revert to default. */}
+            {profileValue &&
+              !(profiles ?? []).some((p) => p.id === profileValue) && (
+                <option value={profileValue}>{profileValue}</option>
+              )}
+            {(profiles ?? []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label ? `${p.label} (${p.id})` : p.id}
+              </option>
+            ))}
+          </select>
+          {profilesError && (
+            <span className="field-hint" style={{ color: 'var(--accent-err)' }}>
+              couldn't load profiles: {profilesError}
+            </span>
+          )}
+        </div>
+      )}
 
       <Textarea
         label="Prompt"
@@ -1275,6 +1365,28 @@ export default function ConfigPanel() {
     [selectedNodeId, currentWorkflow],
   );
 
+  // Provider list is needed by AgentForm to decide whether to show the
+  // profile dropdown. We fetch it once at the panel level (instead of
+  // per-AgentForm-mount) so a rapid provider switch can't race two separate
+  // fetches mid-render. /api/providers is in-process cached on the server.
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/providers')
+      .then((r) => r.json())
+      .then((data: { providers?: ProviderInfo[] }) => {
+        if (!cancelled && Array.isArray(data.providers)) {
+          setProviders(data.providers);
+        }
+      })
+      .catch((err: unknown) => {
+        console.warn('[config-panel] failed to load providers:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const refs = useMemo(
     () => (node ? availableRefs(currentWorkflow, node.id) : []),
     [currentWorkflow, node],
@@ -1336,6 +1448,11 @@ export default function ConfigPanel() {
           <AgentForm
             config={node.config as AgentConfig}
             refs={refs}
+            providerInfo={
+              providers.find(
+                (p) => p.id === ((node.config as AgentConfig).providerId ?? 'claude'),
+              ) ?? null
+            }
             onPatch={patchConfig}
           />
         )}
