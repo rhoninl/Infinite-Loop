@@ -50,6 +50,7 @@ export const agentExecutor: NodeExecutor = {
       signal: ctx.signal,
       onStdoutChunk: ctx.emitStdoutChunk,
       profile: cfg.profile,
+      agent: cfg.agent,
     });
 
     const outputs = {

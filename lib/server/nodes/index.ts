@@ -8,6 +8,7 @@ import { branchExecutor } from './branch';
 import { parallelExecutor } from './parallel';
 import { subworkflowExecutor } from './subworkflow';
 import { judgeExecutor } from './judge';
+import { sidenoteExecutor } from './sidenote';
 
 export const nodeExecutors: Record<NodeType, NodeExecutor> = {
   start: startExecutor,
@@ -19,4 +20,5 @@ export const nodeExecutors: Record<NodeType, NodeExecutor> = {
   parallel: parallelExecutor,
   subworkflow: subworkflowExecutor,
   judge: judgeExecutor,
+  sidenote: sidenoteExecutor,
 };

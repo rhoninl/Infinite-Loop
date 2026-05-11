@@ -965,6 +965,38 @@ button.event-card-head-toggle:focus-visible {
   box-shadow: 0 0 6px var(--accent-err-glow);
 }
 
+/* Subagent / profile chip — small line shown between the node head and
+ * the prompt preview when an agent node carries an --agent name or an
+ * HTTP profile. Reads as a tag, not a body field: smaller font, dim
+ * color, mono glyph in front so the eye can scan a stack of cards and
+ * tell which agents have a subagent pinned. */
+.wf-node-agent {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: -2px 0 6px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--fg-dim);
+  min-width: 0;
+}
+.wf-node-agent-glyph {
+  color: var(--fg-faint);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.wf-node-agent-name {
+  color: var(--fg-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.wf-node[data-state='live'] .wf-node-agent-name {
+  color: var(--accent-live);
+}
+
 .wf-node-body {
   font-size: 13.5px;
   color: var(--fg);
@@ -985,6 +1017,61 @@ button.event-card-head-toggle:focus-visible {
   color: var(--fg-soft);
   font-size: 13.5px;
   letter-spacing: 0;
+}
+
+/* ─── sidenote (sticky-note annotation) ─────────────────────
+ * A free-floating note pinned to the canvas. Visually a torn paper card —
+ * warm tint, dashed border, no chrome handles, no LED. Has no source/target
+ * handles, so the engine never reaches it (and we drop the per-run state
+ * glow). */
+.wf-node.wf-sidenote {
+  background: color-mix(in srgb, var(--node-branch) 8%, var(--bg-elevated));
+  border: 1px dashed var(--border-strong);
+  border-left: 2px solid var(--node-branch);
+  min-height: 80px;
+  width: 200px;
+  padding: 10px 12px;
+  box-shadow: none;
+}
+.wf-node.wf-sidenote[data-selected='true'] {
+  border-color: var(--accent-live);
+  border-left-color: var(--accent-live);
+}
+.wf-node.wf-sidenote::before,
+.wf-node.wf-sidenote::after {
+  content: none;
+}
+.wf-sidenote-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: var(--fg-soft);
+}
+.wf-sidenote-glyph {
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+.wf-sidenote-title {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-soft);
+}
+.wf-sidenote-body {
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.wf-sidenote-placeholder {
+  color: var(--fg-faint);
+  font-style: italic;
 }
 
 .workflow-menu-stub {
@@ -1461,6 +1548,145 @@ button.event-card-head-toggle:focus-visible {
 .field select:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ─── agent picker (custom combobox) ────────────────────────
+ * Wraps a free-text input with a styled popover of discovered agents.
+ * The input is the same shape as a normal `.field input`; the panel
+ * mirrors `.wf-menu-panel`'s phosphor border + glow so it reads as part
+ * of the same family. Free-text typing always wins — the panel is a
+ * suggestion layer, not a constraint. */
+.agent-picker {
+  position: relative;
+  display: block;
+}
+.agent-picker > input {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--mono);
+  font-size: 16px;
+  color: var(--fg);
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.agent-picker > input:focus {
+  border-color: var(--accent-live);
+  background: var(--bg-input-focus);
+  box-shadow: 0 0 0 1px var(--accent-live-glow);
+}
+.agent-picker-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--bg-deep);
+  border: 1px solid var(--accent-live);
+  box-shadow: 0 0 12px var(--accent-live-glow);
+}
+.agent-picker-row {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--mono);
+  color: var(--fg-soft);
+  transition: color 120ms ease, background 120ms ease;
+}
+.agent-picker-panel li:last-child .agent-picker-row {
+  border-bottom: 0;
+}
+.agent-picker-row:hover,
+.agent-picker-row:focus-visible {
+  outline: none;
+  background: var(--hover-tint);
+  color: var(--fg);
+}
+.agent-picker-row[aria-selected='true'] {
+  background: rgba(255, 158, 100, 0.08);
+  color: var(--accent-live);
+}
+.agent-picker-name {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.agent-picker-meta {
+  font-size: 11.5px;
+  color: var(--fg-dim);
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+
+/* Button-style trigger reused by single-select pickers (e.g. Subworkflow's
+ * workflow picker). Same input shape as `.agent-picker > input` so the
+ * field stays visually anchored, but renders the selected text and a
+ * caret instead of a free-text caret. */
+.custom-select-trigger {
+  appearance: none;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 16px;
+  color: var(--fg);
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  padding: 10px 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.custom-select-trigger:hover {
+  border-color: var(--accent-live);
+}
+.custom-select-trigger:focus-visible {
+  outline: none;
+  border-color: var(--accent-live);
+  background: var(--bg-input-focus);
+  box-shadow: 0 0 0 1px var(--accent-live-glow);
+}
+.custom-select-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.custom-select-placeholder {
+  color: var(--fg-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.custom-select-caret {
+  color: var(--fg-dim);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.custom-select-trigger:hover .custom-select-caret,
+.custom-select-trigger:focus-visible .custom-select-caret {
+  color: var(--accent-live);
 }
 
 /* Read-only "preview" input — used by the Working directory field, where

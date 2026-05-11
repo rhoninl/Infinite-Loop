@@ -99,8 +99,7 @@ describe('ConfigPanel', () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Provider')).toHaveTextContent('claude');
     // header shows id + type
-    expect(screen.getByText(/agent-1/)).toBeInTheDocument();
-    expect(screen.getByText(/agent/)).toBeInTheDocument();
+    expect(screen.getByText(/agent-1 · agent/)).toBeInTheDocument();
   });
 
   it('debounces edits to the Agent prompt and dispatches updateNode', () => {

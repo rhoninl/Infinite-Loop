@@ -11,7 +11,14 @@ const TITLE_ICON_SIZE = 16;
 interface AgentData {
   _state?: string;
   label?: string;
-  config?: { providerId?: string; prompt?: string; cwd?: string; timeoutMs?: number };
+  config?: {
+    providerId?: string;
+    prompt?: string;
+    cwd?: string;
+    timeoutMs?: number;
+    agent?: string;
+    profile?: string;
+  };
 }
 
 function truncate(s: string, n: number): string {
@@ -23,6 +30,8 @@ export default function AgentNode({ data, selected }: NodeProps) {
   const state = d._state ?? 'idle';
   const prompt = d.config?.prompt ?? '';
   const provider = d.config?.providerId ?? 'claude';
+  const agentName = (d.config?.agent ?? '').trim();
+  const profileName = (d.config?.profile ?? '').trim();
   const full = prompt || '(no prompt)';
   const preview = truncate(full, PREVIEW_MAX);
   // Surface the full prompt on hover when it's been truncated, so users can
@@ -79,6 +88,36 @@ export default function AgentNode({ data, selected }: NodeProps) {
         </span>
         <span className="wf-node-state-dot" data-state={state} aria-hidden="true" />
       </div>
+      {agentName && (
+        <div
+          className="wf-node-agent"
+          aria-label={`subagent ${agentName}`}
+          title={`--agent ${agentName}`}
+        >
+          <span className="wf-node-agent-glyph" aria-hidden="true">
+            ⤳
+          </span>
+          <span className="wf-node-agent-name">{agentName}</span>
+        </div>
+      )}
+      {/* For HTTP providers (Hermes/OpenRouter/...) the user-selected profile
+       * is the equivalent of an "agent" — it's the knob that decides which
+       * model actually runs. Surfacing it here gives the same at-a-glance
+       * card readout as CLI agents. The auto-title already names the
+       * profile, but the chip echoes it in the same row position so a
+       * mixed CLI/HTTP workflow reads consistently. */}
+      {!agentName && profileName && isHermes && (
+        <div
+          className="wf-node-agent"
+          aria-label={`profile ${profileName}`}
+          title={`profile: ${profileName}`}
+        >
+          <span className="wf-node-agent-glyph" aria-hidden="true">
+            ⤳
+          </span>
+          <span className="wf-node-agent-name">{profileName}</span>
+        </div>
+      )}
       <div className="wf-node-body wf-node-body-italic" title={bodyTitle}>
         {preview}
       </div>

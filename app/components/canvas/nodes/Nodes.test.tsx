@@ -9,6 +9,7 @@ import AgentNode from './AgentNode';
 import BranchNode from './BranchNode';
 import ConditionNode from './ConditionNode';
 import LoopNode from './LoopNode';
+import SidenoteNode from './SidenoteNode';
 
 beforeEach(() => {
   // xyflow's <Handle> uses ResizeObserver under the hood; jsdom needs a polyfill.
@@ -275,6 +276,46 @@ describe('node components', () => {
     );
     const card = screen.getByLabelText('start node');
     expect(card.getAttribute('data-selected')).toBe('true');
+  });
+
+  it('SidenoteNode renders text and exposes no connection handles', () => {
+    renderWithFlow(
+      <SidenoteNode
+        {...makeProps(
+          { config: { text: 'remember to bump max-iterations' } },
+          { type: 'sidenote' }
+        )}
+      />
+    );
+    const card = screen.getByLabelText('sidenote');
+    expect(card).toBeInTheDocument();
+    expect(card.textContent).toContain('remember to bump max-iterations');
+    // No source/target — the engine must never reach a sidenote.
+    expect(card.querySelector('.react-flow__handle')).toBeNull();
+  });
+
+  it('SidenoteNode renders a placeholder when text is empty', () => {
+    renderWithFlow(
+      <SidenoteNode
+        {...makeProps({ config: { text: '' } }, { type: 'sidenote' })}
+      />
+    );
+    expect(screen.getByText('(empty note)')).toBeInTheDocument();
+  });
+
+  it('SidenoteNode does not propagate _state — it never runs', () => {
+    renderWithFlow(
+      <SidenoteNode
+        {...makeProps(
+          { _state: 'live', config: { text: 'x' } },
+          { type: 'sidenote' }
+        )}
+      />
+    );
+    const card = screen.getByLabelText('sidenote');
+    // The node doesn't render a state dot, and we don't surface
+    // `data-state` because the engine cannot reach it (no handles).
+    expect(card.getAttribute('data-state')).toBeNull();
   });
 
   it('ConditionNode exposes met / not_met / error handle ids', () => {

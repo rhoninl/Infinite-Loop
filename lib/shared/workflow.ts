@@ -12,7 +12,8 @@ export type NodeType =
   | 'branch'
   | 'parallel'
   | 'subworkflow'
-  | 'judge';
+  | 'judge'
+  | 'sidenote';
 
 /** Edge handles. Workers MUST emit one of these from a node executor. */
 export type EdgeHandle =
@@ -60,6 +61,10 @@ export interface AgentConfig {
    * (e.g. Hermes/OpenRouter). CLI providers ignore this field. When unset and
    * the provider needs one, the manifest's `defaultProfile` is used. */
   profile?: string;
+  /** Optional subagent name. Only meaningful for the Claude CLI provider — it
+   * becomes `--agent <name>` on the spawned command. When unset, the flag is
+   * omitted entirely. Other providers ignore this field. */
+  agent?: string;
 }
 
 export interface ConditionConfig {
@@ -123,6 +128,11 @@ export interface SubworkflowConfig {
   outputs: Record<string, string>;
 }
 
+export interface SidenoteConfig {
+  /** Free-form note text shown on the canvas. Static — not templated. */
+  text: string;
+}
+
 export interface JudgeNodeConfig {
   /** Templated rubric / criteria text shown to the judge. */
   criteria: string;
@@ -146,6 +156,7 @@ export type NodeConfigByType = {
   parallel: ParallelConfig;
   subworkflow: SubworkflowConfig;
   judge: JudgeNodeConfig;
+  sidenote: SidenoteConfig;
 };
 
 export interface WorkflowNode<T extends NodeType = NodeType> {

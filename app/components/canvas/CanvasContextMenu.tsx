@@ -37,6 +37,10 @@ const STATIC_GROUPS: Array<{ heading: string; items: ContextMenuItem[] }> = [
       { type: 'condition', label: 'Condition' },
     ],
   },
+  {
+    heading: 'Annotations',
+    items: [{ type: 'sidenote', label: 'Note' }],
+  },
 ];
 
 /**

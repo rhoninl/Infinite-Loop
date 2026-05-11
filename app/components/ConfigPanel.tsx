@@ -24,6 +24,7 @@ import type {
   ParallelConfig,
   ParallelMode,
   ParallelOnError,
+  SidenoteConfig,
   SubworkflowConfig,
   Workflow,
   WorkflowNode,
@@ -233,6 +234,259 @@ function EndForm({
   );
 }
 
+function SidenoteForm({
+  config,
+  onPatch,
+}: {
+  config: SidenoteConfig;
+  onPatch: (next: SidenoteConfig) => void;
+}) {
+  const [text, setText] = useDebouncedString(config.text ?? '', (next) =>
+    onPatch({ ...config, text: next }),
+  );
+  return (
+    <div className="field">
+      <span className="field-label">Note</span>
+      <textarea
+        aria-label="Note text"
+        rows={6}
+        value={text}
+        placeholder="Write a free-form note — pinned to the canvas, not run by the engine."
+        onChange={(e) => setText(e.target.value)}
+      />
+      <span className="field-hint">
+        Static text. No templating, no execution — purely for documentation.
+      </span>
+    </div>
+  );
+}
+
+/** Mirror of the server-side CliAgent shape (kept local so the client
+ * doesn't import from `lib/server/...`). Only `name` is required by the
+ * UI; the rest decorates the dropdown option text. */
+interface AgentChoice {
+  name: string;
+  model?: string;
+  group?: 'user' | 'project' | 'builtin';
+}
+
+/**
+ * Custom-styled agent picker. Wraps a free-text input with a popover list
+ * of discovered agents — terminal-aesthetic, not the browser's native
+ * `<datalist>` (which renders inconsistently across browsers and breaks
+ * the visual language of the rest of the app). The user can still type
+ * a name that isn't in the list.
+ */
+function AgentPicker({
+  value,
+  onChange,
+  choices,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  choices: AgentChoice[];
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  // Close on outside click + Esc, but only while open. We listen in capture
+  // phase so xyflow / global handlers can't swallow the event before us.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      const root = wrapRef.current;
+      if (!root) return;
+      if (!root.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown, true);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown, true);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  // Filter against the current input value (case-insensitive substring),
+  // keeping the original order so users see groups clustered as the CLI
+  // returned them.
+  const needle = value.trim().toLowerCase();
+  const filtered = needle.length
+    ? choices.filter((a) => a.name.toLowerCase().includes(needle))
+    : choices;
+
+  return (
+    <div ref={wrapRef} className="agent-picker">
+      <input
+        aria-label="Agent"
+        type="text"
+        autoComplete="off"
+        spellCheck={false}
+        value={value}
+        placeholder="(optional — leave blank for default)"
+        onFocus={() => setOpen(true)}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+      />
+      {open && filtered.length > 0 && (
+        <ul role="listbox" aria-label="Available agents" className="agent-picker-panel">
+          {filtered.map((a) => {
+            const groupLabel =
+              a.group === 'user'
+                ? 'user'
+                : a.group === 'project'
+                  ? 'project'
+                  : a.group === 'builtin'
+                    ? 'built-in'
+                    : '';
+            const meta = [groupLabel, a.model].filter(Boolean).join(' · ');
+            return (
+              <li key={a.name}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={a.name === value}
+                  className="agent-picker-row"
+                  onMouseDown={(e) => {
+                    // mousedown (not click) so the input's blur doesn't fire
+                    // first and unmount the panel before the click lands.
+                    e.preventDefault();
+                    onChange(a.name);
+                    setOpen(false);
+                  }}
+                >
+                  <span className="agent-picker-name">{a.name}</span>
+                  {meta && <span className="agent-picker-meta">{meta}</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Custom single-select dropdown — used in places where a native `<select>`
+ * would be visually inconsistent with the rest of the terminal UI. Reads
+ * as a button + popover, same family as AgentPicker and wf-menu.
+ */
+function WorkflowPicker({
+  value,
+  choices,
+  onChange,
+}: {
+  value: string;
+  choices: WorkflowSummary[];
+  onChange: (next: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      const root = wrapRef.current;
+      if (root && !root.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown, true);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown, true);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const selected = value ? choices.find((c) => c.id === value) : null;
+  const buttonLabel = selected
+    ? `${selected.id} (${selected.name})${selected.source === 'library' ? ' [library]' : ''}`
+    : '(none — pick a workflow)';
+
+  return (
+    <div ref={wrapRef} className="agent-picker">
+      <button
+        type="button"
+        className="custom-select-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span
+          className={selected ? 'custom-select-value' : 'custom-select-placeholder'}
+        >
+          {buttonLabel}
+        </span>
+        <span className="custom-select-caret" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {open && (
+        <ul
+          role="listbox"
+          aria-label="Available workflows"
+          className="agent-picker-panel"
+        >
+          <li>
+            <button
+              type="button"
+              role="option"
+              aria-selected={value === ''}
+              className="agent-picker-row"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange('');
+                setOpen(false);
+              }}
+            >
+              <span className="agent-picker-name">(none)</span>
+              <span className="agent-picker-meta">clear</span>
+            </button>
+          </li>
+          {choices.length === 0 && (
+            <li>
+              <div className="agent-picker-row" style={{ cursor: 'default' }}>
+                <span className="agent-picker-meta">no other workflows</span>
+              </div>
+            </li>
+          )}
+          {choices.map((w) => (
+            <li key={w.id}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={value === w.id}
+                className="agent-picker-row"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(w.id);
+                  setOpen(false);
+                }}
+              >
+                <span className="agent-picker-name">{w.id}</span>
+                <span className="agent-picker-meta">
+                  {[w.name, w.source === 'library' ? 'library' : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function AgentForm({
   config,
   refs,
@@ -253,6 +507,9 @@ function AgentForm({
   );
   const [cwd, setCwd] = useDebouncedString(config.cwd ?? '', (next) =>
     onPatch({ ...config, cwd: next }),
+  );
+  const [agent, setAgent] = useDebouncedString(config.agent ?? '', (next) =>
+    onPatch({ ...config, agent: next.trim() ? next.trim() : undefined }),
   );
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
 
@@ -308,6 +565,58 @@ function AgentForm({
   const cwdInvalid = cwd.length > 0 && !cwd.startsWith('/');
   const providerId = config.providerId ?? 'claude';
   const isHttpProvider = providerInfo?.transport === 'http';
+
+  // Fetch the CLI provider's available agents so the Agent field can
+  // suggest them. The cwd is part of the probe because `claude agents`
+  // resolves project-scoped agents from the working directory's settings
+  // stack — change the cwd, and the listing changes too. When the new
+  // listing no longer contains the currently-selected agent (a project-
+  // level agent from the old directory), we clear the field so the user
+  // has to re-pick; built-in / user-global agents survive the change.
+  const [agentChoices, setAgentChoices] = useState<AgentChoice[]>([]);
+  useEffect(() => {
+    if (isHttpProvider) {
+      setAgentChoices([]);
+      return;
+    }
+    // Only probe once an absolute cwd is set; relative cwds would resolve
+    // against the server, not the workflow's intended directory.
+    if (!cwd || !cwd.startsWith('/')) {
+      setAgentChoices([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(
+      `/api/providers/${encodeURIComponent(providerId)}/agents?cwd=${encodeURIComponent(cwd)}`,
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { agents?: AgentChoice[] } | null) => {
+        if (cancelled || !data || !Array.isArray(data.agents)) return;
+        setAgentChoices(data.agents);
+        const current = (config.agent ?? '').trim();
+        if (
+          current.length > 0 &&
+          data.agents.length > 0 &&
+          !data.agents.some((a) => a.name === current)
+        ) {
+          // The previously-selected agent doesn't exist in the new cwd's
+          // listing. Clear it so the user has to re-select.
+          setAgent('');
+          onPatch({ ...config, agent: undefined });
+        }
+      })
+      .catch(() => {
+        // Silent: not every CLI provider exposes a listing. The input still works.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // We intentionally exclude `config` and `onPatch` from deps: this effect
+    // is keyed to the (providerId, cwd, transport) triplet — re-running it
+    // on every config keystroke would thrash. We read `config.agent` once
+    // when the new listing arrives, which is the only place it's needed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerId, isHttpProvider, cwd]);
 
   // Timeout: millisecond is the wire format (kept as `timeoutMs` on the
   // workflow), but a human entering "60000" was a paper cut. We let the
@@ -419,6 +728,20 @@ function AgentForm({
           />
         )}
       </div>
+      )}
+
+      {!isHttpProvider && (
+        <div className="field">
+          <span className="field-label">Agent</span>
+          <AgentPicker
+            value={agent}
+            onChange={setAgent}
+            choices={agentChoices}
+          />
+          <span className="field-hint">
+            Adds <code>--agent &lt;name&gt;</code> to the spawned command. Leave blank to omit the flag.
+          </span>
+        </div>
       )}
 
       <div className="field">
@@ -1010,10 +1333,6 @@ function SubworkflowForm({
     onPatch({ ...config, outputs: rec });
   };
 
-  const onWorkflowChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    onPatch({ ...config, workflowId: e.target.value });
-  };
-
   // Hide self-reference; cycle detection beyond direct self lives in the
   // engine. If currentWorkflowId is null (e.g. unsaved), just show all.
   const choices = workflows.filter((w) => w.id !== currentWorkflowId);
@@ -1022,15 +1341,11 @@ function SubworkflowForm({
     <>
       <div className="field">
         <span className="field-label">Workflow</span>
-        <select value={config.workflowId ?? ''} onChange={onWorkflowChange}>
-          <option value="">(none — pick a workflow)</option>
-          {choices.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.id} ({w.name})
-              {w.source === 'library' ? ' [library]' : ''}
-            </option>
-          ))}
-        </select>
+        <WorkflowPicker
+          value={config.workflowId ?? ''}
+          choices={choices}
+          onChange={(next) => onPatch({ ...config, workflowId: next })}
+        />
       </div>
 
       <div className="field">
@@ -1410,6 +1725,12 @@ export default function ConfigPanel() {
           <JudgeForm
             config={node.config as JudgeNodeConfig}
             refs={refs}
+            onPatch={patchConfig}
+          />
+        )}
+        {node.type === 'sidenote' && (
+          <SidenoteForm
+            config={node.config as SidenoteConfig}
             onPatch={patchConfig}
           />
         )}

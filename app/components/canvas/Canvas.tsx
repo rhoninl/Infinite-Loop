@@ -25,6 +25,7 @@ import type {
   NodeConfigByType,
   NodeType,
   ParallelConfig,
+  SidenoteConfig,
   StartConfig,
   SubworkflowConfig,
   Workflow,
@@ -39,6 +40,7 @@ import EndNode from './nodes/EndNode';
 import JudgeNode from './nodes/JudgeNode';
 import LoopNode from './nodes/LoopNode';
 import ParallelNode from './nodes/ParallelNode';
+import SidenoteNode from './nodes/SidenoteNode';
 import StartNode from './nodes/StartNode';
 import SubworkflowNode from './nodes/SubworkflowNode';
 import CanvasContextMenu, {
@@ -72,7 +74,10 @@ const DEFAULT_CONFIG: { [K in NodeType]: () => NodeConfigByType[K] } = {
     providerId: 'claude',
     prompt: '',
     cwd: '',
-    timeoutMs: 60000,
+    // 30 minutes. Agent runs (claude --print, hermes calls, etc.) routinely
+    // take longer than a few seconds; 1 min was a paper cut for any real
+    // task. The user can still narrow it per-node in the inspector.
+    timeoutMs: 30 * 60 * 1000,
   }),
   condition: (): ConditionConfig => ({
     kind: 'sentinel',
@@ -91,6 +96,7 @@ const DEFAULT_CONFIG: { [K in NodeType]: () => NodeConfigByType[K] } = {
     candidates: [],
     providerId: 'claude',
   }),
+  sidenote: (): SidenoteConfig => ({ text: '' }),
 };
 
 /** Default config object for a fresh node of a given type. */
@@ -445,6 +451,7 @@ const NODE_TYPES = {
   parallel: ParallelNode,
   subworkflow: SubworkflowNode,
   judge: JudgeNode,
+  sidenote: SidenoteNode,
 } as const;
 
 function CanvasInner() {

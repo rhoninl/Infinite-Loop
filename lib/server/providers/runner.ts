@@ -8,6 +8,58 @@ import type { CliProviderManifest, ProviderManifest } from './types';
 const SIGKILL_GRACE_MS = 2000;
 
 /**
+ * Resolve a CLI provider's argv from its manifest template + RunnerOptions.
+ *
+ * - `{prompt}` is substituted with `opts.prompt` (always present when
+ *   `promptVia: 'arg'`). When `promptVia: 'stdin'`, args are passed through
+ *   unchanged — the prompt is written to stdin instead.
+ * - `{agent}` is an OPTIONAL flag-value placeholder: when `opts.agent` is a
+ *   non-empty string, it's substituted in place; when missing, BOTH the
+ *   `{agent}` token AND the immediately preceding arg (the flag name) are
+ *   dropped. This lets a manifest declare `["--agent", "{agent}"]` and have
+ *   the whole pair vanish when the user didn't pick one.
+ *
+ * Pure; exported for tests.
+ */
+export function resolveCliArgs(
+  args: readonly string[],
+  opts: Pick<RunnerOptions, 'prompt' | 'agent'> & { promptVia: 'arg' | 'stdin' },
+): string[] {
+  const out: string[] = [];
+  const agent = typeof opts.agent === 'string' ? opts.agent.trim() : '';
+  for (const raw of args) {
+    if (raw === '{agent}') {
+      if (agent.length === 0) {
+        // Drop the placeholder and the preceding flag so e.g.
+        // ["--agent", "{agent}"] vanishes entirely. We only pop when the
+        // preceding token looks like a flag — guards against eating the
+        // prompt or an unrelated argument if a manifest omits the flag.
+        const prev = out[out.length - 1];
+        if (typeof prev === 'string' && prev.startsWith('-')) {
+          out.pop();
+        }
+        continue;
+      }
+      out.push(agent);
+      continue;
+    }
+    if (raw.includes('{agent}')) {
+      // Embedded form (e.g. "--agent={agent}") — substitute in place when
+      // set; when empty, drop just this token so an adjacent prompt stays put.
+      if (agent.length === 0) continue;
+      out.push(raw.replace(/\{agent\}/g, agent));
+      continue;
+    }
+    if (opts.promptVia === 'arg' && raw.includes('{prompt}')) {
+      out.push(raw.replace(/\{prompt\}/g, opts.prompt));
+      continue;
+    }
+    out.push(raw);
+  }
+  return out;
+}
+
+/**
  * Dispatch entry point. CLI manifests go through `runCliProvider` (spawn +
  * stdout line parser); HTTP manifests go through `runHttpProvider` (fetch +
  * SSE delta stream). Both produce the same `RunnerResult` shape.
@@ -40,10 +92,11 @@ async function runCliProvider(
   const bin = resolveBin(manifest);
   // Loader normalizes a missing `promptVia` to 'arg', so we can trust it here.
   const promptVia = manifest.promptVia;
-  const args =
-    promptVia === 'stdin'
-      ? manifest.args
-      : manifest.args.map((a) => a.replace(/\{prompt\}/g, opts.prompt));
+  const args = resolveCliArgs(manifest.args, {
+    prompt: opts.prompt,
+    agent: opts.agent,
+    promptVia,
+  });
   const parser = parsers[manifest.outputFormat];
   if (!parser) {
     // Loader validates this, but guard runtime injection too.
