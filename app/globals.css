@@ -1253,9 +1253,60 @@ button.event-card-head-toggle:focus-visible {
   outline: 1px solid var(--accent-live);
   outline-offset: -2px;
 }
+.wf-menu-action {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 4px 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+.wf-menu-action:hover:not(:disabled) {
+  color: var(--accent-live);
+}
 .wf-menu-action-danger:hover:not(:disabled) {
   background: rgba(215, 106, 91, 0.1);
   color: var(--accent-err);
+}
+
+/* Split rename + caret trigger: each is its own <button> so screen-
+ * readers can distinguish the rename target from the menu toggle, but
+ * we strip every UA default so they read as one continuous trigger. */
+.wf-menu-trigger-name-btn,
+.wf-menu-trigger-caret-btn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.wf-menu-trigger-name-btn:focus-visible,
+.wf-menu-trigger-caret-btn:focus-visible {
+  outline: 1px dashed var(--accent-live);
+  outline-offset: 2px;
+}
+
+/* The rename input sits inside the dashed trigger frame. Override the
+ * uppercase / serif / muted styling that `.wf-menu-trigger` inherits
+ * into its children, so the user sees their literal keystrokes. */
+.wf-menu-rename-input {
+  text-transform: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0;
+  color: var(--fg);
+  background: transparent;
+  border: 0;
+  outline: none;
+  padding: 0 4px;
 }
 
 .rail {
@@ -1854,6 +1905,47 @@ input[type='number'].no-spin {
   background: transparent;
   color: var(--fg);
   border-color: var(--fg-soft);
+}
+
+/* Ghost button — transparent chip with muted outline, used by inline
+ * "+ add" and "remove" affordances inside ConfigPanel forms (KvRow,
+ * KvRowsEditor, CandidateRow, JudgeForm). Lower-weight than `.btn` so
+ * it doesn't compete with the primary RUN action. */
+.btn-ghost {
+  appearance: none;
+  background: transparent;
+  color: var(--fg-soft);
+  border: 1px dashed var(--border-strong);
+  border-radius: 0;
+  height: auto;
+  padding: 4px 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--hover-tint);
+  color: var(--accent-live);
+  border-color: var(--accent-live);
+  border-style: solid;
+}
+.btn-ghost:focus-visible {
+  outline: 1px solid var(--accent-live);
+  outline-offset: 2px;
+}
+
+/* Checkbox row used in ConfigPanel forms (e.g. JudgeForm "Override
+ * judge prompt"). Lays the native checkbox next to its label inline. */
+.field-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--fg-soft);
+  cursor: pointer;
 }
 
 /* ─── empty state ───────────────────────────────────────── */

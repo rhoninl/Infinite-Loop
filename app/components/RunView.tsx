@@ -442,7 +442,7 @@ function BranchRow({ branch, parentId }: { branch: BranchState; parentId: string
         <span className="run-view-branch-id">{branch.nodeId}</span>
         <span className="run-view-branch-kind">{branch.nodeType}</span>
         <span
-          className="pill run-view-branch-status"
+          className="pill"
           data-status={branch.status}
           aria-label={`status ${branch.status}`}
         >
