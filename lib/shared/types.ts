@@ -29,6 +29,10 @@ export interface RunnerOptions {
   timeoutMs: number;
   signal: AbortSignal;
   onStdoutChunk?: (line: string) => void;
+  /** Optional model/profile name. CLI providers ignore this; HTTP providers
+   * use it as the `model` field in the request body (falling back to the
+   * manifest's `defaultProfile`). */
+  profile?: string;
 }
 
 export interface RunnerResult {

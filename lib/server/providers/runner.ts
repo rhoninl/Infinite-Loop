@@ -2,9 +2,25 @@ import { spawn } from 'node:child_process';
 import type { RunnerOptions, RunnerResult } from '../../shared/types';
 import { parsers } from './parsers/index';
 import { resolveBin } from './loader';
-import type { ProviderManifest } from './types';
+import { runHttpProvider } from './http-runner';
+import type { CliProviderManifest, ProviderManifest } from './types';
 
 const SIGKILL_GRACE_MS = 2000;
+
+/**
+ * Dispatch entry point. CLI manifests go through `runCliProvider` (spawn +
+ * stdout line parser); HTTP manifests go through `runHttpProvider` (fetch +
+ * SSE delta stream). Both produce the same `RunnerResult` shape.
+ */
+export async function runProvider(
+  manifest: ProviderManifest,
+  opts: RunnerOptions,
+): Promise<RunnerResult> {
+  if (manifest.transport === 'http') {
+    return runHttpProvider(manifest, opts);
+  }
+  return runCliProvider(manifest, opts);
+}
 
 /**
  * Spawn a provider's CLI binary, stream stdout line-by-line through the
@@ -17,12 +33,13 @@ const SIGKILL_GRACE_MS = 2000;
  *   - argv (manifest.args with `{prompt}` substituted, or stdin delivery)
  *   - line parsing (manifest.outputFormat → parsers[key])
  */
-export async function runProvider(
-  manifest: ProviderManifest,
+async function runCliProvider(
+  manifest: CliProviderManifest,
   opts: RunnerOptions,
 ): Promise<RunnerResult> {
   const bin = resolveBin(manifest);
-  const promptVia = manifest.promptVia ?? 'arg';
+  // Loader normalizes a missing `promptVia` to 'arg', so we can trust it here.
+  const promptVia = manifest.promptVia;
   const args =
     promptVia === 'stdin'
       ? manifest.args

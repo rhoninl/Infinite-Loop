@@ -10,6 +10,7 @@ export async function GET() {
       label: m.label,
       description: m.description,
       glyph: m.glyph,
+      transport: m.transport,
     }));
     return NextResponse.json({ providers });
   } catch (err) {

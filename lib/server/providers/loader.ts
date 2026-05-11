@@ -1,7 +1,14 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { KNOWN_OUTPUT_FORMATS } from './parsers/index';
-import type { ProviderManifest } from './types';
+import type {
+  CliProviderManifest,
+  HttpProviderAuth,
+  HttpProviderManifest,
+  HttpProviderProfile,
+  ProviderManifest,
+  ProviderTransport,
+} from './types';
 
 function providersDir(): string {
   return (
@@ -10,12 +17,14 @@ function providersDir(): string {
 }
 
 /**
- * Resolve the binary for a provider. Order:
+ * Resolve the binary for a CLI-transport provider. Order:
  *   1. `INFLOOP_PROVIDER_BIN_<ID>` env override (id upper-cased).
  *   2. `INFLOOP_CLAUDE_BIN` for the legacy claude-only override.
  *   3. The manifest's declared `bin`.
+ *
+ * HTTP-transport manifests have no `bin` and never reach this function.
  */
-export function resolveBin(manifest: ProviderManifest): string {
+export function resolveBin(manifest: CliProviderManifest): string {
   const idEnv = `INFLOOP_PROVIDER_BIN_${manifest.id.toUpperCase()}`;
   const fromIdEnv = process.env[idEnv];
   if (fromIdEnv) return fromIdEnv;
@@ -29,15 +38,40 @@ function isStringArray(v: unknown): v is string[] {
   return Array.isArray(v) && v.every((x) => typeof x === 'string');
 }
 
-function validateManifest(parsed: unknown, file: string): ProviderManifest {
-  if (!parsed || typeof parsed !== 'object') {
-    throw new Error(`provider ${file}: not a JSON object`);
-  }
-  const m = parsed as Record<string, unknown>;
-  for (const key of ['id', 'label', 'description', 'bin', 'outputFormat']) {
-    if (typeof m[key] !== 'string' || (m[key] as string).length === 0) {
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === 'string' && v.length > 0;
+}
+
+function validateCommon(
+  m: Record<string, unknown>,
+  file: string,
+): { id: string; label: string; description: string; glyph?: string } {
+  for (const key of ['id', 'label', 'description']) {
+    if (!isNonEmptyString(m[key])) {
       throw new Error(`provider ${file}: \`${key}\` must be a non-empty string`);
     }
+  }
+  if (m.glyph !== undefined && typeof m.glyph !== 'string') {
+    throw new Error(`provider ${file}: \`glyph\` must be a string if set`);
+  }
+  return {
+    id: m.id as string,
+    label: m.label as string,
+    description: m.description as string,
+    glyph: m.glyph as string | undefined,
+  };
+}
+
+function validateCliManifest(
+  m: Record<string, unknown>,
+  file: string,
+): CliProviderManifest {
+  const common = validateCommon(m, file);
+  if (!isNonEmptyString(m.bin)) {
+    throw new Error(`provider ${file}: \`bin\` must be a non-empty string`);
+  }
+  if (!isNonEmptyString(m.outputFormat)) {
+    throw new Error(`provider ${file}: \`outputFormat\` must be a non-empty string`);
   }
   if (!isStringArray(m.args)) {
     throw new Error(`provider ${file}: \`args\` must be a string array`);
@@ -56,19 +90,109 @@ function validateManifest(parsed: unknown, file: string): ProviderManifest {
       `provider ${file}: \`promptVia\` must be "arg" or "stdin" if set`,
     );
   }
-  if (m.glyph !== undefined && typeof m.glyph !== 'string') {
-    throw new Error(`provider ${file}: \`glyph\` must be a string if set`);
-  }
   return {
-    id: m.id as string,
-    label: m.label as string,
-    description: m.description as string,
-    glyph: m.glyph as string | undefined,
+    ...common,
+    transport: 'cli',
     bin: m.bin as string,
     args: m.args as string[],
     outputFormat: m.outputFormat as string,
     promptVia: (m.promptVia as 'arg' | 'stdin' | undefined) ?? 'arg',
   };
+}
+
+function validateHttpAuth(raw: unknown, file: string): HttpProviderAuth | undefined {
+  if (raw === undefined) return undefined;
+  if (!raw || typeof raw !== 'object') {
+    throw new Error(`provider ${file}: \`auth\` must be an object if set`);
+  }
+  const auth = raw as Record<string, unknown>;
+  if (auth.type !== 'bearer') {
+    throw new Error(`provider ${file}: \`auth.type\` must be "bearer" (only kind supported)`);
+  }
+  if (!isNonEmptyString(auth.envVar)) {
+    throw new Error(`provider ${file}: \`auth.envVar\` must be a non-empty string`);
+  }
+  return { type: 'bearer', envVar: auth.envVar };
+}
+
+function validateHttpProfiles(
+  raw: unknown,
+  file: string,
+): HttpProviderProfile[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new Error(`provider ${file}: \`profiles\` must be an array if set`);
+  }
+  return raw.map((entry, i) => {
+    if (!entry || typeof entry !== 'object') {
+      throw new Error(`provider ${file}: \`profiles[${i}]\` must be an object`);
+    }
+    const e = entry as Record<string, unknown>;
+    if (!isNonEmptyString(e.id)) {
+      throw new Error(`provider ${file}: \`profiles[${i}].id\` must be a non-empty string`);
+    }
+    if (e.label !== undefined && typeof e.label !== 'string') {
+      throw new Error(`provider ${file}: \`profiles[${i}].label\` must be a string if set`);
+    }
+    return { id: e.id, label: e.label as string | undefined };
+  });
+}
+
+function validateHttpManifest(
+  m: Record<string, unknown>,
+  file: string,
+): HttpProviderManifest {
+  const common = validateCommon(m, file);
+  if (!isNonEmptyString(m.baseUrl)) {
+    throw new Error(`provider ${file}: \`baseUrl\` must be a non-empty string`);
+  }
+  if (!isNonEmptyString(m.endpoint)) {
+    throw new Error(`provider ${file}: \`endpoint\` must be a non-empty string`);
+  }
+  // Endpoints are joined with `baseUrl` via raw concatenation in the runner —
+  // both halves MUST be deliberate about the boundary. We require a leading
+  // slash here so a typo can't silently produce `https://host/v1chat/...`.
+  if (!(m.endpoint as string).startsWith('/')) {
+    throw new Error(`provider ${file}: \`endpoint\` must start with "/"`);
+  }
+  if (m.profilesEndpoint !== undefined) {
+    if (typeof m.profilesEndpoint !== 'string') {
+      throw new Error(`provider ${file}: \`profilesEndpoint\` must be a string if set`);
+    }
+    if (!(m.profilesEndpoint as string).startsWith('/')) {
+      throw new Error(`provider ${file}: \`profilesEndpoint\` must start with "/"`);
+    }
+  }
+  if (m.defaultProfile !== undefined && typeof m.defaultProfile !== 'string') {
+    throw new Error(`provider ${file}: \`defaultProfile\` must be a string if set`);
+  }
+  return {
+    ...common,
+    transport: 'http',
+    baseUrl: (m.baseUrl as string).replace(/\/+$/, ''),
+    endpoint: m.endpoint as string,
+    profilesEndpoint: m.profilesEndpoint as string | undefined,
+    defaultProfile: m.defaultProfile as string | undefined,
+    auth: validateHttpAuth(m.auth, file),
+    profiles: validateHttpProfiles(m.profiles, file),
+  };
+}
+
+function validateManifest(parsed: unknown, file: string): ProviderManifest {
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error(`provider ${file}: not a JSON object`);
+  }
+  const m = parsed as Record<string, unknown>;
+  const transportRaw = m.transport ?? 'cli';
+  if (transportRaw !== 'cli' && transportRaw !== 'http') {
+    throw new Error(
+      `provider ${file}: \`transport\` must be "cli" or "http"`,
+    );
+  }
+  const transport = transportRaw as ProviderTransport;
+  return transport === 'http'
+    ? validateHttpManifest(m, file)
+    : validateCliManifest(m, file);
 }
 
 interface CacheEntry {

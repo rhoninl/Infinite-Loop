@@ -56,6 +56,10 @@ export interface AgentConfig {
   prompt: string;
   cwd: string;
   timeoutMs: number;
+  /** Optional model/profile name. Only meaningful for HTTP-transport providers
+   * (e.g. Hermes/OpenRouter). CLI providers ignore this field. When unset and
+   * the provider needs one, the manifest's `defaultProfile` is used. */
+  profile?: string;
 }
 
 export interface ConditionConfig {

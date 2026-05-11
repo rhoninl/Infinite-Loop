@@ -42,6 +42,7 @@ export const agentExecutor: NodeExecutor = {
       timeoutMs: cfg.timeoutMs,
       signal: ctx.signal,
       onStdoutChunk: ctx.emitStdoutChunk,
+      profile: cfg.profile,
     });
 
     const outputs = {
