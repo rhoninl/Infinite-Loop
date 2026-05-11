@@ -31,18 +31,25 @@ export async function runHttpProvider(
 
   let bearerToken: string | undefined;
   if (manifest.auth?.type === 'bearer') {
-    // .trim(): .env files routinely smuggle a trailing newline into the
-    // token, which produces `Authorization: Bearer <token>\n` and a
-    // confusing 401 from the server.
-    bearerToken = process.env[manifest.auth.envVar]?.trim();
-    if (!bearerToken) {
-      return {
-        exitCode: 1,
-        stdout: '',
-        stderr: `http-runner(${manifest.id}): env var ${manifest.auth.envVar} is not set`,
-        durationMs: Date.now() - startedAt,
-        timedOut: false,
-      };
+    // Inline token (from a *.hermes.local.json file the user configured via
+    // the UI) wins; the env-var path is for committed manifests where the
+    // secret deliberately lives off-disk.
+    if (manifest.auth.token) {
+      bearerToken = manifest.auth.token;
+    } else if (manifest.auth.envVar) {
+      // .trim(): .env files routinely smuggle a trailing newline into the
+      // token, which produces `Authorization: Bearer <token>\n` and a
+      // confusing 401 from the server.
+      bearerToken = process.env[manifest.auth.envVar]?.trim();
+      if (!bearerToken) {
+        return {
+          exitCode: 1,
+          stdout: '',
+          stderr: `http-runner(${manifest.id}): env var ${manifest.auth.envVar} is not set`,
+          durationMs: Date.now() - startedAt,
+          timedOut: false,
+        };
+      }
     }
   }
 

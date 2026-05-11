@@ -1,75 +1,59 @@
 {
   "id": "loop-claude-until-condition",
   "name": "Loop Claude until condition",
-  "version": 10,
+  "version": 72,
   "createdAt": 1777359000000,
-  "updatedAt": 1778051532178,
+  "updatedAt": 1778507565402,
   "nodes": [
     {
       "id": "start-1",
       "type": "start",
       "position": {
-        "x": -47.025160580917266,
-        "y": 134.61663221229864
+        "x": -63.10255196466209,
+        "y": 99.65561402930062
       },
       "config": {}
-    },
-    {
-      "id": "loop-1",
-      "type": "loop",
-      "position": {
-        "x": 280,
-        "y": 120
-      },
-      "config": {
-        "maxIterations": 10,
-        "mode": "while-not-met"
-      },
-      "children": [
-        {
-          "id": "claude-1",
-          "type": "agent",
-          "position": {
-            "x": 84.83102061595844,
-            "y": 65.41343727264584
-          },
-          "config": {
-            "providerId": "claude",
-            "prompt": "Please use Chrome devtool mcp to test the project, all ui/ux to make sure they are not any ui/ux issue on it, if u find any issue just fix it and test again. DONT USE Playwright or others.\n\nIn this session u shouldn't ask any qeustion just YOLO ",
-            "cwd": "/Users/liyuqi/project/CodeCase/InfLoop",
-            "timeoutMs": 1000000
-          }
-        }
-      ],
-      "size": {
-        "width": 588,
-        "height": 240
-      }
     },
     {
       "id": "end-1",
       "type": "end",
       "position": {
-        "x": 946.491590623976,
-        "y": 117.15411629178365
+        "x": 717.6001243781202,
+        "y": 85.20643459035406
       },
       "config": {
         "outcome": "succeeded"
+      }
+    },
+    {
+      "id": "agent-3",
+      "type": "agent",
+      "position": {
+        "x": 290.9496947621125,
+        "y": 163.01435587436256
+      },
+      "config": {
+        "providerId": "myhermes-productmanager",
+        "prompt": "Who u are?",
+        "cwd": "",
+        "timeoutMs": 60000
       }
     }
   ],
   "edges": [
     {
-      "id": "e1",
+      "id": "e_y1jpf4ki",
       "source": "start-1",
       "sourceHandle": "next",
-      "target": "loop-1"
+      "target": "agent-3",
+      "targetHandle": "in"
     },
     {
-      "id": "e2",
-      "source": "loop-1",
+      "id": "e_fdattb1y",
+      "source": "agent-3",
       "sourceHandle": "next",
-      "target": "end-1"
+      "target": "end-1",
+      "targetHandle": "in"
     }
   ]
 }

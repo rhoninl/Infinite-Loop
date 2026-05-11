@@ -15,11 +15,7 @@ export const agentExecutor: NodeExecutor = {
   async execute(ctx: NodeExecutorContext): Promise<NodeExecutorResult> {
     const cfg = ctx.config as AgentConfig;
 
-    if (
-      !isNonEmptyString(cfg?.providerId) ||
-      !isNonEmptyString(cfg?.prompt) ||
-      !isNonEmptyString(cfg?.cwd)
-    ) {
+    if (!isNonEmptyString(cfg?.providerId) || !isNonEmptyString(cfg?.prompt)) {
       return {
         outputs: { errorMessage: 'invalid agent config' },
         branch: 'error',
@@ -36,9 +32,20 @@ export const agentExecutor: NodeExecutor = {
       };
     }
 
+    // cwd is only meaningful for CLI providers — they spawn a process there.
+    // HTTP providers (Hermes etc.) just POST to a remote API, so we don't
+    // require it; fall back to the engine's defaultCwd to satisfy the
+    // RunnerOptions contract.
+    if (provider.transport === 'cli' && !isNonEmptyString(cfg.cwd)) {
+      return {
+        outputs: { errorMessage: 'invalid agent config' },
+        branch: 'error',
+      };
+    }
+
     const result = await runProvider(provider, {
       prompt: cfg.prompt,
-      cwd: cfg.cwd,
+      cwd: isNonEmptyString(cfg.cwd) ? cfg.cwd : ctx.defaultCwd,
       timeoutMs: cfg.timeoutMs,
       signal: ctx.signal,
       onStdoutChunk: ctx.emitStdoutChunk,

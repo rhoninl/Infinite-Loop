@@ -3,6 +3,7 @@
 import { Card, CardBody, CardHeader, Chip } from '@heroui/react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import ProviderIcon from '../../icons/ProviderIcon';
+import { useProviders } from '@/lib/client/use-providers';
 
 const NODE_TYPE = 'agent';
 const PREVIEW_MAX = 40;
@@ -39,6 +40,25 @@ export default function AgentNode({ data, selected }: NodeProps) {
   const bodyTitle = full !== preview ? full : undefined;
   const customLabel = d.label?.trim();
 
+  // Resolve provider metadata so hermes-local nodes can show their brand
+  // icon (registered under "hermes" in ProviderIcon, not under the per-
+  // port id like "myhermes-productmanager") and a default title that
+  // includes the model name + parent connection.
+  const providers = useProviders();
+  const info = providers.find((p) => p.id === provider);
+  const isHermes = info?.kind === 'hermes-local';
+  // For hermes-local nodes we override two things:
+  //   - the icon lookup key → "hermes" (so the registry mark resolves)
+  //   - the auto-title → "<profile> · <connection-label>" if the user
+  //     didn't set a custom display name
+  const iconKey = isHermes ? 'hermes' : provider;
+  const autoTitle = isHermes
+    ? info && info.connectionLabel
+      ? `${info.label} · ${info.connectionLabel}`
+      : info?.label
+    : undefined;
+  const titleText = customLabel || autoTitle;
+
   return (
     <Card
       className="wf-node"
@@ -58,11 +78,15 @@ export default function AgentNode({ data, selected }: NodeProps) {
          * via currentColor (ProviderIcon's mask-image uses currentColor). */}
         <span
           className="wf-node-title wf-node-title-icon"
-          aria-label={customLabel ? `${customLabel} (${provider} agent)` : `${provider} agent`}
+          aria-label={
+            titleText
+              ? `${titleText} (${provider} agent)`
+              : `${provider} agent`
+          }
         >
-          <ProviderIcon providerId={provider} size={TITLE_ICON_SIZE} />
-          {customLabel ? (
-            <span className="wf-node-title-text">{customLabel}</span>
+          <ProviderIcon providerId={iconKey} size={TITLE_ICON_SIZE} />
+          {titleText ? (
+            <span className="wf-node-title-text">{titleText}</span>
           ) : null}
         </span>
         <Chip

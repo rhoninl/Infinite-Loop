@@ -45,7 +45,13 @@ function isNonEmptyString(v: unknown): v is string {
 function validateCommon(
   m: Record<string, unknown>,
   file: string,
-): { id: string; label: string; description: string; glyph?: string } {
+): {
+  id: string;
+  label: string;
+  description: string;
+  glyph?: string;
+  kind?: 'hermes-local';
+} {
   for (const key of ['id', 'label', 'description']) {
     if (!isNonEmptyString(m[key])) {
       throw new Error(`provider ${file}: \`${key}\` must be a non-empty string`);
@@ -54,11 +60,15 @@ function validateCommon(
   if (m.glyph !== undefined && typeof m.glyph !== 'string') {
     throw new Error(`provider ${file}: \`glyph\` must be a string if set`);
   }
+  // `kind` is only set by `applyHermesLocalDefaults` for files this
+  // process knows about — never trust a raw value from the manifest body.
+  const kind = m.kind === 'hermes-local' ? 'hermes-local' : undefined;
   return {
     id: m.id as string,
     label: m.label as string,
     description: m.description as string,
     glyph: m.glyph as string | undefined,
+    kind,
   };
 }
 
@@ -109,10 +119,21 @@ function validateHttpAuth(raw: unknown, file: string): HttpProviderAuth | undefi
   if (auth.type !== 'bearer') {
     throw new Error(`provider ${file}: \`auth.type\` must be "bearer" (only kind supported)`);
   }
-  if (!isNonEmptyString(auth.envVar)) {
-    throw new Error(`provider ${file}: \`auth.envVar\` must be a non-empty string`);
+  const hasEnvVar = isNonEmptyString(auth.envVar);
+  const hasToken = isNonEmptyString(auth.token);
+  if (hasEnvVar && hasToken) {
+    throw new Error(
+      `provider ${file}: \`auth\` must set exactly one of \`envVar\` or \`token\``,
+    );
   }
-  return { type: 'bearer', envVar: auth.envVar };
+  if (!hasEnvVar && !hasToken) {
+    throw new Error(
+      `provider ${file}: \`auth\` must set either \`envVar\` or \`token\``,
+    );
+  }
+  return hasEnvVar
+    ? { type: 'bearer', envVar: auth.envVar as string }
+    : { type: 'bearer', token: auth.token as string };
 }
 
 function validateHttpProfiles(
@@ -195,6 +216,96 @@ function validateManifest(parsed: unknown, file: string): ProviderManifest {
     : validateCliManifest(m, file);
 }
 
+/** Suffix that marks a user-managed local provider (gitignored). */
+export const HERMES_LOCAL_SUFFIX = '.hermes.local.json';
+
+/** Convert a `<id>.hermes.local.json` filename to its provider id. */
+export function hermesLocalIdFromFilename(entry: string): string | null {
+  if (!entry.endsWith(HERMES_LOCAL_SUFFIX)) return null;
+  const stem = entry.slice(0, -HERMES_LOCAL_SUFFIX.length);
+  return stem.length > 0 ? stem : null;
+}
+
+/** Lowercased, dash-only slug for use as an id component (e.g. when
+ * building `<stem>-<profile>` ids). Mirrors the slug used by the store,
+ * minus the unique-id collision logic — duplicates within a single
+ * connection are not expected. */
+function slugForId(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/** Expand a `<stem>.hermes.local.json` file (new shape:
+ * `{ label, host, token, ports: [{ port, profile }] }`) into one HTTP
+ * manifest per port. Each manifest is its own palette card, labeled by
+ * the discovered profile so the user picks the model directly.
+ *
+ * Returns `[]` (with a warn) on any structural issue — never throws —
+ * so a single malformed local file can't break the whole providers API.
+ */
+function expandHermesLocalFile(
+  parsed: unknown,
+  stem: string,
+  file: string,
+): HttpProviderManifest[] {
+  if (!parsed || typeof parsed !== 'object') {
+    console.warn(`[providers] ${file} is not a JSON object`);
+    return [];
+  }
+  const p = parsed as Record<string, unknown>;
+  const label = isNonEmptyString(p.label) ? p.label : null;
+  const host = isNonEmptyString(p.host) ? p.host : null;
+  const token = isNonEmptyString(p.token) ? p.token : null;
+  if (!label || !host || !token) {
+    console.warn(
+      `[providers] ${file}: missing required field(s) (label, host, token)`,
+    );
+    return [];
+  }
+  const portsRaw = Array.isArray(p.ports) ? p.ports : [];
+  const out: HttpProviderManifest[] = [];
+  for (let i = 0; i < portsRaw.length; i++) {
+    const entry = portsRaw[i];
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as Record<string, unknown>;
+    const port = e.port;
+    const profile = e.profile;
+    if (
+      typeof port !== 'number' ||
+      !Number.isInteger(port) ||
+      port < 1 ||
+      port > 65535
+    ) {
+      console.warn(`[providers] ${file}: ports[${i}].port is not a valid port`);
+      continue;
+    }
+    if (typeof profile !== 'string' || profile.length === 0) {
+      console.warn(`[providers] ${file}: ports[${i}].profile is empty`);
+      continue;
+    }
+    const profileSlug = slugForId(profile);
+    const id = profileSlug ? `${stem}-${profileSlug}` : `${stem}-${port}`;
+    out.push({
+      id,
+      label: profile,
+      description: `${host}:${port}`,
+      glyph: '☿',
+      transport: 'http',
+      kind: 'hermes-local',
+      connectionId: stem,
+      connectionLabel: label,
+      baseUrl: `${host}:${port}/v1`,
+      endpoint: '/chat/completions',
+      profilesEndpoint: '/models',
+      defaultProfile: profile,
+      auth: { type: 'bearer', token },
+    });
+  }
+  return out;
+}
+
 interface CacheEntry {
   dir: string;
   manifests: ProviderManifest[];
@@ -243,6 +354,24 @@ export async function loadProviders(): Promise<ProviderManifest[]> {
       parsed = JSON.parse(raw);
     } catch (err) {
       console.warn(`[providers] ${file} is not valid JSON: ${(err as Error).message}`);
+      continue;
+    }
+    // `*.hermes.local.json` is the user-managed connection format. One
+    // file expands into N manifests — one per port the user registered,
+    // each its own palette card labeled by the discovered profile.
+    const hermesLocalId = hermesLocalIdFromFilename(entry);
+    if (hermesLocalId !== null) {
+      const expanded = expandHermesLocalFile(parsed, hermesLocalId, entry);
+      for (const manifest of expanded) {
+        if (byId.has(manifest.id)) {
+          console.warn(
+            `[providers] id collision: "${manifest.id}" already loaded; ignoring entry from ${entry}`,
+          );
+          continue;
+        }
+        byId.set(manifest.id, manifest);
+        manifests.push(manifest);
+      }
       continue;
     }
     let manifest: ProviderManifest;

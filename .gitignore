@@ -16,3 +16,9 @@ coverage
 # User-generated run history (per-workflow JSON records). Anchored to the
 # repo root so it doesn't accidentally swallow `app/api/runs/`.
 /runs/
+
+# User-managed local provider connections (Hermes endpoint + bearer token
+# pairs configured via the UI). The token sits in plaintext here, so the
+# file must never reach the repo. Anchored to `/providers/` so an unrelated
+# `*.local.json` elsewhere in the tree is unaffected.
+/providers/*.local.json

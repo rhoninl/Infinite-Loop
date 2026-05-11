@@ -11,6 +11,9 @@ export async function GET() {
       description: m.description,
       glyph: m.glyph,
       transport: m.transport,
+      kind: m.kind,
+      connectionId: m.connectionId,
+      connectionLabel: m.connectionLabel,
     }));
     return NextResponse.json({ providers });
   } catch (err) {

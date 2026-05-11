@@ -12,6 +12,12 @@
 
 export type ProviderTransport = 'cli' | 'http';
 
+/** Discriminator for providers loaded from the user-managed
+ * `<id>.hermes.local.json` files. The palette uses this to group them
+ * under their own collapsible section so the user can manage them
+ * separately from committed CLI / HTTP providers. */
+export type ProviderKind = 'hermes-local';
+
 interface ProviderManifestCommon {
   id: string;
   label: string;
@@ -20,6 +26,17 @@ interface ProviderManifestCommon {
   /** Always present after validation. Manifest files may omit it — the
    * loader defaults a missing value to "cli". */
   transport: ProviderTransport;
+  /** Set by the loader when the manifest came from a recognized
+   * user-managed file (e.g. `*.hermes.local.json`). Absent for committed
+   * `*.json` manifests. */
+  kind?: ProviderKind;
+  /** For manifests expanded from a multi-profile parent (a single
+   * `*.hermes.local.json` connection produces one manifest per port),
+   * this points back at the parent so the UI can group them. */
+  connectionId?: string;
+  /** Human label of the parent connection, used as the sub-header in
+   * the grouped palette view. */
+  connectionLabel?: string;
 }
 
 export interface CliProviderManifest extends ProviderManifestCommon {
@@ -35,9 +52,15 @@ export interface CliProviderManifest extends ProviderManifestCommon {
 
 export interface HttpProviderAuth {
   type: 'bearer';
-  /** Name of the env var holding the bearer token. Required so the secret
-   * never lives on disk alongside the manifest. */
-  envVar: string;
+  /** Name of the env var holding the bearer token. Used by committed
+   * manifests so the secret never lives on disk alongside them. Exactly
+   * one of `envVar` or `token` must be set. */
+  envVar?: string;
+  /** Inline bearer token. Only meant for gitignored local manifests
+   * (`*.local.json`) where the user has explicitly opted into storing the
+   * secret on disk via the UI. Exactly one of `envVar` or `token` must be
+   * set. */
+  token?: string;
 }
 
 export interface HttpProviderProfile {
@@ -70,4 +93,7 @@ export interface ProviderInfo {
   description: string;
   glyph?: string;
   transport: ProviderTransport;
+  kind?: ProviderKind;
+  connectionId?: string;
+  connectionLabel?: string;
 }
