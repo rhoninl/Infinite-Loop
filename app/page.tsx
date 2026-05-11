@@ -7,7 +7,6 @@ import {
   useState,
   type CSSProperties,
 } from 'react';
-import { Button, Chip } from '@heroui/react';
 import Canvas from './components/canvas/Canvas';
 import Palette from './components/Palette';
 import ConfigPanel from './components/ConfigPanel';
@@ -18,18 +17,6 @@ import ThemeToggle from './components/ThemeToggle';
 import { useEngineWebSocket } from '../lib/client/ws-client';
 import { useWorkflowStore } from '../lib/client/workflow-store-client';
 import { useAutoSave } from '../lib/client/use-auto-save';
-import type { RunStatus } from '../lib/shared/workflow';
-
-const RUN_STATUS_COLOR: Record<
-  RunStatus,
-  'default' | 'success' | 'warning' | 'danger'
-> = {
-  idle: 'default',
-  running: 'warning',
-  succeeded: 'success',
-  failed: 'danger',
-  cancelled: 'default',
-};
 
 const DEFAULT_WORKFLOW_ID = 'loop-claude-until-condition';
 const RIGHT_WIDTH_STORAGE_KEY = 'infloop:right-width';
@@ -188,13 +175,13 @@ export default function Page() {
 
         <div className="actions">
           <ThemeToggle />
-          <Button
+          <button
             type="button"
-            variant="bordered"
+            className="btn btn-toggle"
             aria-label="toggle run history"
             aria-pressed={historyOpen}
-            onPress={() => setHistoryOpen((v) => !v)}
-            isDisabled={isRunning}
+            onClick={() => setHistoryOpen((v) => !v)}
+            disabled={isRunning}
             title={
               isRunning
                 ? 'Run history is unavailable while a run is in progress'
@@ -202,34 +189,26 @@ export default function Page() {
             }
           >
             History
-          </Button>
-          <Chip
-            variant="dot"
-            color={RUN_STATUS_COLOR[runStatus]}
-            aria-label={`run ${runStatus}`}
-            classNames={{
-              base: 'bg-bg-elevated border-border-strong',
-              content: 'text-fg font-medium',
-            }}
-          >
-            {runStatus}
-          </Chip>
+          </button>
+          <span className="pill" data-status={runStatus}>
+            <span className="dot" /> {runStatus}
+          </span>
           {isRunning ? (
-            <Button
+            <button
               type="button"
-              color="danger"
-              onPress={handleStop}
+              onClick={handleStop}
+              className="btn btn-stop"
               aria-label="stop run"
             >
               Stop
-            </Button>
+            </button>
           ) : (
-            <Button
+            <button
               type="button"
-              color="success"
-              onPress={handleRun}
+              onClick={handleRun}
+              className="btn"
               aria-label="run workflow"
-              isDisabled={!currentWorkflow}
+              disabled={!currentWorkflow}
               title={
                 !currentWorkflow
                   ? 'Open or create a workflow first'
@@ -237,7 +216,7 @@ export default function Page() {
               }
             >
               Run
-            </Button>
+            </button>
           )}
         </div>
       </header>

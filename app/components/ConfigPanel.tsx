@@ -9,14 +9,6 @@ import {
   useState,
   type ChangeEvent,
 } from 'react';
-import {
-  Button,
-  Checkbox,
-  Input,
-  Radio,
-  RadioGroup,
-  Textarea,
-} from '@heroui/react';
 import { useWorkflowStore } from '@/lib/client/workflow-store-client';
 import FolderPicker from './FolderPicker';
 import type { ProviderInfo } from '@/lib/server/providers/types';
@@ -135,11 +127,7 @@ function pickInitialTimeoutUnit(ms: number): TimeoutUnit {
   return 's';
 }
 
-/* ─── segmented control built on HeroUI RadioGroup ─────────── */
-/* RadioGroup gives us proper accessibility (role="radiogroup" + role="radio"
- * children) for free; the classNames just compress the radios into a
- * pill/segment row visually. The data-selected attribute HeroUI puts on each
- * radio's base slot is what drives the "active" tint. */
+/* ─── segmented control ─────────────────────────────────────── */
 interface SegmentedProps<T extends string> {
   label: string;
   value: T;
@@ -153,40 +141,22 @@ function Segmented<T extends string>({
   onChange,
 }: SegmentedProps<T>) {
   return (
-    <RadioGroup
-      label={label}
-      orientation="horizontal"
-      value={value}
-      onValueChange={(next) => onChange(next as T)}
-      classNames={{
-        base: 'gap-1',
-        label: 'text-fg-soft text-xs uppercase tracking-wider',
-        wrapper: 'flex w-full gap-0 rounded-md border border-border bg-bg-deep p-0.5',
-      }}
-    >
-      {options.map((opt) => (
-        <Radio
-          key={opt.value}
-          value={opt.value}
-          classNames={{
-            base: [
-              'm-0 max-w-none flex-1 justify-center',
-              'cursor-pointer rounded px-3 py-1.5',
-              'data-[selected=true]:bg-bg-elevated',
-              'data-[selected=true]:text-fg',
-              'data-[selected=true]:shadow-sm',
-              'text-fg-dim hover:text-fg',
-              'transition-colors',
-            ].join(' '),
-            wrapper: 'hidden',
-            labelWrapper: 'm-0 p-0',
-            label: 'text-sm',
-          }}
-        >
-          {opt.label}
-        </Radio>
-      ))}
-    </RadioGroup>
+    <div className="field" role="group" aria-label={label}>
+      <span className="field-label">{label}</span>
+      <div className="segmented">
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            data-active={value === opt.value}
+            aria-pressed={value === opt.value}
+            onClick={() => onChange(opt.value)}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -205,24 +175,31 @@ function DisplayNameField({
 }) {
   const [v, setV] = useDebouncedString(value, onCommit);
   return (
-    <Input
-      label="Display name"
-      labelPlacement="outside"
-      type="text"
-      value={v}
-      placeholder={fallback}
-      onValueChange={setV}
-      description="Shown on the canvas card. Leave blank to use the default."
-    />
+    <div className="field">
+      <span className="field-label">Display name</span>
+      <input
+        aria-label="Display name"
+        type="text"
+        value={v}
+        placeholder={fallback}
+        onChange={(e) => setV(e.target.value)}
+      />
+      <span className="field-hint">
+        Shown on the canvas card. Leave blank to use the default.
+      </span>
+    </div>
   );
 }
 
-/** Render the "Available refs: …" hint string for an Input's description prop.
- * Returns undefined when there are no refs so HeroUI hides the helper row. */
-function refsHint(refs: string[]): string | undefined {
-  if (refs.length === 0) return undefined;
-  const prefix = refs.length === 1 ? 'Available ref: ' : 'Available refs: ';
-  return prefix + refs.join('  ·  ');
+/* ─── chips listing available template refs ────────────────── */
+function RefChips({ refs }: { refs: string[] }) {
+  if (refs.length === 0) return null;
+  return (
+    <div className="field-hint" aria-label="available template refs">
+      {refs.length === 1 ? 'Available ref: ' : 'Available refs: '}
+      {refs.join('  ·  ')}
+    </div>
+  );
 }
 
 /* ─── per-type forms ───────────────────────────────────────── */
@@ -361,31 +338,33 @@ function AgentForm({
 
   return (
     <>
-      {/* Provider is read-only display, not a form field — but keeping the
-       * label/value shape identical to the inputs below so the right-rail
-       * forms read as a single column. */}
-      <Input
-        label="Provider"
-        labelPlacement="outside"
-        value={providerId}
-        isReadOnly
-        classNames={{ input: 'font-mono text-fg-soft' }}
-      />
+      <div className="field">
+        <span className="field-label">Provider</span>
+        <span
+          className="field-hint"
+          aria-label="Provider"
+          style={{ fontFamily: 'var(--mono)', color: 'var(--fg-soft)' }}
+        >
+          {providerId}
+        </span>
+      </div>
 
       {/* No Profile field for HTTP providers — each Hermes palette card
        * is already bound to a specific (host, port, model) tuple by the
        * `.hermes.local.json` connection it came from, so there's nothing
        * for the node author to override here. */}
 
-      <Textarea
-        label="Prompt"
-        labelPlacement="outside"
-        isRequired
-        minRows={5}
-        value={prompt}
-        onValueChange={setPrompt}
-        description={refsHint(refs)}
-      />
+      <div className="field">
+        <span className="field-label">Prompt</span>
+        <textarea
+          aria-label="Prompt"
+          required
+          rows={5}
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+        />
+        <RefChips refs={refs} />
+      </div>
 
       {!isHttpProvider && (
       <div className="field" style={{ position: 'relative' }}>
@@ -442,54 +421,38 @@ function AgentForm({
       </div>
       )}
 
-      {/* Iteration timeout: number input + unit segmented control. The unit
-       * picker rides as endContent so it stays inside the Input's labeled
-       * frame instead of fighting alignment in a separate row. */}
-      <Input
-        label="Iteration timeout"
-        labelPlacement="outside"
-        type="number"
-        inputMode="decimal"
-        min={0}
-        step="any"
-        value={String(timeoutDisplay)}
-        onChange={onTimeoutChange}
-        classNames={{ input: 'no-spin' }}
-        endContent={
-          <RadioGroup
+      <div className="field">
+        <span className="field-label">Iteration timeout</span>
+        <div className="field-row">
+          <input
+            aria-label="Iteration timeout"
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="any"
+            value={timeoutDisplay}
+            onChange={onTimeoutChange}
+            className="no-spin"
+          />
+          <div
+            className="seg-tight"
+            role="group"
             aria-label="Iteration timeout unit"
-            orientation="horizontal"
-            value={timeoutUnit}
-            onValueChange={(next) => setTimeoutUnit(next as TimeoutUnit)}
-            classNames={{
-              base: 'gap-0 shrink-0',
-              wrapper:
-                'flex-nowrap gap-0 rounded-md border border-border bg-bg-input p-0.5',
-            }}
           >
             {TIMEOUT_UNITS.map((u) => (
-              <Radio
+              <button
                 key={u}
-                value={u}
-                classNames={{
-                  base: [
-                    'm-0 max-w-none shrink-0',
-                    'cursor-pointer rounded px-2 py-0.5',
-                    'data-[selected=true]:bg-bg-elevated',
-                    'data-[selected=true]:text-fg',
-                    'text-fg-soft hover:text-fg',
-                  ].join(' '),
-                  wrapper: 'hidden',
-                  labelWrapper: 'm-0 p-0',
-                  label: 'text-xs whitespace-nowrap',
-                }}
+                type="button"
+                data-active={timeoutUnit === u}
+                aria-pressed={timeoutUnit === u}
+                onClick={() => setTimeoutUnit(u)}
               >
                 {u}
-              </Radio>
+              </button>
             ))}
-          </RadioGroup>
-        }
-      />
+          </div>
+        </div>
+      </div>
     </>
   );
 }
@@ -550,69 +513,81 @@ function ConditionForm({
 
       {kind === 'sentinel' && (
         <>
-          <Input
-            label="Pattern"
-            labelPlacement="outside"
-            type="text"
-            value={pattern}
-            onValueChange={setPattern}
-          />
-          <Checkbox
-            isSelected={config.sentinel?.isRegex ?? false}
-            onValueChange={(checked) =>
-              onPatch({
-                ...config,
-                sentinel: {
-                  pattern: config.sentinel?.pattern ?? '',
-                  isRegex: checked,
-                },
-              })
-            }
-          >
-            Treat as regex
-          </Checkbox>
+          <div className="field">
+            <span className="field-label">Pattern</span>
+            <input
+              aria-label="Pattern"
+              type="text"
+              value={pattern}
+              onChange={(e) => setPattern(e.target.value)}
+            />
+          </div>
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={config.sentinel?.isRegex ?? false}
+              onChange={(e) =>
+                onPatch({
+                  ...config,
+                  sentinel: {
+                    pattern: config.sentinel?.pattern ?? '',
+                    isRegex: e.target.checked,
+                  },
+                })
+              }
+            />
+            <span>Treat as regex</span>
+          </label>
         </>
       )}
 
       {kind === 'command' && (
-        <Input
-          label="Command"
-          labelPlacement="outside"
-          type="text"
-          value={cmd}
-          onValueChange={setCmd}
-        />
+        <div className="field">
+          <span className="field-label">Command</span>
+          <input
+            aria-label="Command"
+            type="text"
+            value={cmd}
+            onChange={(e) => setCmd(e.target.value)}
+          />
+        </div>
       )}
 
       {kind === 'judge' && (
         <>
-          <Textarea
-            label="Rubric"
-            labelPlacement="outside"
-            minRows={4}
-            value={rubric}
-            onValueChange={setRubric}
-          />
-          <Input
-            label="Model"
-            labelPlacement="outside"
-            type="text"
-            value={model}
-            onValueChange={setModel}
-            description="blank = claude code default"
-          />
+          <div className="field">
+            <span className="field-label">Rubric</span>
+            <textarea
+              aria-label="Rubric"
+              rows={4}
+              value={rubric}
+              onChange={(e) => setRubric(e.target.value)}
+            />
+          </div>
+          <div className="field">
+            <span className="field-label">Model</span>
+            <input
+              aria-label="Model"
+              type="text"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+            />
+            <span className="field-hint">blank = claude code default</span>
+          </div>
         </>
       )}
 
-      <Input
-        label="Against"
-        labelPlacement="outside"
-        type="text"
-        value={against}
-        placeholder="{{<previous-node>.stdout}}"
-        onValueChange={setAgainst}
-        description={refsHint(refs)}
-      />
+      <div className="field">
+        <span className="field-label">Against</span>
+        <input
+          aria-label="Against"
+          type="text"
+          value={against}
+          placeholder="{{<previous-node>.stdout}}"
+          onChange={(e) => setAgainst(e.target.value)}
+        />
+        <RefChips refs={refs} />
+      </div>
     </>
   );
 }
@@ -648,15 +623,17 @@ function LoopForm({
       />
 
       {!infinite && (
-        <Input
-          label="Max iterations"
-          labelPlacement="outside"
-          type="number"
-          min={1}
-          max={100}
-          value={String(config.maxIterations ?? 5)}
-          onChange={onMaxChange}
-        />
+        <div className="field">
+          <span className="field-label">Max iterations</span>
+          <input
+            aria-label="Max iterations"
+            type="number"
+            min={1}
+            max={100}
+            value={config.maxIterations ?? 5}
+            onChange={onMaxChange}
+          />
+        </div>
       )}
 
       <Segmented<LoopConfig['mode']>
@@ -691,15 +668,17 @@ function BranchForm({
 
   return (
     <>
-      <Input
-        label="Left"
-        labelPlacement="outside"
-        type="text"
-        value={lhs}
-        onValueChange={setLhs}
-        placeholder="{{claude-1.stdout}}"
-        description={refsHint(refs)}
-      />
+      <div className="field">
+        <span className="field-label">Left</span>
+        <input
+          aria-label="Left"
+          type="text"
+          value={lhs}
+          onChange={(e) => setLhs(e.target.value)}
+          placeholder="{{claude-1.stdout}}"
+        />
+        <RefChips refs={refs} />
+      </div>
 
       <Segmented<BranchOp>
         label="Operator"
@@ -713,15 +692,17 @@ function BranchForm({
         onChange={(next) => onPatch({ ...config, op: next })}
       />
 
-      <Input
-        label="Right"
-        labelPlacement="outside"
-        type="text"
-        value={rhs}
-        onValueChange={setRhs}
-        placeholder={op === 'matches' ? '^DONE' : 'DONE'}
-        description={refsHint(refs)}
-      />
+      <div className="field">
+        <span className="field-label">Right</span>
+        <input
+          aria-label="Right"
+          type="text"
+          value={rhs}
+          onChange={(e) => setRhs(e.target.value)}
+          placeholder={op === 'matches' ? '^DONE' : 'DONE'}
+        />
+        <RefChips refs={refs} />
+      </div>
     </>
   );
 }
@@ -769,15 +750,17 @@ function ParallelForm({
       />
 
       {mode === 'quorum' && (
-        <Input
-          label="Quorum N"
-          labelPlacement="outside"
-          type="number"
-          min={1}
-          value={quorumStr}
-          onValueChange={setQuorumStr}
-          description="1 ≤ quorumN ≤ children.length"
-        />
+        <div className="field">
+          <span className="field-label">Quorum N</span>
+          <input
+            aria-label="Quorum N"
+            type="number"
+            min={1}
+            value={quorumStr}
+            onChange={(e) => setQuorumStr(e.target.value)}
+          />
+          <span className="field-hint">1 ≤ quorumN ≤ children.length</span>
+        </div>
       )}
 
       <Segmented<ParallelOnError>
@@ -880,31 +863,33 @@ function KvRow({
         alignItems: 'flex-start',
       }}
     >
-      <Input
+      <input
         aria-label={`${nameLabel} ${index}`}
         type="text"
-        size="sm"
         value={name}
-        onValueChange={setName}
+        onChange={(e) => setName(e.target.value)}
         placeholder={nameLabel}
       />
-      <Input
-        aria-label={`${valueLabel} ${index}`}
-        type="text"
-        size="sm"
-        value={value}
-        onValueChange={setValue}
-        placeholder={valuePlaceholder}
-        description={isLast ? valueDescription : undefined}
-      />
-      <Button
-        size="sm"
-        variant="light"
-        onPress={onRemove}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <input
+          aria-label={`${valueLabel} ${index}`}
+          type="text"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={valuePlaceholder}
+        />
+        {isLast && valueDescription ? (
+          <span className="field-hint">{valueDescription}</span>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        className="btn btn-ghost"
+        onClick={onRemove}
         aria-label={`remove ${nameLabel} ${index}`}
       >
         ✕
-      </Button>
+      </button>
     </div>
   );
 }
@@ -946,14 +931,14 @@ function KvRowsEditor({
           onRemove={() => removeRow(row.rowId)}
         />
       ))}
-      <Button
-        size="sm"
-        variant="flat"
-        onPress={addRow}
+      <button
+        type="button"
+        className="btn btn-ghost"
+        onClick={addRow}
         style={{ alignSelf: 'flex-start' }}
       >
         + {addLabel}
-      </Button>
+      </button>
     </div>
   );
 }
@@ -1113,21 +1098,20 @@ function CandidateRow({
         >
           [{index}]
         </span>
-        <Button
+        <button
           type="button"
-          size="sm"
-          variant="light"
-          onPress={onRemove}
+          className="btn btn-ghost"
+          onClick={onRemove}
           aria-label={`remove candidate ${index}`}
         >
           remove
-        </Button>
+        </button>
       </div>
-      <Textarea
+      <textarea
         aria-label={`candidate ${index}`}
-        minRows={2}
+        rows={2}
         value={v}
-        onValueChange={setV}
+        onChange={(e) => setV(e.target.value)}
       />
     </div>
   );
@@ -1192,14 +1176,16 @@ function JudgeForm({
 
   return (
     <>
-      <Textarea
-        label="Criteria"
-        labelPlacement="outside"
-        minRows={4}
-        value={criteria}
-        onValueChange={setCriteria}
-        description={refsHint(refs)}
-      />
+      <div className="field">
+        <span className="field-label">Criteria</span>
+        <textarea
+          aria-label="Criteria"
+          rows={4}
+          value={criteria}
+          onChange={(e) => setCriteria(e.target.value)}
+        />
+        <RefChips refs={refs} />
+      </div>
 
       <div className="field">
         <span className="field-label">Candidates</span>
@@ -1216,60 +1202,68 @@ function JudgeForm({
               onRemove={() => removeCandidate(i)}
             />
           ))}
-          <Button
+          <button
             type="button"
-            size="sm"
-            variant="flat"
-            onPress={addCandidate}
+            className="btn btn-ghost"
+            onClick={addCandidate}
             style={{ alignSelf: 'flex-start' }}
           >
             + add candidate
-          </Button>
+          </button>
         </div>
       </div>
 
-      <Checkbox
-        isSelected={overridePrompt}
-        onValueChange={(checked) => {
-          setOverridePrompt(checked);
-          if (!checked) {
-            // Clear both the local buffer and the stored override so the
-            // engine falls back to the provider default.
-            setJudgePrompt('');
-            onPatch({ ...config, judgePrompt: undefined });
-          }
-        }}
-      >
-        Override judge prompt
-      </Checkbox>
+      <label className="field-checkbox">
+        <input
+          type="checkbox"
+          checked={overridePrompt}
+          onChange={(e) => {
+            const checked = e.target.checked;
+            setOverridePrompt(checked);
+            if (!checked) {
+              // Clear both the local buffer and the stored override so the
+              // engine falls back to the provider default.
+              setJudgePrompt('');
+              onPatch({ ...config, judgePrompt: undefined });
+            }
+          }}
+        />
+        <span>Override judge prompt</span>
+      </label>
 
       {overridePrompt && (
-        <Textarea
-          label="Judge prompt"
-          labelPlacement="outside"
-          minRows={4}
-          value={judgePrompt}
-          onValueChange={setJudgePrompt}
-        />
+        <div className="field">
+          <span className="field-label">Judge prompt</span>
+          <textarea
+            aria-label="Judge prompt"
+            rows={4}
+            value={judgePrompt}
+            onChange={(e) => setJudgePrompt(e.target.value)}
+          />
+        </div>
       )}
 
-      <Input
-        label="Model"
-        labelPlacement="outside"
-        type="text"
-        value={model}
-        onValueChange={setModel}
-        description="blank = provider default"
-      />
+      <div className="field">
+        <span className="field-label">Model</span>
+        <input
+          aria-label="Model"
+          type="text"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+        />
+        <span className="field-hint">blank = provider default</span>
+      </div>
 
-      <Input
-        label="Provider"
-        labelPlacement="outside"
-        type="text"
-        value={providerId}
-        placeholder="claude"
-        onValueChange={setProviderId}
-      />
+      <div className="field">
+        <span className="field-label">Provider</span>
+        <input
+          aria-label="Provider"
+          type="text"
+          value={providerId}
+          placeholder="claude"
+          onChange={(e) => setProviderId(e.target.value)}
+        />
+      </div>
     </>
   );
 }

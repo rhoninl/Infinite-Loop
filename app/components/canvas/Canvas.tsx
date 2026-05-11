@@ -11,7 +11,6 @@ import {
   type Node as XyNode,
   type NodeChange,
 } from '@xyflow/react';
-import { useTheme } from 'next-themes';
 import '@xyflow/react/dist/style.css';
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { useWorkflowStore } from '../../../lib/client/workflow-store-client';
@@ -466,23 +465,29 @@ function CanvasInner() {
 
   const { screenToFlowPosition, fitView } = useReactFlow();
 
-  // Sync xyflow's color mode with the app theme. xyflow puts a `light` /
-  // `dark` class on its root container — and HeroUI's design tokens key off
-  // those exact class names, so HeroUI components rendered inside the canvas
-  // (e.g. node status Chips) would otherwise pick up the *wrong* token set
-  // whenever xyflow's class disagreed with our `<html>` class. Reading the
-  // resolved theme from `next-themes` keeps them in lockstep.
+  // Sync xyflow's color mode with the app theme (set on
+  // `document.documentElement.dataset.theme` by the pre-paint script in
+  // `app/layout.tsx`, kept in sync by `ThemeToggle`).
   //
   // Gate on `mounted` so the first client render matches SSR (which has no
   // access to the user's stored theme): otherwise a user with light mode
   // saved in localStorage hydrates with `light` while the server emitted
   // `dark`, producing a hydration mismatch on the ReactFlow root className.
-  const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [docTheme, setDocTheme] = useState<'light' | 'dark'>('dark');
   useEffect(() => {
     setMounted(true);
+    const html = document.documentElement;
+    const read = (): 'light' | 'dark' =>
+      html.dataset.theme === 'light' ? 'light' : 'dark';
+    setDocTheme(read());
+    // ThemeToggle mutates `data-theme` on <html>; observe so the canvas
+    // re-renders into the new color mode without a full reload.
+    const obs = new MutationObserver(() => setDocTheme(read()));
+    obs.observe(html, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
   }, []);
-  const colorMode: ColorMode = mounted && resolvedTheme === 'light' ? 'light' : 'dark';
+  const colorMode: ColorMode = mounted && docTheme === 'light' ? 'light' : 'dark';
 
   // Fit the viewport to the workflow once per loaded workflow. Without this
   // an opened workflow whose nodes sit at large x/y may render partially
