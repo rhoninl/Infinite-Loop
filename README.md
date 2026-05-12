@@ -350,11 +350,13 @@ You can confirm the server boots and registers tools without installing anything
 
 ```bash
 printf '%s\n' \
-  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{}}}' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke-test","version":"0.0.0"}}}' \
   '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
   | bun run mcp/inflooop-mcp/index.ts
 ```
+
+The MCP server keeps its stdio transport open after `tools/list` (real clients hold the pipe open for follow-up `tools/call` requests). For a one-shot probe, kill the process with `Ctrl-C` after stdout shows the `tools/list` response, or pipe through `head -n 2` to close stdin once two response lines have arrived.
 
 Expected: stderr prints `[inflooop-mcp] connected — N workflow tool(s) registered`, stdout prints a `tools/list` response listing every saved workflow plus the three `inflooop_*` utility tools.
 
