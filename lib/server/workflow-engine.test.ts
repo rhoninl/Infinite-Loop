@@ -6,6 +6,7 @@ import type {
   WorkflowEvent,
   WorkflowNode,
 } from '../shared/workflow';
+import type { ResolvedInputs } from '../shared/resolve-run-inputs';
 
 // Capture the real modules up front; bun's `mock.module` is global to the
 // test process and replaces live ESM bindings, so anything captured AFTER the
@@ -485,5 +486,64 @@ describe('WorkflowEngine', () => {
     await expect(eng.start(wf)).rejects.toThrow(/already active/);
     release!();
     await first;
+  });
+});
+
+describe('WorkflowEngine — workflow inputs', () => {
+  beforeEach(() => {
+    eventBus.clear();
+  });
+
+  afterEach(() => {
+    eventBus.clear();
+  });
+
+  it('seeds resolved inputs into scope under `inputs`', async () => {
+    const wf: Workflow = {
+      id: 'w-inputs-1',
+      name: 'inputs-seed',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [startNode, endNode],
+      edges: [{ id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'end-1' }],
+    };
+    const eng = new WorkflowEngine({
+      start: exec(['next']),
+      end: exec(['next']),
+      agent: exec(['next']),
+      condition: exec(['next']),
+      loop: exec(['next']),
+    });
+
+    const resolvedInputs: ResolvedInputs = { topic: 'cats' };
+    await eng.start(wf, { resolvedInputs });
+
+    expect(eng.getState().status).toBe('succeeded');
+    expect(eng.getState().scope.inputs).toEqual({ topic: 'cats' });
+  });
+
+  it('omits scope.inputs entirely when none supplied and none declared', async () => {
+    const wf: Workflow = {
+      id: 'w-inputs-2',
+      name: 'inputs-none',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [startNode, endNode],
+      edges: [{ id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'end-1' }],
+    };
+    const eng = new WorkflowEngine({
+      start: exec(['next']),
+      end: exec(['next']),
+      agent: exec(['next']),
+      condition: exec(['next']),
+      loop: exec(['next']),
+    });
+
+    await eng.start(wf);
+
+    expect(eng.getState().status).toBe('succeeded');
+    expect(eng.getState().scope.inputs).toBeUndefined();
   });
 });

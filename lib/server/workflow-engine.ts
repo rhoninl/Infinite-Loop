@@ -35,6 +35,7 @@ import type {
   WorkflowEvent,
   WorkflowNode,
 } from '../shared/workflow';
+import type { ResolvedInputs } from '../shared/resolve-run-inputs';
 import { eventBus } from './event-bus';
 import { nodeExecutors } from './nodes/index';
 import { saveRun } from './run-store';
@@ -108,7 +109,10 @@ export class WorkflowEngine {
     return { ...this.snapshot, events: this.recentEvents };
   }
 
-  async start(workflow: Workflow): Promise<void> {
+  async start(
+    workflow: Workflow,
+    opts?: { resolvedInputs?: ResolvedInputs },
+  ): Promise<void> {
     if (this.snapshot.status === 'running') {
       throw new Error('a run is already active');
     }
@@ -130,6 +134,11 @@ export class WorkflowEngine {
     const seedScope: Scope = {};
     if (workflow.globals && typeof workflow.globals === 'object') {
       seedScope.globals = { ...workflow.globals };
+    }
+    if (opts?.resolvedInputs && typeof opts.resolvedInputs === 'object') {
+      // Pre-resolved by the caller (API route or subworkflow executor); the
+      // engine does no validation here — it just seeds.
+      seedScope.inputs = { ...opts.resolvedInputs };
     }
     this.snapshot = {
       status: 'running',
