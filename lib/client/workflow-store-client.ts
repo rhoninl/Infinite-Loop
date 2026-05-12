@@ -445,6 +445,7 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
       if (!s.currentWorkflow) return {};
       return {
         currentWorkflow: bumpUpdated({ ...s.currentWorkflow, globals: next }),
+        isDirty: true,
         ...pushPast(s, s.currentWorkflow),
       };
     }),
@@ -454,6 +455,7 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
       if (!s.currentWorkflow) return {};
       return {
         currentWorkflow: bumpUpdated({ ...s.currentWorkflow, inputs: next }),
+        isDirty: true,
         ...pushPast(s, s.currentWorkflow),
       };
     }),
