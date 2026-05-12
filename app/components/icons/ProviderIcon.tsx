@@ -19,6 +19,13 @@ interface Props {
 interface IconEntry {
   src: string;
   label: string;
+  /** "mask" tints the image with `currentColor` via a CSS mask — used
+   * for monochrome line marks (Claude, Codex) so they read as one of
+   * the theme accents. "img" renders the file as a regular <img>, used
+   * for marks whose original colors (or shading) the user wants
+   * preserved (the Hermes mascot is a detailed black-on-white drawing
+   * that loses depth when collapsed to a single tint). */
+  mode?: 'mask' | 'img';
 }
 
 export default function ProviderIcon({
@@ -28,6 +35,19 @@ export default function ProviderIcon({
 }: Props) {
   const entry = providerId ? REGISTRY[providerId] : undefined;
   if (entry) {
+    if (entry.mode === 'img') {
+      return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={entry.src}
+          alt={entry.label}
+          width={size}
+          height={size}
+          className="provider-icon-img"
+          style={{ width: size, height: size }}
+        />
+      );
+    }
     return (
       <span
         role="img"
@@ -52,4 +72,5 @@ export default function ProviderIcon({
 const REGISTRY: Record<string, IconEntry> = {
   claude: { src: '/icons/claude.png', label: 'Claude' },
   codex: { src: '/icons/codex.png', label: 'OpenAI' },
+  hermes: { src: '/icons/hermes.webp', label: 'Hermes', mode: 'img' },
 };

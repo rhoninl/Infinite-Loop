@@ -222,6 +222,131 @@ describe('providers/loader', () => {
     expect(await loadProviders()).toEqual([]);
   });
 
+  it('expands a *.hermes.local.json with ports into one manifest per port', async () => {
+    // New shape: label / host / token / ports[{port, profile}]. The
+    // loader emits one card per port, labeled by the discovered profile
+    // and pointing at `<host>:<port>/v1`.
+    writeManifest('my-hermes.hermes.local.json', {
+      label: 'My Hermes',
+      host: 'https://my-hermes.example',
+      token: 'sk-test-123',
+      ports: [
+        { port: 8001, profile: 'productmanager' },
+        { port: 8002, profile: 'engineer' },
+      ],
+    });
+    const { loadProviders } = await import('./loader');
+    const list = await loadProviders();
+    expect(list).toHaveLength(2);
+    // sorted by label → 'engineer' before 'productmanager'.
+    const eng = list.find((m) => m.label === 'engineer');
+    const pm = list.find((m) => m.label === 'productmanager');
+    if (!eng || !pm) throw new Error('expected both manifests');
+    if (eng.transport !== 'http' || pm.transport !== 'http') {
+      throw new Error('unreachable');
+    }
+    expect(eng.id).toBe('my-hermes-engineer');
+    expect(eng.baseUrl).toBe('https://my-hermes.example:8002/v1');
+    expect(eng.defaultProfile).toBe('engineer');
+    expect(eng.auth?.token).toBe('sk-test-123');
+    expect(pm.id).toBe('my-hermes-productmanager');
+    expect(pm.baseUrl).toBe('https://my-hermes.example:8001/v1');
+  });
+
+  it('drops malformed port entries but keeps the rest of the connection', async () => {
+    writeManifest('mixed.hermes.local.json', {
+      label: 'Mixed',
+      host: 'https://h.example',
+      token: 't',
+      ports: [
+        { port: 8001, profile: 'good' },
+        { port: 'oops' }, // bad port
+        { port: 8003, profile: '' }, // empty profile
+        { port: 8004, profile: 'alsogood' },
+      ],
+    });
+    const { loadProviders } = await import('./loader');
+    const list = await loadProviders();
+    expect(list).toHaveLength(2);
+    expect(list.map((m) => m.label).sort()).toEqual(['alsogood', 'good']);
+  });
+
+  it('hermes-local-store.validateInputSync strips port and path from host', async () => {
+    const { validateInputSync } = await import('./hermes-local-store');
+    expect(
+      validateInputSync({
+        label: 'A',
+        host: 'https://h.example',
+        token: 't',
+        ports: [{ port: 8001, profile: 'm' }],
+      }).host,
+    ).toBe('https://h.example');
+    // User pasted port + path — both stripped.
+    expect(
+      validateInputSync({
+        label: 'A',
+        host: 'http://192.168.1.10:9000',
+        token: 't',
+      }).host,
+    ).toBe('http://192.168.1.10');
+    // Reject paths that aren't / (more informative than silently stripping).
+    expect(() =>
+      validateInputSync({
+        label: 'A',
+        host: 'https://h.example/v1',
+        token: 't',
+      }),
+    ).toThrow(/path/);
+  });
+
+  it('hermes-local-store rejects duplicate ports and out-of-range values', async () => {
+    const { validateInputSync } = await import('./hermes-local-store');
+    expect(() =>
+      validateInputSync({
+        label: 'A',
+        host: 'https://h.example',
+        token: 't',
+        ports: [{ port: 8001 }, { port: 8001 }],
+      }),
+    ).toThrow(/listed more than once/);
+    expect(() =>
+      validateInputSync({
+        label: 'A',
+        host: 'https://h.example',
+        token: 't',
+        ports: [{ port: 70000 }],
+      }),
+    ).toThrow(/1..65535/);
+  });
+
+  it('rejects auth that sets neither envVar nor token', async () => {
+    writeManifest('bad.json', {
+      id: 'bad',
+      label: 'Bad',
+      description: 'd',
+      transport: 'http',
+      baseUrl: 'https://x',
+      endpoint: '/c',
+      auth: { type: 'bearer' },
+    });
+    const { loadProviders } = await import('./loader');
+    expect(await loadProviders()).toEqual([]);
+  });
+
+  it('rejects auth that sets both envVar and token', async () => {
+    writeManifest('bad.json', {
+      id: 'bad',
+      label: 'Bad',
+      description: 'd',
+      transport: 'http',
+      baseUrl: 'https://x',
+      endpoint: '/c',
+      auth: { type: 'bearer', envVar: 'X', token: 'y' },
+    });
+    const { loadProviders } = await import('./loader');
+    expect(await loadProviders()).toEqual([]);
+  });
+
   it('resolveBin honors INFLOOP_PROVIDER_BIN_<ID> and INFLOOP_CLAUDE_BIN alias', async () => {
     const { resolveBin } = await import('./loader');
     const claudeManifest = {

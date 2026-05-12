@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runProvider } from './runner';
+import { resolveCliArgs, runProvider } from './runner';
 import type { ProviderManifest } from './types';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -166,6 +166,87 @@ describe('runProvider', () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('PROMPT_VIA_STDIN_BEGIN');
     expect(result.stdout).toContain('hello-from-stdin');
+  });
+
+  describe('resolveCliArgs', () => {
+    it('substitutes {prompt} in arg mode', () => {
+      const out = resolveCliArgs(['--print', '{prompt}'], {
+        prompt: 'hi',
+        promptVia: 'arg',
+      });
+      expect(out).toEqual(['--print', 'hi']);
+    });
+
+    it('leaves {prompt} alone in stdin mode (prompt delivered separately)', () => {
+      const out = resolveCliArgs(['--print', '{prompt}'], {
+        prompt: 'hi',
+        promptVia: 'stdin',
+      });
+      expect(out).toEqual(['--print', '{prompt}']);
+    });
+
+    it('substitutes {agent} when value is set', () => {
+      const out = resolveCliArgs(['--agent', '{agent}', '{prompt}'], {
+        prompt: 'p',
+        agent: 'code-review-agent',
+        promptVia: 'arg',
+      });
+      expect(out).toEqual(['--agent', 'code-review-agent', 'p']);
+    });
+
+    it('strips {agent} AND its preceding flag when agent is empty', () => {
+      const out = resolveCliArgs(['--print', '--agent', '{agent}', '{prompt}'], {
+        prompt: 'p',
+        agent: '',
+        promptVia: 'arg',
+      });
+      expect(out).toEqual(['--print', 'p']);
+    });
+
+    it('strips the flag pair when agent is undefined', () => {
+      const out = resolveCliArgs(['--agent', '{agent}', '{prompt}'], {
+        prompt: 'p',
+        promptVia: 'arg',
+      });
+      expect(out).toEqual(['p']);
+    });
+
+    it('treats a whitespace-only agent value as empty (strips the pair)', () => {
+      const out = resolveCliArgs(['--agent', '{agent}', '{prompt}'], {
+        prompt: 'p',
+        agent: '   ',
+        promptVia: 'arg',
+      });
+      expect(out).toEqual(['p']);
+    });
+
+    it('does not pop a non-flag token when {agent} is missing its flag', () => {
+      // Manifest author put {agent} after the prompt placeholder, with no
+      // preceding flag. Empty agent should drop just the placeholder, not
+      // the prompt sitting in `out`.
+      const out = resolveCliArgs(['{prompt}', '{agent}'], {
+        prompt: 'p',
+        agent: '',
+        promptVia: 'arg',
+      });
+      expect(out).toEqual(['p']);
+    });
+
+    it('substitutes embedded {agent} (--agent={agent}) and drops it when empty', () => {
+      const set = resolveCliArgs(['--agent={agent}', '{prompt}'], {
+        prompt: 'p',
+        agent: 'reviewer',
+        promptVia: 'arg',
+      });
+      expect(set).toEqual(['--agent=reviewer', 'p']);
+
+      const empty = resolveCliArgs(['--agent={agent}', '{prompt}'], {
+        prompt: 'p',
+        agent: '',
+        promptVia: 'arg',
+      });
+      expect(empty).toEqual(['p']);
+    });
   });
 
   it('returns null exitCode + helpful stderr when binary spawn fails', async () => {

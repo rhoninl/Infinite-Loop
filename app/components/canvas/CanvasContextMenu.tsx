@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Listbox, ListboxItem, ListboxSection } from '@heroui/react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { NodeType } from '@/lib/shared/workflow';
 import type { ProviderInfo } from '@/lib/server/providers/types';
 
@@ -38,28 +37,20 @@ const STATIC_GROUPS: Array<{ heading: string; items: ContextMenuItem[] }> = [
       { type: 'condition', label: 'Condition' },
     ],
   },
+  {
+    heading: 'Scripts',
+    items: [{ type: 'script', label: 'Script' }],
+  },
+  {
+    heading: 'Annotations',
+    items: [{ type: 'sidenote', label: 'Note' }],
+  },
 ];
-
-/** Stable key encoding so we can recover the picked item from a Listbox key. */
-function itemKey(item: ContextMenuItem): string {
-  return `${item.type}:${item.providerId ?? item.type}`;
-}
-
-function itemAriaLabel(item: ContextMenuItem): string {
-  return item.providerId
-    ? `add ${item.providerId} agent node`
-    : `add ${item.type} node`;
-}
 
 /**
  * Right-click menu for the canvas. Same node catalog as the Palette but
  * placed at the cursor and skipping the drag gesture. Loop adoption is the
  * caller's job — see Canvas.tsx onContextMenuPick.
- *
- * The outer wrapper handles its own positioning + outside-click/Escape
- * dismissal — there's no HeroUI primitive for "appear at exact mouse
- * position" so we don't reach for Popover. Inside, a HeroUI Listbox renders
- * the sections and routes selection through `onAction`.
  */
 export default function CanvasContextMenu({ open, onClose, onPick }: Props) {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
@@ -156,29 +147,19 @@ export default function CanvasContextMenu({ open, onClose, onPick }: Props) {
     }
   }, [open, providers.length]);
 
-  // Build the list of groups + a flat key→item map for `onAction` routing.
-  // Memoized so the Listbox identity stays stable across re-renders that
-  // don't actually change the menu contents.
-  const { groups, keyMap } = useMemo(() => {
-    const groups = [
-      ...STATIC_GROUPS,
-      {
-        heading: 'Model Runners',
-        items: providers.map<ContextMenuItem>((p) => ({
-          type: 'agent',
-          label: p.label,
-          providerId: p.id,
-        })),
-      },
-    ];
-    const keyMap = new Map<string, ContextMenuItem>();
-    for (const group of groups) {
-      for (const item of group.items) keyMap.set(itemKey(item), item);
-    }
-    return { groups, keyMap };
-  }, [providers]);
-
   if (!open) return null;
+
+  const groups = [
+    ...STATIC_GROUPS,
+    {
+      heading: 'Model Runners',
+      items: providers.map<ContextMenuItem>((p) => ({
+        type: 'agent',
+        label: p.label,
+        providerId: p.id,
+      })),
+    },
+  ];
 
   const style: React.CSSProperties = {
     position: 'fixed',
@@ -192,7 +173,7 @@ export default function CanvasContextMenu({ open, onClose, onPick }: Props) {
       ref={rootRef}
       role="menu"
       aria-label="canvas context menu"
-      className="min-w-[200px] rounded-md border border-border-strong bg-bg-elevated font-mono shadow-lg"
+      className="canvas-context-menu"
       style={style}
       // Stop xyflow + the canvas from receiving the mousedown that originated
       // inside the menu — without this, clicking an item would simultaneously
@@ -200,62 +181,50 @@ export default function CanvasContextMenu({ open, onClose, onPick }: Props) {
       onMouseDown={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <Listbox
-        aria-label="canvas context menu items"
-        variant="flat"
-        // `onAction` fires for any item activation (mouse OR keyboard). We
-        // route by the encoded key back to the original ContextMenuItem.
-        onAction={(key) => {
-          const item = keyMap.get(String(key));
-          if (!item) return;
-          onPick(item, open);
-          onClose();
-        }}
-      >
-        {groups.map((group) => {
-          const isModelRunners = group.heading === 'Model Runners';
-          const placeholder = (() => {
-            if (isModelRunners && !providersLoaded) return 'loading…';
-            if (group.items.length > 0) return null;
-            if (isModelRunners && providersError) return 'failed to load providers';
-            return 'none available';
-          })();
-
-          // ListboxSection requires real ListboxItem children to register
-          // them in the ARIA collection. For loading / empty states we
-          // render a non-selectable, plain-text item so the section still
-          // shows the heading + status without breaking the collection
-          // contract.
-          if (placeholder) {
-            return (
-              <ListboxSection key={group.heading} title={group.heading}>
-                <ListboxItem
-                  key={`${group.heading}__placeholder`}
-                  isReadOnly
-                  className="serif-italic text-fg-muted"
-                  textValue={placeholder}
-                >
-                  {placeholder}
-                </ListboxItem>
-              </ListboxSection>
-            );
-          }
-
-          return (
-            <ListboxSection key={group.heading} title={group.heading}>
-              {group.items.map((item) => (
-                <ListboxItem
-                  key={itemKey(item)}
-                  aria-label={itemAriaLabel(item)}
-                  textValue={item.label}
-                >
-                  {item.label}
-                </ListboxItem>
-              ))}
-            </ListboxSection>
-          );
-        })}
-      </Listbox>
+      {groups.map((group) => {
+        const isModelRunners = group.heading === 'Model Runners';
+        const showLoading = isModelRunners && !providersLoaded;
+        const showEmpty = group.items.length === 0 && !showLoading;
+        return (
+          <section key={group.heading} className="ccm-section">
+            <h4 className="ccm-heading">{group.heading}</h4>
+            {showLoading && (
+              <div className="ccm-empty serif-italic">loading…</div>
+            )}
+            {showEmpty && (
+              <div className="ccm-empty serif-italic">
+                {isModelRunners && providersError
+                  ? 'failed to load providers'
+                  : 'none available'}
+              </div>
+            )}
+            {!showLoading && group.items.length > 0 && (
+              <ul className="ccm-list">
+                {group.items.map((item) => (
+                  <li key={`${item.type}:${item.providerId ?? item.type}`}>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label={
+                        item.providerId
+                          ? `add ${item.providerId} agent node`
+                          : `add ${item.type} node`
+                      }
+                      className="ccm-item"
+                      onClick={() => {
+                        onPick(item, open);
+                        onClose();
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }

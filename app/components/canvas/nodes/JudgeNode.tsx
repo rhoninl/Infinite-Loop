@@ -1,19 +1,9 @@
 'use client';
 
-import { Card, CardBody, CardHeader, Chip } from '@heroui/react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 
 const NODE_TYPE = 'judge';
 const CRITERIA_PREVIEW_MAX = 60;
-
-type ChipColor = 'default' | 'success' | 'danger' | 'warning';
-
-function chipColor(state: string): ChipColor {
-  if (state === 'live') return 'warning';
-  if (state === 'succeeded') return 'success';
-  if (state === 'failed') return 'danger';
-  return 'default';
-}
 
 interface JudgeData {
   _state?: string;
@@ -42,37 +32,26 @@ export default function JudgeNode({ data, selected }: NodeProps) {
   const criteriaTitle = preview !== criteria ? criteria : undefined;
 
   return (
-    <Card
+    <div
       className="wf-node"
-      shadow="none"
-      radius="none"
       data-node-type={NODE_TYPE}
       data-state={state}
       data-selected={selected ? 'true' : 'false'}
       aria-label="judge node"
     >
       <Handle type="target" position={Position.Left} id="in" />
-      <CardHeader className="wf-node-head !p-0">
+      <div className="wf-node-head">
         <span className="wf-node-title">{title}</span>
-        <Chip
-          size="sm"
-          variant="dot"
-          color={chipColor(state)}
-          aria-label={`state ${state}`}
-          data-state={state}
-          className="wf-node-state-chip h-auto border-0 px-0"
-        >
-          {state}
-        </Chip>
-      </CardHeader>
-      <CardBody className="wf-node-body !p-0">
+        <span className="wf-node-state-dot" data-state={state} aria-hidden="true" />
+      </div>
+      <div className="wf-node-body">
         <div>
           ⚖ {n} candidates · {provider}
         </div>
         <div className="wf-node-body-italic" title={criteriaTitle}>
           {preview || '(no criteria)'}
         </div>
-      </CardBody>
+      </div>
       <Handle
         type="source"
         position={Position.Right}
@@ -85,6 +64,6 @@ export default function JudgeNode({ data, selected }: NodeProps) {
         id="error"
         style={{ top: '75%' }}
       />
-    </Card>
+    </div>
   );
 }

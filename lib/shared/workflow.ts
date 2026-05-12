@@ -12,7 +12,9 @@ export type NodeType =
   | 'branch'
   | 'parallel'
   | 'subworkflow'
-  | 'judge';
+  | 'judge'
+  | 'sidenote'
+  | 'script';
 
 /** Edge handles. Workers MUST emit one of these from a node executor. */
 export type EdgeHandle =
@@ -60,6 +62,10 @@ export interface AgentConfig {
    * (e.g. Hermes/OpenRouter). CLI providers ignore this field. When unset and
    * the provider needs one, the manifest's `defaultProfile` is used. */
   profile?: string;
+  /** Optional subagent name. Only meaningful for the Claude CLI provider — it
+   * becomes `--agent <name>` on the spawned command. When unset, the flag is
+   * omitted entirely. Other providers ignore this field. */
+  agent?: string;
 }
 
 export interface ConditionConfig {
@@ -123,6 +129,39 @@ export interface SubworkflowConfig {
   outputs: Record<string, string>;
 }
 
+export interface SidenoteConfig {
+  /** Free-form note text shown on the canvas. Static — not templated. */
+  text: string;
+}
+
+export type ScriptLanguage = 'ts' | 'py';
+
+export interface ScriptConfig {
+  /** 'ts' → run via Bun; 'py' → run via python3. Interpreter binaries are
+   * configurable through `INFLOOP_BUN_BIN` / `INFLOOP_PYTHON_BIN`. */
+  language: ScriptLanguage;
+  /** Ordered named inputs. Each value is a templated string; the resolved
+   * values are passed to the user's `run(...)` function as positional args
+   * in declaration (insertion) order. Record key order is preserved by
+   * modern JS engines for string keys. */
+  inputs: Record<string, string>;
+  /** Declared output names. The user's function returns an object; for
+   * each name listed here, that key is pulled from the return value and
+   * placed in this node's scope under the same name. Undeclared keys are
+   * ignored. */
+  outputs: string[];
+  /** Inline source. Must define a top-level `run(arg1, arg2, …)` function
+   * accepting the inputs (in order) and returning an object whose keys
+   * include each declared output. NOT templated — write template
+   * literals / f-strings freely. */
+  code: string;
+  /** Templated working directory override. Falls back to the engine's
+   * `defaultCwd` when unset or blank. */
+  cwd?: string;
+  /** Per-run timeout. 0 disables the timer. */
+  timeoutMs?: number;
+}
+
 export interface JudgeNodeConfig {
   /** Templated rubric / criteria text shown to the judge. */
   criteria: string;
@@ -146,6 +185,8 @@ export type NodeConfigByType = {
   parallel: ParallelConfig;
   subworkflow: SubworkflowConfig;
   judge: JudgeNodeConfig;
+  sidenote: SidenoteConfig;
+  script: ScriptConfig;
 };
 
 export interface WorkflowNode<T extends NodeType = NodeType> {
@@ -184,6 +225,11 @@ export interface Workflow {
   edges: WorkflowEdge[];
   createdAt: number;
   updatedAt: number;
+  /** Workflow-level custom globals. Each entry's value is a literal
+   * string (NOT templated — globals don't reference each other). At run
+   * time the engine merges them into the scope under the `globals` key,
+   * so any node can reference `{{globals.NAME}}`. */
+  globals?: Record<string, string>;
 }
 
 export interface WorkflowSummary {

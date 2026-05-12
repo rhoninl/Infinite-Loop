@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Workflow, WorkflowSummary } from '../../lib/shared/workflow';
 import { useWorkflowStore } from '../../lib/client/workflow-store-client';
 import WorkflowMenu from './WorkflowMenu';
@@ -104,36 +104,39 @@ describe('WorkflowMenu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'workflow menu' }));
 
     await waitFor(() =>
-      expect(
-        screen.getByRole('menuitem', { name: /Alpha/ }),
-      ).toBeInTheDocument(),
+      expect(screen.getByLabelText('workflow wf-a')).toBeInTheDocument(),
     );
-    expect(
-      screen.getByRole('menuitem', { name: /Beta/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText('workflow wf-b')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/api/workflows');
   });
 
   it('loads a workflow when its row is clicked', async () => {
-    const calls: string[] = [];
-    globalThis.fetch = (async (url: RequestInfo | URL) => {
+    const fetchMock = mock(async (url: RequestInfo | URL) => {
       const u = String(url);
-      calls.push(u);
-      if (u === '/api/workflows') return jsonResponse({ workflows: [SUMMARY_A] });
-      if (u === '/api/workflows/wf-a') return jsonResponse({ workflow: FULL_A });
+      if (u === '/api/workflows') {
+        return jsonResponse({ workflows: [SUMMARY_A] });
+      }
+      if (u === '/api/workflows/wf-a') {
+        return jsonResponse({ workflow: FULL_A });
+      }
       throw new Error(`unexpected fetch ${u}`);
-    }) as unknown as typeof fetch;
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     render(<WorkflowMenu />);
     fireEvent.click(screen.getByRole('button', { name: 'workflow menu' }));
 
-    const row = await screen.findByRole('menuitem', { name: /Alpha/ });
-    fireEvent.click(row);
+    const row = await screen.findByLabelText('workflow wf-a');
+    await act(async () => {
+      fireEvent.click(row);
+    });
 
     await waitFor(() =>
       expect(useWorkflowStore.getState().currentWorkflow?.id).toBe('wf-a'),
     );
-    expect(calls).toContain('/api/workflows/wf-a');
+    expect(fetchMock).toHaveBeenCalledWith('/api/workflows/wf-a');
+    // Menu closes after selection.
+    expect(screen.queryByLabelText('workflow list')).toBeNull();
   });
 
   it('POSTs to /api/workflows when "New" is clicked and loads the result', async () => {
@@ -153,8 +156,10 @@ describe('WorkflowMenu', () => {
     render(<WorkflowMenu />);
     fireEvent.click(screen.getByRole('button', { name: 'workflow menu' }));
 
-    const newBtn = await screen.findByRole('menuitem', { name: 'New' });
-    fireEvent.click(newBtn);
+    const newBtn = await screen.findByLabelText('new workflow');
+    await act(async () => {
+      fireEvent.click(newBtn);
+    });
 
     await waitFor(() => {
       expect(useWorkflowStore.getState().currentWorkflow).not.toBeNull();
@@ -260,9 +265,27 @@ describe('WorkflowMenu', () => {
     expect(useWorkflowStore.getState().currentWorkflow?.name).toBe('My Wf');
   });
 
-  // Note: outside-click and Escape-to-close behavior is now provided by
-  // HeroUI's Dropdown (built on react-aria), which is exercised by its own
-  // upstream test suite. We skip the dedicated test here because the
-  // happy-dom + react-aria pointer-event interaction is unstable in
-  // bun:test and tends to segfault the runner.
+  it('closes the dropdown when clicking outside', async () => {
+    const fetchMock = mock(async () => jsonResponse({ workflows: [] }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    render(
+      <div>
+        <button type="button" data-testid="outside">
+          outside
+        </button>
+        <WorkflowMenu />
+      </div>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'workflow menu' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('workflow list')).toBeInTheDocument(),
+    );
+
+    fireEvent.mouseDown(screen.getByTestId('outside'));
+
+    await waitFor(() =>
+      expect(screen.queryByLabelText('workflow list')).toBeNull(),
+    );
+  });
 });

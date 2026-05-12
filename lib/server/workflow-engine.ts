@@ -45,6 +45,11 @@ const TEXT_CONFIG_FIELDS: Partial<Record<string, string[]>> = {
   agent: ['prompt', 'cwd'],
   condition: ['against'],
   branch: ['lhs', 'rhs'],
+  // Script: `code` stays literal so template braces inside string literals
+  // / f-strings aren't mangled. `cwd` is a top-level templated string;
+  // `inputs` is a Record<string,string> resolved per-value below in
+  // `resolveConfigTemplates`.
+  script: ['cwd'],
   // Phase 2+: shell.cmd, judge.rubric, etc.
 };
 
@@ -118,11 +123,19 @@ export class WorkflowEngine {
     // case, so we accept the gap rather than write a "running" placeholder
     // (which would accumulate as zombies without a reaper).
     this.currentRunId = crypto.randomUUID();
+    // Workflow globals are seeded into scope upfront so any node can
+    // reference `{{globals.NAME}}`. They're stored as a plain record so
+    // the templating resolver walks into them like any other namespaced
+    // scope entry.
+    const seedScope: Scope = {};
+    if (workflow.globals && typeof workflow.globals === 'object') {
+      seedScope.globals = { ...workflow.globals };
+    }
     this.snapshot = {
       status: 'running',
       workflowId: workflow.id,
       iterationByLoopId: {},
-      scope: {},
+      scope: seedScope,
       startedAt,
     };
 
@@ -938,6 +951,28 @@ export class WorkflowEngine {
             missingKey: w.missingKey,
           });
         }
+      }
+    }
+    // Script's `inputs` is a name → templated-value Record; resolve each
+    // value against scope. Mirrors how subworkflow handles its `inputs`.
+    if (node.type === 'script') {
+      const rawInputs = cfg.inputs;
+      if (rawInputs && typeof rawInputs === 'object' && !Array.isArray(rawInputs)) {
+        const next: Record<string, string> = {};
+        for (const [name, value] of Object.entries(rawInputs as Record<string, unknown>)) {
+          if (typeof value !== 'string') continue;
+          const { text, warnings } = resolveTemplate(value, scope);
+          next[name] = text;
+          for (const w of warnings) {
+            eventBus.emit({
+              type: 'template_warning',
+              nodeId: this.namespaced(node.id, exec),
+              field: `inputs.${name}`,
+              missingKey: w.missingKey,
+            });
+          }
+        }
+        resolved.inputs = next;
       }
     }
     return resolved;

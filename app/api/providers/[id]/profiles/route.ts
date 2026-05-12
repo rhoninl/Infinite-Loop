@@ -25,11 +25,18 @@ async function fetchLiveProfiles(
   const url = manifest.baseUrl + manifest.profilesEndpoint;
   const headers: Record<string, string> = { accept: 'application/json' };
   if (manifest.auth?.type === 'bearer') {
-    const token = process.env[manifest.auth.envVar]?.trim();
-    if (!token) {
-      throw new Error(`env var ${manifest.auth.envVar} is not set`);
+    // Same precedence as the runner: inline token (UI-managed local file)
+    // wins over env var (committed manifest).
+    let token: string | undefined;
+    if (manifest.auth.token) {
+      token = manifest.auth.token;
+    } else if (manifest.auth.envVar) {
+      token = process.env[manifest.auth.envVar]?.trim();
+      if (!token) {
+        throw new Error(`env var ${manifest.auth.envVar} is not set`);
+      }
     }
-    headers.authorization = `Bearer ${token}`;
+    if (token) headers.authorization = `Bearer ${token}`;
   }
   const resp = await fetch(url, { headers });
   if (!resp.ok) {

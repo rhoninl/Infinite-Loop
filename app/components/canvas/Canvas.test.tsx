@@ -91,7 +91,7 @@ describe('defaultConfigFor', () => {
     expect(defaultConfigFor('start')).toEqual({});
     expect(defaultConfigFor('end')).toEqual({});
     const agent = defaultConfigFor('agent') as AgentConfig;
-    expect(agent).toEqual({ providerId: 'claude', prompt: '', cwd: '', timeoutMs: 60000 });
+    expect(agent).toEqual({ providerId: 'claude', prompt: '', cwd: '', timeoutMs: 30 * 60 * 1000 });
     const condition = defaultConfigFor('condition') as ConditionConfig;
     expect(condition.kind).toBe('sentinel');
     expect(condition.sentinel).toEqual({ pattern: '', isRegex: false });
@@ -129,7 +129,7 @@ describe('buildDroppedNode', () => {
     expect(node.position).toEqual({ x: 50, y: 75 });
     expect(node.label).toBe('Step');
     expect((node.config as AgentConfig).providerId).toBe('claude');
-    expect((node.config as AgentConfig).timeoutMs).toBe(60000);
+    expect((node.config as AgentConfig).timeoutMs).toBe(30 * 60 * 1000);
   });
 
   it('honors the dropped providerId on agent nodes', () => {

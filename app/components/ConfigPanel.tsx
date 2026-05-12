@@ -9,20 +9,14 @@ import {
   useState,
   type ChangeEvent,
 } from 'react';
-import {
-  Button,
-  Checkbox,
-  Input,
-  Radio,
-  RadioGroup,
-  Textarea,
-} from '@heroui/react';
 import { useWorkflowStore } from '@/lib/client/workflow-store-client';
 import FolderPicker from './FolderPicker';
-import type {
-  HttpProviderProfile,
-  ProviderInfo,
-} from '@/lib/server/providers/types';
+import TemplateField from './TemplateField';
+import {
+  availableVariables,
+  type TemplateRef,
+} from '@/lib/shared/template-refs';
+import type { ProviderInfo } from '@/lib/server/providers/types';
 import type {
   AgentConfig,
   BranchConfig,
@@ -35,6 +29,9 @@ import type {
   ParallelConfig,
   ParallelMode,
   ParallelOnError,
+  ScriptConfig,
+  ScriptLanguage,
+  SidenoteConfig,
   SubworkflowConfig,
   Workflow,
   WorkflowNode,
@@ -138,11 +135,7 @@ function pickInitialTimeoutUnit(ms: number): TimeoutUnit {
   return 's';
 }
 
-/* ─── segmented control built on HeroUI RadioGroup ─────────── */
-/* RadioGroup gives us proper accessibility (role="radiogroup" + role="radio"
- * children) for free; the classNames just compress the radios into a
- * pill/segment row visually. The data-selected attribute HeroUI puts on each
- * radio's base slot is what drives the "active" tint. */
+/* ─── segmented control ─────────────────────────────────────── */
 interface SegmentedProps<T extends string> {
   label: string;
   value: T;
@@ -156,40 +149,22 @@ function Segmented<T extends string>({
   onChange,
 }: SegmentedProps<T>) {
   return (
-    <RadioGroup
-      label={label}
-      orientation="horizontal"
-      value={value}
-      onValueChange={(next) => onChange(next as T)}
-      classNames={{
-        base: 'gap-1',
-        label: 'text-fg-soft text-xs uppercase tracking-wider',
-        wrapper: 'flex w-full gap-0 rounded-md border border-border bg-bg-deep p-0.5',
-      }}
-    >
-      {options.map((opt) => (
-        <Radio
-          key={opt.value}
-          value={opt.value}
-          classNames={{
-            base: [
-              'm-0 max-w-none flex-1 justify-center',
-              'cursor-pointer rounded px-3 py-1.5',
-              'data-[selected=true]:bg-bg-elevated',
-              'data-[selected=true]:text-fg',
-              'data-[selected=true]:shadow-sm',
-              'text-fg-dim hover:text-fg',
-              'transition-colors',
-            ].join(' '),
-            wrapper: 'hidden',
-            labelWrapper: 'm-0 p-0',
-            label: 'text-sm',
-          }}
-        >
-          {opt.label}
-        </Radio>
-      ))}
-    </RadioGroup>
+    <div className="field" role="group" aria-label={label}>
+      <span className="field-label">{label}</span>
+      <div className="segmented">
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            data-active={value === opt.value}
+            aria-pressed={value === opt.value}
+            onClick={() => onChange(opt.value)}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -208,24 +183,31 @@ function DisplayNameField({
 }) {
   const [v, setV] = useDebouncedString(value, onCommit);
   return (
-    <Input
-      label="Display name"
-      labelPlacement="outside"
-      type="text"
-      value={v}
-      placeholder={fallback}
-      onValueChange={setV}
-      description="Shown on the canvas card. Leave blank to use the default."
-    />
+    <div className="field">
+      <span className="field-label">Display name</span>
+      <input
+        aria-label="Display name"
+        type="text"
+        value={v}
+        placeholder={fallback}
+        onChange={(e) => setV(e.target.value)}
+      />
+      <span className="field-hint">
+        Shown on the canvas card. Leave blank to use the default.
+      </span>
+    </div>
   );
 }
 
-/** Render the "Available refs: …" hint string for an Input's description prop.
- * Returns undefined when there are no refs so HeroUI hides the helper row. */
-function refsHint(refs: string[]): string | undefined {
-  if (refs.length === 0) return undefined;
-  const prefix = refs.length === 1 ? 'Available ref: ' : 'Available refs: ';
-  return prefix + refs.join('  ·  ');
+/* ─── chips listing available template refs ────────────────── */
+function RefChips({ refs }: { refs: string[] }) {
+  if (refs.length === 0) return null;
+  return (
+    <div className="field-hint" aria-label="available template refs">
+      {refs.length === 1 ? 'Available ref: ' : 'Available refs: '}
+      {refs.join('  ·  ')}
+    </div>
+  );
 }
 
 /* ─── per-type forms ───────────────────────────────────────── */
@@ -259,14 +241,366 @@ function EndForm({
   );
 }
 
+function SidenoteForm({
+  config,
+  onPatch,
+}: {
+  config: SidenoteConfig;
+  onPatch: (next: SidenoteConfig) => void;
+}) {
+  const [text, setText] = useDebouncedString(config.text ?? '', (next) =>
+    onPatch({ ...config, text: next }),
+  );
+  return (
+    <div className="field">
+      <span className="field-label">Note</span>
+      <textarea
+        aria-label="Note text"
+        rows={6}
+        value={text}
+        placeholder="Write a free-form note — pinned to the canvas, not run by the engine."
+        onChange={(e) => setText(e.target.value)}
+      />
+      <span className="field-hint">
+        Static text. No templating, no execution — purely for documentation.
+      </span>
+    </div>
+  );
+}
+
+/** Mirror of the server-side CliAgent shape (kept local so the client
+ * doesn't import from `lib/server/...`). Only `name` is required by the
+ * UI; the rest decorates the dropdown option text. */
+interface AgentChoice {
+  name: string;
+  model?: string;
+  group?: 'user' | 'project' | 'builtin';
+}
+
+/**
+ * Custom-styled agent picker. Wraps a free-text input with a popover list
+ * of discovered agents — terminal-aesthetic, not the browser's native
+ * `<datalist>` (which renders inconsistently across browsers and breaks
+ * the visual language of the rest of the app). The user can still type
+ * a name that isn't in the list.
+ */
+function AgentPicker({
+  value,
+  onChange,
+  choices,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  choices: AgentChoice[];
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  // Close on outside click + Esc, but only while open. We listen in capture
+  // phase so xyflow / global handlers can't swallow the event before us.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      const root = wrapRef.current;
+      if (!root) return;
+      if (!root.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown, true);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown, true);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  // Filter against the current input value (case-insensitive substring),
+  // keeping the original order so users see groups clustered as the CLI
+  // returned them.
+  const needle = value.trim().toLowerCase();
+  const filtered = needle.length
+    ? choices.filter((a) => a.name.toLowerCase().includes(needle))
+    : choices;
+
+  return (
+    <div ref={wrapRef} className="agent-picker">
+      <input
+        aria-label="Agent"
+        type="text"
+        autoComplete="off"
+        spellCheck={false}
+        value={value}
+        placeholder="(optional — leave blank for default)"
+        onFocus={() => setOpen(true)}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+      />
+      {open && filtered.length > 0 && (
+        <ul role="listbox" aria-label="Available agents" className="agent-picker-panel">
+          {filtered.map((a) => {
+            const groupLabel =
+              a.group === 'user'
+                ? 'user'
+                : a.group === 'project'
+                  ? 'project'
+                  : a.group === 'builtin'
+                    ? 'built-in'
+                    : '';
+            const meta = [groupLabel, a.model].filter(Boolean).join(' · ');
+            return (
+              <li key={a.name}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={a.name === value}
+                  className="agent-picker-row"
+                  onMouseDown={(e) => {
+                    // mousedown (not click) so the input's blur doesn't fire
+                    // first and unmount the panel before the click lands.
+                    e.preventDefault();
+                    onChange(a.name);
+                    setOpen(false);
+                  }}
+                >
+                  <span className="agent-picker-name">{a.name}</span>
+                  {meta && <span className="agent-picker-meta">{meta}</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Custom single-select dropdown — used in places where a native `<select>`
+ * would be visually inconsistent with the rest of the terminal UI. Reads
+ * as a button + popover, same family as AgentPicker and wf-menu.
+ */
+function WorkflowPicker({
+  value,
+  choices,
+  onChange,
+}: {
+  value: string;
+  choices: WorkflowSummary[];
+  onChange: (next: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      const root = wrapRef.current;
+      if (root && !root.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown, true);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown, true);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const selected = value ? choices.find((c) => c.id === value) : null;
+  const buttonLabel = selected
+    ? `${selected.id} (${selected.name})${selected.source === 'library' ? ' [library]' : ''}`
+    : '(none — pick a workflow)';
+
+  return (
+    <div ref={wrapRef} className="agent-picker">
+      <button
+        type="button"
+        className="custom-select-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span
+          className={selected ? 'custom-select-value' : 'custom-select-placeholder'}
+        >
+          {buttonLabel}
+        </span>
+        <span className="custom-select-caret" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {open && (
+        <ul
+          role="listbox"
+          aria-label="Available workflows"
+          className="agent-picker-panel"
+        >
+          <li>
+            <button
+              type="button"
+              role="option"
+              aria-selected={value === ''}
+              className="agent-picker-row"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange('');
+                setOpen(false);
+              }}
+            >
+              <span className="agent-picker-name">(none)</span>
+              <span className="agent-picker-meta">clear</span>
+            </button>
+          </li>
+          {choices.length === 0 && (
+            <li>
+              <div className="agent-picker-row" style={{ cursor: 'default' }}>
+                <span className="agent-picker-meta">no other workflows</span>
+              </div>
+            </li>
+          )}
+          {choices.map((w) => (
+            <li key={w.id}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={value === w.id}
+                className="agent-picker-row"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(w.id);
+                  setOpen(false);
+                }}
+              >
+                <span className="agent-picker-name">{w.id}</span>
+                <span className="agent-picker-meta">
+                  {[w.name, w.source === 'library' ? 'library' : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/* ─── working-directory field ───────────────────────────────
+ * Shared between AgentForm (CLI providers) and ScriptForm. Renders the
+ * read-only tail-truncated preview backed by FolderPicker. The truncation
+ * math + invalid-path warning live here so any future cwd consumer gets
+ * the same behavior without re-implementing it. */
+function CwdField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [display, setDisplay] = useState(value);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !value) {
+      setDisplay(value);
+      return;
+    }
+    const recompute = () => {
+      const cs = getComputedStyle(el);
+      const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const usable = el.clientWidth - padX;
+      if (usable <= 0) return;
+      const probe = document.createElement('span');
+      probe.style.font = cs.font;
+      probe.style.visibility = 'hidden';
+      probe.style.position = 'absolute';
+      probe.style.whiteSpace = 'pre';
+      probe.textContent = 'M';
+      document.body.appendChild(probe);
+      const charW = probe.getBoundingClientRect().width;
+      document.body.removeChild(probe);
+      if (charW <= 0) return;
+      const fits = Math.floor(usable / charW);
+      if (value.length <= fits) {
+        setDisplay(value);
+      } else {
+        setDisplay('…' + value.slice(value.length - (fits - 1)));
+      }
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [value]);
+
+  const invalid = value.length > 0 && !value.startsWith('/');
+
+  return (
+    <div className="field" style={{ position: 'relative' }}>
+      <span className="field-label">Working directory</span>
+      <div
+        ref={ref}
+        role="button"
+        tabIndex={0}
+        aria-label="Working directory"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-invalid={invalid || undefined}
+        title={value || undefined}
+        data-tooltip={value || undefined}
+        className={`field-readonly cwd-preview${value ? '' : ' is-empty'}`}
+        onClick={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
+      >
+        {value ? display : '(no folder selected — click to choose)'}
+      </div>
+      {invalid && (
+        <span className="field-hint" style={{ color: 'var(--accent-err)' }}>
+          Must start with /
+        </span>
+      )}
+      {open && (
+        <FolderPicker
+          initialPath={value && value.startsWith('/') ? value : undefined}
+          onSelect={(picked) => {
+            onChange(picked);
+            setOpen(false);
+          }}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 function AgentForm({
   config,
   refs,
+  templateRefs,
+  selfId,
   providerInfo,
   onPatch,
 }: {
   config: AgentConfig;
   refs: string[];
+  templateRefs: readonly TemplateRef[];
+  selfId: string;
   /** Provider metadata for `config.providerId`, fetched once at the panel
    * level. `null` while the panel-level fetch is in flight, or if the id
    * doesn't match any known provider. */
@@ -280,104 +614,64 @@ function AgentForm({
   const [cwd, setCwd] = useDebouncedString(config.cwd ?? '', (next) =>
     onPatch({ ...config, cwd: next }),
   );
-  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+  const [agent, setAgent] = useDebouncedString(config.agent ?? '', (next) =>
+    onPatch({ ...config, agent: next.trim() ? next.trim() : undefined }),
+  );
 
-  // Tail-truncate the cwd preview in JS — the previous direction:rtl CSS
-  // trick is unreliable when the path starts with `/` (a bidi-neutral
-  // character that the algorithm treats as a run boundary). Measure the
-  // available width with a hidden monospace probe, count how many chars
-  // fit, slice the path's tail to that length and prefix with an ellipsis.
-  const cwdRef = useRef<HTMLDivElement | null>(null);
-  const [cwdDisplay, setCwdDisplay] = useState(cwd);
-  useLayoutEffect(() => {
-    const el = cwdRef.current;
-    if (!el || !cwd) {
-      setCwdDisplay(cwd);
-      return;
-    }
-
-    const recompute = () => {
-      const cs = getComputedStyle(el);
-      const padX =
-        parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
-      const usable = el.clientWidth - padX;
-      if (usable <= 0) return;
-
-      // Probe the rendered character width once per recompute (mono so any
-      // glyph is the same width — `M` is just a stable reference).
-      const probe = document.createElement('span');
-      probe.style.font = cs.font;
-      probe.style.visibility = 'hidden';
-      probe.style.position = 'absolute';
-      probe.style.whiteSpace = 'pre';
-      probe.textContent = 'M';
-      document.body.appendChild(probe);
-      const charW = probe.getBoundingClientRect().width;
-      document.body.removeChild(probe);
-      if (charW <= 0) return;
-
-      const fits = Math.floor(usable / charW);
-      if (cwd.length <= fits) {
-        setCwdDisplay(cwd);
-      } else {
-        // Reserve one slot for the leading ellipsis glyph.
-        setCwdDisplay('…' + cwd.slice(cwd.length - (fits - 1)));
-      }
-    };
-
-    recompute();
-    const ro = new ResizeObserver(recompute);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [cwd]);
-
-  const cwdInvalid = cwd.length > 0 && !cwd.startsWith('/');
   const providerId = config.providerId ?? 'claude';
   const isHttpProvider = providerInfo?.transport === 'http';
 
-  // Profiles are only fetched for http providers. Live failures surface as
-  // an inline note; the dropdown also always includes the currently-saved
-  // profile so an unknown stored value doesn't silently revert to default.
-  const [profiles, setProfiles] = useState<HttpProviderProfile[] | null>(null);
-  const [profilesError, setProfilesError] = useState<string | null>(null);
+  // Fetch the CLI provider's available agents so the Agent field can
+  // suggest them. The cwd is part of the probe because `claude agents`
+  // resolves project-scoped agents from the working directory's settings
+  // stack — change the cwd, and the listing changes too. When the new
+  // listing no longer contains the currently-selected agent (a project-
+  // level agent from the old directory), we clear the field so the user
+  // has to re-pick; built-in / user-global agents survive the change.
+  const [agentChoices, setAgentChoices] = useState<AgentChoice[]>([]);
   useEffect(() => {
-    if (!isHttpProvider) {
-      setProfiles(null);
-      setProfilesError(null);
+    if (isHttpProvider) {
+      setAgentChoices([]);
+      return;
+    }
+    // Only probe once an absolute cwd is set; relative cwds would resolve
+    // against the server, not the workflow's intended directory.
+    if (!cwd || !cwd.startsWith('/')) {
+      setAgentChoices([]);
       return;
     }
     let cancelled = false;
-    setProfiles(null);
-    setProfilesError(null);
-    fetch(`/api/providers/${encodeURIComponent(providerId)}/profiles`)
-      .then(async (r) => {
-        const body = (await r.json()) as {
-          profiles?: HttpProviderProfile[];
-          error?: string;
-        };
-        if (cancelled) return;
-        if (!r.ok) {
-          setProfilesError(body.error ?? `HTTP ${r.status}`);
-          setProfiles([]);
-          return;
+    fetch(
+      `/api/providers/${encodeURIComponent(providerId)}/agents?cwd=${encodeURIComponent(cwd)}`,
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { agents?: AgentChoice[] } | null) => {
+        if (cancelled || !data || !Array.isArray(data.agents)) return;
+        setAgentChoices(data.agents);
+        const current = (config.agent ?? '').trim();
+        if (
+          current.length > 0 &&
+          data.agents.length > 0 &&
+          !data.agents.some((a) => a.name === current)
+        ) {
+          // The previously-selected agent doesn't exist in the new cwd's
+          // listing. Clear it so the user has to re-select.
+          setAgent('');
+          onPatch({ ...config, agent: undefined });
         }
-        setProfiles(Array.isArray(body.profiles) ? body.profiles : []);
       })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setProfilesError((err as Error).message);
-        setProfiles([]);
+      .catch(() => {
+        // Silent: not every CLI provider exposes a listing. The input still works.
       });
     return () => {
       cancelled = true;
     };
-  }, [isHttpProvider, providerId]);
-
-  const profileValue = config.profile ?? '';
-  const onProfileChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    const next = e.target.value;
-    onPatch({ ...config, profile: next.length > 0 ? next : undefined });
-  };
+    // We intentionally exclude `config` and `onPatch` from deps: this effect
+    // is keyed to the (providerId, cwd, transport) triplet — re-running it
+    // on every config keystroke would thrash. We read `config.agent` once
+    // when the new listing arrives, which is the only place it's needed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerId, isHttpProvider, cwd]);
 
   // Timeout: millisecond is the wire format (kept as `timeoutMs` on the
   // workflow), but a human entering "60000" was a paper cut. We let the
@@ -408,164 +702,85 @@ function AgentForm({
 
   return (
     <>
-      {/* Provider is read-only display, not a form field — but keeping the
-       * label/value shape identical to the inputs below so the right-rail
-       * forms read as a single column. */}
-      <Input
-        label="Provider"
-        labelPlacement="outside"
-        value={providerId}
-        isReadOnly
-        classNames={{ input: 'font-mono text-fg-soft' }}
-      />
+      <div className="field">
+        <span className="field-label">Provider</span>
+        <span
+          className="field-hint"
+          aria-label="Provider"
+          style={{ fontFamily: 'var(--mono)', color: 'var(--fg-soft)' }}
+        >
+          {providerId}
+        </span>
+      </div>
 
-      {/* Profile dropdown only for HTTP-transport providers (Hermes etc.).
-       * Plain <select> to match the SubworkflowForm workflow picker styling.
-       * Empty value = "use the manifest's defaultProfile at run time". */}
-      {isHttpProvider && (
+      {/* No Profile field for HTTP providers — each Hermes palette card
+       * is already bound to a specific (host, port, model) tuple by the
+       * `.hermes.local.json` connection it came from, so there's nothing
+       * for the node author to override here. */}
+
+      <div className="field">
+        <span className="field-label">Prompt</span>
+        <TemplateField
+          multiline
+          rows={5}
+          ariaLabel="Prompt"
+          value={prompt}
+          onChange={setPrompt}
+          selfId={selfId}
+          refs={templateRefs}
+          fieldPath="prompt"
+        />
+        <RefChips refs={refs} />
+      </div>
+
+      {!isHttpProvider && <CwdField value={cwd} onChange={setCwd} />}
+
+      {!isHttpProvider && (
         <div className="field">
-          <span className="field-label">Profile</span>
-          <select
-            aria-label="Profile"
-            value={profileValue}
-            onChange={onProfileChange}
-            disabled={profiles === null}
-          >
-            <option value="">
-              {profiles === null ? 'loading…' : '(use provider default)'}
-            </option>
-            {/* Always include the currently-selected profile, even if the
-             * live list doesn't (or hasn't yet) returned it — so an unknown
-             * value saved earlier doesn't silently revert to default. */}
-            {profileValue &&
-              !(profiles ?? []).some((p) => p.id === profileValue) && (
-                <option value={profileValue}>{profileValue}</option>
-              )}
-            {(profiles ?? []).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label ? `${p.label} (${p.id})` : p.id}
-              </option>
-            ))}
-          </select>
-          {profilesError && (
-            <span className="field-hint" style={{ color: 'var(--accent-err)' }}>
-              couldn't load profiles: {profilesError}
-            </span>
-          )}
+          <span className="field-label">Agent</span>
+          <AgentPicker
+            value={agent}
+            onChange={setAgent}
+            choices={agentChoices}
+          />
+          <span className="field-hint">
+            Adds <code>--agent &lt;name&gt;</code> to the spawned command. Leave blank to omit the flag.
+          </span>
         </div>
       )}
 
-      <Textarea
-        label="Prompt"
-        labelPlacement="outside"
-        isRequired
-        minRows={5}
-        value={prompt}
-        onValueChange={setPrompt}
-        description={refsHint(refs)}
-      />
-
-      <div className="field" style={{ position: 'relative' }}>
-        <span className="field-label">Working directory</span>
-        {/* Read-only preview of the resolved cwd. The only way to mutate it
-         * is to open the picker (click, Enter, or Space) — the popover
-         * handles both manual path entry and tree navigation, with the two
-         * views live-synced. */}
-        {/* Rendered as a div (not <input>) so CSS truncation can show the
-         * TAIL of the path. Long cwds like
-         * "/Users/liyuqi/project/Codecase/InfLoop" should anchor to
-         * "…/Codecase/InfLoop" — the inner folder is what the user is
-         * orienting on. `<input>` doesn't honour text-overflow: ellipsis
-         * reliably and resets scrollLeft on focus, so a div is more honest. */}
-        <div
-          ref={cwdRef}
-          role="button"
-          tabIndex={0}
-          aria-label="Working directory"
-          aria-haspopup="dialog"
-          aria-expanded={folderPickerOpen}
-          aria-invalid={cwdInvalid || undefined}
-          // `title` is the screen-reader / OS-level tooltip; the visible
-          // hover tooltip is CSS-only via `::after` reading data-tooltip.
-          // We carry both so the full path is always discoverable.
-          title={cwd || undefined}
-          data-tooltip={cwd || undefined}
-          className={`field-readonly cwd-preview${cwd ? '' : ' is-empty'}`}
-          onClick={() => setFolderPickerOpen(true)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setFolderPickerOpen(true);
-            }
-          }}
-        >
-          {cwd ? cwdDisplay : '(no folder selected — click to choose)'}
-        </div>
-        {cwdInvalid && (
-          <span className="field-hint" style={{ color: 'var(--accent-err)' }}>
-            Must start with /
-          </span>
-        )}
-        {folderPickerOpen && (
-          <FolderPicker
-            initialPath={cwd && cwd.startsWith('/') ? cwd : undefined}
-            onSelect={(picked) => {
-              setCwd(picked);
-              setFolderPickerOpen(false);
-            }}
-            onClose={() => setFolderPickerOpen(false)}
+      <div className="field">
+        <span className="field-label">Iteration timeout</span>
+        <div className="field-row">
+          <input
+            aria-label="Iteration timeout"
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="any"
+            value={timeoutDisplay}
+            onChange={onTimeoutChange}
+            className="no-spin"
           />
-        )}
-      </div>
-
-      {/* Iteration timeout: number input + unit segmented control. The unit
-       * picker rides as endContent so it stays inside the Input's labeled
-       * frame instead of fighting alignment in a separate row. */}
-      <Input
-        label="Iteration timeout"
-        labelPlacement="outside"
-        type="number"
-        inputMode="decimal"
-        min={0}
-        step="any"
-        value={String(timeoutDisplay)}
-        onChange={onTimeoutChange}
-        classNames={{ input: 'no-spin' }}
-        endContent={
-          <RadioGroup
+          <div
+            className="seg-tight"
+            role="group"
             aria-label="Iteration timeout unit"
-            orientation="horizontal"
-            value={timeoutUnit}
-            onValueChange={(next) => setTimeoutUnit(next as TimeoutUnit)}
-            classNames={{
-              base: 'gap-0 shrink-0',
-              wrapper:
-                'flex-nowrap gap-0 rounded-md border border-border bg-bg-input p-0.5',
-            }}
           >
             {TIMEOUT_UNITS.map((u) => (
-              <Radio
+              <button
                 key={u}
-                value={u}
-                classNames={{
-                  base: [
-                    'm-0 max-w-none shrink-0',
-                    'cursor-pointer rounded px-2 py-0.5',
-                    'data-[selected=true]:bg-bg-elevated',
-                    'data-[selected=true]:text-fg',
-                    'text-fg-soft hover:text-fg',
-                  ].join(' '),
-                  wrapper: 'hidden',
-                  labelWrapper: 'm-0 p-0',
-                  label: 'text-xs whitespace-nowrap',
-                }}
+                type="button"
+                data-active={timeoutUnit === u}
+                aria-pressed={timeoutUnit === u}
+                onClick={() => setTimeoutUnit(u)}
               >
                 {u}
-              </Radio>
+              </button>
             ))}
-          </RadioGroup>
-        }
-      />
+          </div>
+        </div>
+      </div>
     </>
   );
 }
@@ -573,10 +788,14 @@ function AgentForm({
 function ConditionForm({
   config,
   refs,
+  templateRefs,
+  selfId,
   onPatch,
 }: {
   config: ConditionConfig;
   refs: string[];
+  templateRefs: readonly TemplateRef[];
+  selfId: string;
   onPatch: (next: ConditionConfig) => void;
 }) {
   const kind: ConditionKind = config.kind ?? 'sentinel';
@@ -626,69 +845,83 @@ function ConditionForm({
 
       {kind === 'sentinel' && (
         <>
-          <Input
-            label="Pattern"
-            labelPlacement="outside"
-            type="text"
-            value={pattern}
-            onValueChange={setPattern}
-          />
-          <Checkbox
-            isSelected={config.sentinel?.isRegex ?? false}
-            onValueChange={(checked) =>
-              onPatch({
-                ...config,
-                sentinel: {
-                  pattern: config.sentinel?.pattern ?? '',
-                  isRegex: checked,
-                },
-              })
-            }
-          >
-            Treat as regex
-          </Checkbox>
+          <div className="field">
+            <span className="field-label">Pattern</span>
+            <input
+              aria-label="Pattern"
+              type="text"
+              value={pattern}
+              onChange={(e) => setPattern(e.target.value)}
+            />
+          </div>
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={config.sentinel?.isRegex ?? false}
+              onChange={(e) =>
+                onPatch({
+                  ...config,
+                  sentinel: {
+                    pattern: config.sentinel?.pattern ?? '',
+                    isRegex: e.target.checked,
+                  },
+                })
+              }
+            />
+            <span>Treat as regex</span>
+          </label>
         </>
       )}
 
       {kind === 'command' && (
-        <Input
-          label="Command"
-          labelPlacement="outside"
-          type="text"
-          value={cmd}
-          onValueChange={setCmd}
-        />
+        <div className="field">
+          <span className="field-label">Command</span>
+          <input
+            aria-label="Command"
+            type="text"
+            value={cmd}
+            onChange={(e) => setCmd(e.target.value)}
+          />
+        </div>
       )}
 
       {kind === 'judge' && (
         <>
-          <Textarea
-            label="Rubric"
-            labelPlacement="outside"
-            minRows={4}
-            value={rubric}
-            onValueChange={setRubric}
-          />
-          <Input
-            label="Model"
-            labelPlacement="outside"
-            type="text"
-            value={model}
-            onValueChange={setModel}
-            description="blank = claude code default"
-          />
+          <div className="field">
+            <span className="field-label">Rubric</span>
+            <textarea
+              aria-label="Rubric"
+              rows={4}
+              value={rubric}
+              onChange={(e) => setRubric(e.target.value)}
+            />
+          </div>
+          <div className="field">
+            <span className="field-label">Model</span>
+            <input
+              aria-label="Model"
+              type="text"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+            />
+            <span className="field-hint">blank = claude code default</span>
+          </div>
         </>
       )}
 
-      <Input
-        label="Against"
-        labelPlacement="outside"
-        type="text"
-        value={against}
-        placeholder="{{<previous-node>.stdout}}"
-        onValueChange={setAgainst}
-        description={refsHint(refs)}
-      />
+      <div className="field">
+        <span className="field-label">Against</span>
+        <TemplateField
+          ariaLabel="Against"
+          value={against}
+          onChange={setAgainst}
+          selfId={selfId}
+          refs={templateRefs}
+          fieldPath="against"
+          placeholder="{{<previous-node>.stdout}}"
+        />
+        <RefChips refs={refs} />
+      </div>
     </>
   );
 }
@@ -724,15 +957,17 @@ function LoopForm({
       />
 
       {!infinite && (
-        <Input
-          label="Max iterations"
-          labelPlacement="outside"
-          type="number"
-          min={1}
-          max={100}
-          value={String(config.maxIterations ?? 5)}
-          onChange={onMaxChange}
-        />
+        <div className="field">
+          <span className="field-label">Max iterations</span>
+          <input
+            aria-label="Max iterations"
+            type="number"
+            min={1}
+            max={100}
+            value={config.maxIterations ?? 5}
+            onChange={onMaxChange}
+          />
+        </div>
       )}
 
       <Segmented<LoopConfig['mode']>
@@ -751,10 +986,14 @@ function LoopForm({
 function BranchForm({
   config,
   refs,
+  templateRefs,
+  selfId,
   onPatch,
 }: {
   config: BranchConfig;
   refs: string[];
+  templateRefs: readonly TemplateRef[];
+  selfId: string;
   onPatch: (next: BranchConfig) => void;
 }) {
   const [lhs, setLhs] = useDebouncedString(config.lhs ?? '', (next) =>
@@ -767,15 +1006,19 @@ function BranchForm({
 
   return (
     <>
-      <Input
-        label="Left"
-        labelPlacement="outside"
-        type="text"
-        value={lhs}
-        onValueChange={setLhs}
-        placeholder="{{claude-1.stdout}}"
-        description={refsHint(refs)}
-      />
+      <div className="field">
+        <span className="field-label">Left</span>
+        <TemplateField
+          ariaLabel="Left"
+          value={lhs}
+          onChange={setLhs}
+          selfId={selfId}
+          refs={templateRefs}
+          fieldPath="lhs"
+          placeholder="{{claude-1.stdout}}"
+        />
+        <RefChips refs={refs} />
+      </div>
 
       <Segmented<BranchOp>
         label="Operator"
@@ -789,15 +1032,19 @@ function BranchForm({
         onChange={(next) => onPatch({ ...config, op: next })}
       />
 
-      <Input
-        label="Right"
-        labelPlacement="outside"
-        type="text"
-        value={rhs}
-        onValueChange={setRhs}
-        placeholder={op === 'matches' ? '^DONE' : 'DONE'}
-        description={refsHint(refs)}
-      />
+      <div className="field">
+        <span className="field-label">Right</span>
+        <TemplateField
+          ariaLabel="Right"
+          value={rhs}
+          onChange={setRhs}
+          selfId={selfId}
+          refs={templateRefs}
+          fieldPath="rhs"
+          placeholder={op === 'matches' ? '^DONE' : 'DONE'}
+        />
+        <RefChips refs={refs} />
+      </div>
     </>
   );
 }
@@ -845,15 +1092,17 @@ function ParallelForm({
       />
 
       {mode === 'quorum' && (
-        <Input
-          label="Quorum N"
-          labelPlacement="outside"
-          type="number"
-          min={1}
-          value={quorumStr}
-          onValueChange={setQuorumStr}
-          description="1 ≤ quorumN ≤ children.length"
-        />
+        <div className="field">
+          <span className="field-label">Quorum N</span>
+          <input
+            aria-label="Quorum N"
+            type="number"
+            min={1}
+            value={quorumStr}
+            onChange={(e) => setQuorumStr(e.target.value)}
+          />
+          <span className="field-hint">1 ≤ quorumN ≤ children.length</span>
+        </div>
       )}
 
       <Segmented<ParallelOnError>
@@ -916,6 +1165,10 @@ interface KvRowsEditorProps {
   valuePlaceholder?: string;
   valueDescription?: string;
   addLabel: string;
+  /** When set, the value cell uses TemplateField with autocomplete + lint
+   * driven by these args. Leave undefined for plain text values (e.g.
+   * subworkflow output paths). */
+  template?: { selfId: string; refs: readonly TemplateRef[]; fieldPath: (name: string) => string };
 }
 
 /* Per-row component so each cell carries its own debounced text buffer —
@@ -928,6 +1181,7 @@ function KvRow({
   valueLabel,
   valuePlaceholder,
   valueDescription,
+  template,
   onCommit,
   onRemove,
 }: {
@@ -938,6 +1192,7 @@ function KvRow({
   valueLabel: string;
   valuePlaceholder?: string;
   valueDescription?: string;
+  template?: KvRowsEditorProps['template'];
   onCommit: (patch: Partial<KvRowData>) => void;
   onRemove: () => void;
 }) {
@@ -956,31 +1211,45 @@ function KvRow({
         alignItems: 'flex-start',
       }}
     >
-      <Input
+      <input
         aria-label={`${nameLabel} ${index}`}
         type="text"
-        size="sm"
         value={name}
-        onValueChange={setName}
+        onChange={(e) => setName(e.target.value)}
         placeholder={nameLabel}
       />
-      <Input
-        aria-label={`${valueLabel} ${index}`}
-        type="text"
-        size="sm"
-        value={value}
-        onValueChange={setValue}
-        placeholder={valuePlaceholder}
-        description={isLast ? valueDescription : undefined}
-      />
-      <Button
-        size="sm"
-        variant="light"
-        onPress={onRemove}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {template ? (
+          <TemplateField
+            ariaLabel={`${valueLabel} ${index}`}
+            value={value}
+            onChange={setValue}
+            selfId={template.selfId}
+            refs={template.refs}
+            fieldPath={template.fieldPath(name)}
+            placeholder={valuePlaceholder}
+          />
+        ) : (
+          <input
+            aria-label={`${valueLabel} ${index}`}
+            type="text"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={valuePlaceholder}
+          />
+        )}
+        {isLast && valueDescription ? (
+          <span className="field-hint">{valueDescription}</span>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        className="btn btn-ghost"
+        onClick={onRemove}
         aria-label={`remove ${nameLabel} ${index}`}
       >
         ✕
-      </Button>
+      </button>
     </div>
   );
 }
@@ -993,6 +1262,7 @@ function KvRowsEditor({
   valuePlaceholder,
   valueDescription,
   addLabel,
+  template,
 }: KvRowsEditorProps) {
   const updateRow = (rowId: string, patch: Partial<KvRowData>) => {
     onChange(
@@ -1018,27 +1288,32 @@ function KvRowsEditor({
           valueLabel={valueLabel}
           valuePlaceholder={valuePlaceholder}
           valueDescription={valueDescription}
+          template={template}
           onCommit={(patch) => updateRow(row.rowId, patch)}
           onRemove={() => removeRow(row.rowId)}
         />
       ))}
-      <Button
-        size="sm"
-        variant="flat"
-        onPress={addRow}
+      <button
+        type="button"
+        className="btn btn-ghost"
+        onClick={addRow}
         style={{ alignSelf: 'flex-start' }}
       >
         + {addLabel}
-      </Button>
+      </button>
     </div>
   );
 }
 
 function SubworkflowForm({
   config,
+  templateRefs,
+  selfId,
   onPatch,
 }: {
   config: SubworkflowConfig;
+  templateRefs: readonly TemplateRef[];
+  selfId: string;
   onPatch: (next: SubworkflowConfig) => void;
 }) {
   const currentWorkflowId = useWorkflowStore(
@@ -1101,10 +1376,6 @@ function SubworkflowForm({
     onPatch({ ...config, outputs: rec });
   };
 
-  const onWorkflowChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    onPatch({ ...config, workflowId: e.target.value });
-  };
-
   // Hide self-reference; cycle detection beyond direct self lives in the
   // engine. If currentWorkflowId is null (e.g. unsaved), just show all.
   const choices = workflows.filter((w) => w.id !== currentWorkflowId);
@@ -1113,15 +1384,11 @@ function SubworkflowForm({
     <>
       <div className="field">
         <span className="field-label">Workflow</span>
-        <select value={config.workflowId ?? ''} onChange={onWorkflowChange}>
-          <option value="">(none — pick a workflow)</option>
-          {choices.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.id} ({w.name})
-              {w.source === 'library' ? ' [library]' : ''}
-            </option>
-          ))}
-        </select>
+        <WorkflowPicker
+          value={config.workflowId ?? ''}
+          choices={choices}
+          onChange={(next) => onPatch({ ...config, workflowId: next })}
+        />
       </div>
 
       <div className="field">
@@ -1133,6 +1400,11 @@ function SubworkflowForm({
           valueLabel="value template"
           valuePlaceholder="{{claude-1.stdout}}"
           addLabel="add input"
+          template={{
+            selfId,
+            refs: templateRefs,
+            fieldPath: (name) => `inputs.${name || '?'}`,
+          }}
         />
       </div>
 
@@ -1161,11 +1433,13 @@ function SubworkflowForm({
 function CandidateRow({
   index,
   value,
+  template,
   onCommit,
   onRemove,
 }: {
   index: number;
   value: string;
+  template?: { selfId: string; refs: readonly TemplateRef[] };
   onCommit: (next: string) => void;
   onRemove: () => void;
 }) {
@@ -1189,22 +1463,34 @@ function CandidateRow({
         >
           [{index}]
         </span>
-        <Button
+        <button
           type="button"
-          size="sm"
-          variant="light"
-          onPress={onRemove}
+          className="btn btn-ghost"
+          onClick={onRemove}
           aria-label={`remove candidate ${index}`}
         >
           remove
-        </Button>
+        </button>
       </div>
-      <Textarea
-        aria-label={`candidate ${index}`}
-        minRows={2}
-        value={v}
-        onValueChange={setV}
-      />
+      {template ? (
+        <TemplateField
+          multiline
+          rows={2}
+          ariaLabel={`candidate ${index}`}
+          value={v}
+          onChange={setV}
+          selfId={template.selfId}
+          refs={template.refs}
+          fieldPath={`candidates.${index}`}
+        />
+      ) : (
+        <textarea
+          aria-label={`candidate ${index}`}
+          rows={2}
+          value={v}
+          onChange={(e) => setV(e.target.value)}
+        />
+      )}
     </div>
   );
 }
@@ -1212,10 +1498,14 @@ function CandidateRow({
 function JudgeForm({
   config,
   refs,
+  templateRefs,
+  selfId,
   onPatch,
 }: {
   config: JudgeNodeConfig;
   refs: string[];
+  templateRefs: readonly TemplateRef[];
+  selfId: string;
   onPatch: (next: JudgeNodeConfig) => void;
 }) {
   const [criteria, setCriteria] = useDebouncedString(
@@ -1268,14 +1558,20 @@ function JudgeForm({
 
   return (
     <>
-      <Textarea
-        label="Criteria"
-        labelPlacement="outside"
-        minRows={4}
-        value={criteria}
-        onValueChange={setCriteria}
-        description={refsHint(refs)}
-      />
+      <div className="field">
+        <span className="field-label">Criteria</span>
+        <TemplateField
+          multiline
+          rows={4}
+          ariaLabel="Criteria"
+          value={criteria}
+          onChange={setCriteria}
+          selfId={selfId}
+          refs={templateRefs}
+          fieldPath="criteria"
+        />
+        <RefChips refs={refs} />
+      </div>
 
       <div className="field">
         <span className="field-label">Candidates</span>
@@ -1288,65 +1584,398 @@ function JudgeForm({
               key={i}
               index={i}
               value={c}
+              template={{ selfId, refs: templateRefs }}
               onCommit={(next) => updateCandidate(i, next)}
               onRemove={() => removeCandidate(i)}
             />
           ))}
-          <Button
+          <button
             type="button"
-            size="sm"
-            variant="flat"
-            onPress={addCandidate}
+            className="btn btn-ghost"
+            onClick={addCandidate}
             style={{ alignSelf: 'flex-start' }}
           >
             + add candidate
-          </Button>
+          </button>
         </div>
       </div>
 
-      <Checkbox
-        isSelected={overridePrompt}
-        onValueChange={(checked) => {
-          setOverridePrompt(checked);
-          if (!checked) {
-            // Clear both the local buffer and the stored override so the
-            // engine falls back to the provider default.
-            setJudgePrompt('');
-            onPatch({ ...config, judgePrompt: undefined });
-          }
-        }}
-      >
-        Override judge prompt
-      </Checkbox>
+      <label className="field-checkbox">
+        <input
+          type="checkbox"
+          checked={overridePrompt}
+          onChange={(e) => {
+            const checked = e.target.checked;
+            setOverridePrompt(checked);
+            if (!checked) {
+              // Clear both the local buffer and the stored override so the
+              // engine falls back to the provider default.
+              setJudgePrompt('');
+              onPatch({ ...config, judgePrompt: undefined });
+            }
+          }}
+        />
+        <span>Override judge prompt</span>
+      </label>
 
       {overridePrompt && (
-        <Textarea
-          label="Judge prompt"
-          labelPlacement="outside"
-          minRows={4}
-          value={judgePrompt}
-          onValueChange={setJudgePrompt}
-        />
+        <div className="field">
+          <span className="field-label">Judge prompt</span>
+          <TemplateField
+            multiline
+            rows={4}
+            ariaLabel="Judge prompt"
+            value={judgePrompt}
+            onChange={setJudgePrompt}
+            selfId={selfId}
+            refs={templateRefs}
+            fieldPath="judgePrompt"
+          />
+        </div>
       )}
 
-      <Input
-        label="Model"
-        labelPlacement="outside"
+      <div className="field">
+        <span className="field-label">Model</span>
+        <input
+          aria-label="Model"
+          type="text"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+        />
+        <span className="field-hint">blank = provider default</span>
+      </div>
+
+      <div className="field">
+        <span className="field-label">Provider</span>
+        <input
+          aria-label="Provider"
+          type="text"
+          value={providerId}
+          placeholder="claude"
+          onChange={(e) => setProviderId(e.target.value)}
+        />
+      </div>
+    </>
+  );
+}
+
+/* ─── script form ──────────────────────────────────────────── */
+
+/** Per-output-name row. Local debounced buffer so cell edits don't slam
+ * the store on every keystroke. */
+function OutputNameRow({
+  index,
+  value,
+  onCommit,
+  onRemove,
+}: {
+  index: number;
+  value: string;
+  onCommit: (next: string) => void;
+  onRemove: () => void;
+}) {
+  const [v, setV] = useDebouncedString(value, onCommit);
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr auto',
+        gap: 8,
+        alignItems: 'center',
+      }}
+    >
+      <input
+        aria-label={`output name ${index}`}
         type="text"
-        value={model}
-        onValueChange={setModel}
-        description="blank = provider default"
+        value={v}
+        placeholder="output name"
+        onChange={(e) => setV(e.target.value)}
+      />
+      <button
+        type="button"
+        className="btn btn-ghost"
+        onClick={onRemove}
+        aria-label={`remove output ${index}`}
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+function ScriptForm({
+  config,
+  refs,
+  templateRefs,
+  selfId,
+  onPatch,
+}: {
+  config: ScriptConfig;
+  refs: string[];
+  templateRefs: readonly TemplateRef[];
+  selfId: string;
+  onPatch: (next: ScriptConfig) => void;
+}) {
+  const language: ScriptLanguage = config.language ?? 'ts';
+  const [code, setCode] = useDebouncedString(config.code ?? '', (next) =>
+    onPatch({ ...config, code: next }),
+  );
+  const [cwd, setCwd] = useDebouncedString(config.cwd ?? '', (next) =>
+    onPatch({ ...config, cwd: next || undefined }),
+  );
+
+  // Inputs are a name → templated-value Record; UI mirrors subworkflow.inputs.
+  // Local KvRow state carries stable rowIds so cell edits don't re-key the
+  // entry on every keystroke. Re-sync from upstream when the upstream
+  // reference changes (node switch / undo).
+  const [inputRows, setInputRows] = useState<KvRowData[]>(() =>
+    recordToRows(config.inputs),
+  );
+  const lastInputs = useRef(config.inputs);
+  useEffect(() => {
+    if (config.inputs !== lastInputs.current) {
+      lastInputs.current = config.inputs;
+      setInputRows(recordToRows(config.inputs));
+    }
+  }, [config.inputs]);
+  const commitInputs = (rows: KvRowData[]) => {
+    setInputRows(rows);
+    const rec = rowsToRecord(rows);
+    lastInputs.current = rec;
+    onPatch({ ...config, inputs: rec });
+  };
+
+  // Outputs are an ordered list of names. The user implements `run(...)`
+  // returning an object; each declared name is pulled into scope.
+  const outputs = Array.isArray(config.outputs) ? config.outputs : [];
+  const updateOutput = (idx: number, next: string) => {
+    const arr = outputs.slice();
+    arr[idx] = next;
+    onPatch({ ...config, outputs: arr });
+  };
+  const removeOutput = (idx: number) => {
+    const arr = outputs.slice();
+    arr.splice(idx, 1);
+    onPatch({ ...config, outputs: arr });
+  };
+  const addOutput = () => {
+    onPatch({ ...config, outputs: [...outputs, ''] });
+  };
+
+  const timeoutMsRaw = config.timeoutMs ?? 60_000;
+  const [timeoutUnit, setTimeoutUnit] = useState<TimeoutUnit>(() =>
+    pickInitialTimeoutUnit(timeoutMsRaw),
+  );
+  const timeoutDisplay = Number(
+    (timeoutMsRaw / TIMEOUT_UNIT_MS[timeoutUnit]).toFixed(2),
+  );
+  const onTimeoutChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    if (raw === '') return;
+    const value = Number(raw);
+    if (Number.isFinite(value) && value > 0) {
+      const ms = Math.max(1000, Math.round(value * TIMEOUT_UNIT_MS[timeoutUnit]));
+      onPatch({ ...config, timeoutMs: ms });
+    }
+  };
+
+  // Show the user the function signature their `run(...)` should match,
+  // derived from the input names. Updates as they rename inputs.
+  const argList = Object.keys(config.inputs ?? {}).join(', ') || '/* no inputs */';
+  const sigHint =
+    language === 'ts'
+      ? `function run(${argList}) { return { ${(outputs[0] ?? 'output1')}: "…" } }`
+      : `def run(${argList}):\n    return { "${(outputs[0] ?? 'output1')}": "…" }`;
+
+  return (
+    <>
+      <Segmented<ScriptLanguage>
+        label="Language"
+        value={language}
+        options={[
+          { value: 'ts', label: 'TypeScript (Bun)' },
+          { value: 'py', label: 'Python (python3)' },
+        ]}
+        onChange={(next) => onPatch({ ...config, language: next })}
       />
 
-      <Input
-        label="Provider"
-        labelPlacement="outside"
-        type="text"
-        value={providerId}
-        placeholder="claude"
-        onValueChange={setProviderId}
-      />
+      <div className="field">
+        <span className="field-label">Inputs</span>
+        <KvRowsEditor
+          rows={inputRows}
+          onChange={commitInputs}
+          nameLabel="arg name"
+          valueLabel="value template"
+          valuePlaceholder="{{claude-1.stdout}}"
+          addLabel="add input"
+          template={{
+            selfId,
+            refs: templateRefs,
+            fieldPath: (name) => `inputs.${name || '?'}`,
+          }}
+        />
+        <RefChips refs={refs} />
+      </div>
+
+      <div className="field">
+        <span className="field-label">Outputs</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {outputs.map((name, i) => (
+            <OutputNameRow
+              key={i}
+              index={i}
+              value={name}
+              onCommit={(next) => updateOutput(i, next)}
+              onRemove={() => removeOutput(i)}
+            />
+          ))}
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={addOutput}
+            style={{ alignSelf: 'flex-start' }}
+          >
+            + add output
+          </button>
+        </div>
+        <span className="field-hint">
+          The function returns an object; each declared name is copied into
+          this node&apos;s scope under the same key.
+        </span>
+      </div>
+
+      <div className="field">
+        <span className="field-label">Code</span>
+        <textarea
+          aria-label="Code"
+          rows={12}
+          spellCheck={false}
+          style={{ fontFamily: 'var(--mono)', fontSize: 12 }}
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+        />
+        <span
+          className="field-hint"
+          style={{ fontFamily: 'var(--mono)', whiteSpace: 'pre-wrap' }}
+        >
+          {sigHint}
+        </span>
+        <span className="field-hint">
+          Not templated. Define <code>run(…)</code> taking the inputs as
+          positional args; return an object with the declared output keys.
+        </span>
+      </div>
+
+      <CwdField value={cwd} onChange={setCwd} />
+
+      <div className="field">
+        <span className="field-label">Timeout</span>
+        <div className="field-row">
+          <input
+            aria-label="Timeout"
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="any"
+            value={timeoutDisplay}
+            onChange={onTimeoutChange}
+            className="no-spin"
+          />
+          <div className="seg-tight" role="group" aria-label="Timeout unit">
+            {TIMEOUT_UNITS.map((u) => (
+              <button
+                key={u}
+                type="button"
+                data-active={timeoutUnit === u}
+                aria-pressed={timeoutUnit === u}
+                onClick={() => setTimeoutUnit(u)}
+              >
+                {u}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
     </>
+  );
+}
+
+/* ─── globals panel ────────────────────────────────────────── */
+
+/** Shown in the right-hand pane when no node is selected. Lets the user
+ * define `{{globals.NAME}}` variables that any node in the workflow can
+ * reference. Values are literal strings — NOT templated, since globals
+ * have no scope to template against. */
+function GlobalsPanel({ workflow }: { workflow: Workflow | null }) {
+  const setGlobals = useWorkflowStore((s) => s.setGlobals);
+  const [rows, setRows] = useState<KvRowData[]>(() =>
+    recordToRows(workflow?.globals),
+  );
+  const lastGlobals = useRef(workflow?.globals);
+  useEffect(() => {
+    if (workflow?.globals !== lastGlobals.current) {
+      lastGlobals.current = workflow?.globals;
+      setRows(recordToRows(workflow?.globals));
+    }
+  }, [workflow?.globals]);
+
+  const commit = (next: KvRowData[]) => {
+    setRows(next);
+    const rec = rowsToRecord(next);
+    lastGlobals.current = rec;
+    setGlobals(rec);
+  };
+
+  if (!workflow) {
+    return (
+      <aside aria-label="config panel" className="config-stub">
+        <p className="config-empty">
+          <span className="config-empty-prompt">›</span> open a workflow to
+          configure<span className="crt-cursor" aria-hidden="true" />
+        </p>
+      </aside>
+    );
+  }
+
+  return (
+    <aside aria-label="config panel" className="config-stub">
+      <header
+        className="serif"
+        style={{
+          fontFamily: 'var(--mono)',
+          fontSize: 11,
+          letterSpacing: '0.22em',
+          textTransform: 'uppercase',
+          color: 'var(--fg-soft)',
+          marginBottom: 18,
+        }}
+      >
+        workflow · globals
+      </header>
+      <form className="task-form" onSubmit={(e) => e.preventDefault()}>
+        <p
+          className="field-hint"
+          style={{ marginBottom: 12, color: 'var(--fg-dim)' }}
+        >
+          Workflow-level variables available to every node as{' '}
+          <code style={{ fontFamily: 'var(--mono)' }}>
+            {'{{globals.NAME}}'}
+          </code>
+          . Values are literal strings — they aren&apos;t templated.
+        </p>
+        <KvRowsEditor
+          rows={rows}
+          onChange={commit}
+          nameLabel="name"
+          valueLabel="value"
+          valuePlaceholder="literal value"
+          addLabel="add global"
+        />
+        <p className="field-hint" style={{ marginTop: 16 }}>
+          Select a node on the canvas to edit its config.
+        </p>
+      </form>
+    </aside>
   );
 }
 
@@ -1392,15 +2021,16 @@ export default function ConfigPanel() {
     [currentWorkflow, node],
   );
 
+  // Structured ref list for the TemplateField autocomplete dropdown.
+  // `refs` (string[]) remains for the lightweight RefChips hint line —
+  // both stay in sync because both derive from the workflow + selfId.
+  const templateRefs: TemplateRef[] = useMemo(
+    () => (node ? availableVariables(currentWorkflow, node.id) : []),
+    [currentWorkflow, node],
+  );
+
   if (!node) {
-    return (
-      <aside aria-label="config panel" className="config-stub">
-        <p className="config-empty">
-          <span className="config-empty-prompt">›</span> select a node to
-          configure<span className="crt-cursor" aria-hidden="true" />
-        </p>
-      </aside>
-    );
+    return <GlobalsPanel workflow={currentWorkflow} />;
   }
 
   const patchConfig = (nextConfig: WorkflowNode['config']) => {
@@ -1448,6 +2078,8 @@ export default function ConfigPanel() {
           <AgentForm
             config={node.config as AgentConfig}
             refs={refs}
+            templateRefs={templateRefs}
+            selfId={node.id}
             providerInfo={
               providers.find(
                 (p) => p.id === ((node.config as AgentConfig).providerId ?? 'claude'),
@@ -1460,6 +2092,8 @@ export default function ConfigPanel() {
           <ConditionForm
             config={node.config as ConditionConfig}
             refs={refs}
+            templateRefs={templateRefs}
+            selfId={node.id}
             onPatch={patchConfig}
           />
         )}
@@ -1473,6 +2107,8 @@ export default function ConfigPanel() {
           <BranchForm
             config={node.config as BranchConfig}
             refs={refs}
+            templateRefs={templateRefs}
+            selfId={node.id}
             onPatch={patchConfig}
           />
         )}
@@ -1485,6 +2121,8 @@ export default function ConfigPanel() {
         {node.type === 'subworkflow' && (
           <SubworkflowForm
             config={node.config as SubworkflowConfig}
+            templateRefs={templateRefs}
+            selfId={node.id}
             onPatch={patchConfig}
           />
         )}
@@ -1492,6 +2130,23 @@ export default function ConfigPanel() {
           <JudgeForm
             config={node.config as JudgeNodeConfig}
             refs={refs}
+            templateRefs={templateRefs}
+            selfId={node.id}
+            onPatch={patchConfig}
+          />
+        )}
+        {node.type === 'sidenote' && (
+          <SidenoteForm
+            config={node.config as SidenoteConfig}
+            onPatch={patchConfig}
+          />
+        )}
+        {node.type === 'script' && (
+          <ScriptForm
+            config={node.config as ScriptConfig}
+            refs={refs}
+            templateRefs={templateRefs}
+            selfId={node.id}
             onPatch={patchConfig}
           />
         )}

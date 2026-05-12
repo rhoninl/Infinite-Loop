@@ -11,6 +11,8 @@
     "stream-json",
     "--include-partial-messages",
     "--verbose",
+    "--agent",
+    "{agent}",
     "{prompt}"
   ],
   "outputFormat": "claude-stream-json",

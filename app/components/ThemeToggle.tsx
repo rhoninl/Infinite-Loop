@@ -1,51 +1,54 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useTheme } from 'next-themes';
-import { Button } from '@heroui/react';
+import { useCallback, useEffect, useState } from 'react';
 
-/**
- * Top-bar theme toggle.
- *
- * Theme state is owned by `next-themes` (configured with
- * `attribute="data-theme"` and `storageKey="infloop:theme"` in
- * <Providers>). We render a HeroUI Button so the control inherits the
- * shared focus/keyboard behavior and visual language used by the rest of
- * the migrated UI.
- *
- * The `mounted` guard is the standard next-themes idiom: on the server
- * `resolvedTheme` is `undefined`, so we render a placeholder until after
- * hydration to keep server and first client paint identical and avoid
- * hydration mismatches on the glyph/label.
- */
+type Theme = 'dark' | 'light';
+
+const STORAGE_KEY = 'infloop:theme';
+
+function readCurrentTheme(): Theme {
+  if (typeof document === 'undefined') return 'dark';
+  const t = document.documentElement.dataset.theme;
+  return t === 'light' ? 'light' : 'dark';
+}
+
 export default function ThemeToggle() {
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
+  // Start in 'dark' on the server render so the markup is stable; the
+  // pre-paint script in layout.tsx has already set the actual dataset.theme,
+  // and we sync from it after mount.
+  const [theme, setTheme] = useState<Theme>('dark');
 
   useEffect(() => {
-    setMounted(true);
+    setTheme(readCurrentTheme());
   }, []);
 
-  const isLight = mounted && resolvedTheme === 'light';
-  const next = isLight ? 'dark' : 'light';
-  const label = `switch to ${next} theme`;
+  const toggle = useCallback(() => {
+    const next: Theme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    document.documentElement.dataset.theme = next;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, next);
+    } catch {
+      // localStorage may be unavailable; toggle is still effective for the session.
+    }
+  }, [theme]);
 
-  // Legacy `.theme-toggle*` classes still drive the dashed-border +
-  // half-disc visual; a later cleanup unit will retire them in favor of
-  // HeroUI tokens.
+  // Glyph is drawn in CSS (half-disc) — see .theme-toggle-glyph in globals.css.
+  // Which half is filled is controlled by `aria-pressed` so the JSX stays
+  // declarative and the glyph alignment is independent of font metrics.
+  const label = theme === 'dark' ? 'switch to light theme' : 'switch to dark theme';
+
   return (
-    <Button
-      size="sm"
-      variant="light"
-      onPress={() => setTheme(next)}
-      aria-label={label}
-      aria-pressed={isLight}
-      title={label}
+    <button
+      type="button"
       className="theme-toggle"
-      disableRipple
+      onClick={toggle}
+      aria-label={label}
+      aria-pressed={theme === 'light'}
+      title={label}
     >
       <span className="theme-toggle-glyph" aria-hidden="true" />
-      <span className="theme-toggle-label">{isLight ? 'light' : 'dark'}</span>
-    </Button>
+      <span className="theme-toggle-label">{theme}</span>
+    </button>
   );
 }

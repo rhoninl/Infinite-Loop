@@ -1,28 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Chip, Spinner } from '@heroui/react';
 import { useWorkflowStore } from '../../lib/client/workflow-store-client';
 import { GroupedEventLog, formatPayload } from './RunLog';
 import { eventNodeId } from '../../lib/client/group-events';
 import type {
   NodeStartedEvent,
-  RunStatus,
   Workflow,
   WorkflowEvent,
   WorkflowNode,
 } from '../../lib/shared/workflow';
-
-// Map run status onto HeroUI semantic colors. `running` is warning (warm) so
-// it reads as "in flight" rather than success or failure; cancelled stays
-// neutral because the user chose to stop, not because anything went wrong.
-const STATUS_COLOR: Record<RunStatus, 'warning' | 'success' | 'danger' | 'default'> = {
-  idle: 'default',
-  running: 'warning',
-  succeeded: 'success',
-  failed: 'danger',
-  cancelled: 'default',
-};
 
 const SUBWORKFLOW_PREF_KEY = 'infloop:runview:expandSubworkflows';
 
@@ -34,17 +21,6 @@ interface BranchState {
   /** All stdout lines emitted by this branch, in arrival order. */
   stdoutLines: string[];
 }
-
-const BRANCH_STATUS_CHIP: Record<
-  BranchState['status'],
-  'default' | 'warning' | 'success' | 'danger'
-> = {
-  idle: 'default',
-  live: 'warning',
-  succeeded: 'success',
-  failed: 'danger',
-  cancelled: 'default',
-};
 
 /**
  * Walk events to find each `node_started` not yet matched by a `node_finished`
@@ -375,25 +351,18 @@ export default function RunView() {
   return (
     <aside aria-label="run view" className="run-view">
       <header className="run-view-head">
-        <Chip
-          aria-label="run status"
-          variant="dot"
-          size="sm"
-          color={STATUS_COLOR[runStatus]}
-        >
-          {runStatus}
-        </Chip>
-        <Chip
-          as="button"
+        <span className="pill" aria-label="run status" data-status={runStatus}>
+          <span className="dot" /> {runStatus}
+        </span>
+        <button
+          type="button"
+          className="btn btn-toggle"
           aria-label="toggle subworkflow expansion"
           aria-pressed={expandSubworkflows}
-          variant={expandSubworkflows ? 'solid' : 'bordered'}
-          size="sm"
-          color={expandSubworkflows ? 'warning' : 'default'}
           onClick={() => setExpandSubworkflows((v) => !v)}
         >
           Subworkflow: {expandSubworkflows ? 'show all' : 'collapsed'}
-        </Chip>
+        </button>
         <span className="run-view-ws" aria-label="event stream status">
           SSE: {connectionStatus}
         </span>
@@ -408,11 +377,6 @@ export default function RunView() {
             return (
               <div key={ev.nodeId} className="run-view-current-row-group">
                 <div className="run-view-current-row">
-                  <Spinner
-                    aria-label={`running ${ev.nodeId}`}
-                    size="sm"
-                    color="warning"
-                  />
                   <span className="tag" data-kind="live">
                     <span className="dot" /> {ev.nodeType}
                   </span>
@@ -477,14 +441,13 @@ function BranchRow({ branch, parentId }: { branch: BranchState; parentId: string
       >
         <span className="run-view-branch-id">{branch.nodeId}</span>
         <span className="run-view-branch-kind">{branch.nodeType}</span>
-        <Chip
-          size="sm"
-          variant="dot"
-          color={BRANCH_STATUS_CHIP[branch.status]}
-          className="ml-auto"
+        <span
+          className="pill"
+          data-status={branch.status}
+          aria-label={`status ${branch.status}`}
         >
-          {branch.status}
-        </Chip>
+          <span className="dot" /> {branch.status}
+        </span>
       </button>
       {!expanded && branch.status === 'live' && preview ? (
         <pre
