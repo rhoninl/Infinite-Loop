@@ -142,6 +142,7 @@ export class WorkflowEngine {
     }
     this.snapshot = {
       status: 'running',
+      runId: this.currentRunId,
       workflowId: workflow.id,
       iterationByLoopId: {},
       scope: seedScope,

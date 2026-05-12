@@ -173,13 +173,50 @@ describe('POST /api/run', () => {
     expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
+
+  it('includes runId in the 202 response when engine assigns one', async () => {
+    getWorkflowMock.mockResolvedValue(sampleWorkflow);
+    // First call: guard check (idle — allow start); second call: post-start state with runId.
+    getStateMock.mockReturnValueOnce(idleState).mockReturnValueOnce({
+      ...runningState,
+      runId: 'rid-abc',
+    });
+
+    const res = await POST(jsonRequest({ workflowId: 'wf-1' }));
+
+    expect(res.status).toBe(202);
+    const body = (await res.json()) as { runId?: string; state: RunSnapshot };
+    expect(body.runId).toBe('rid-abc');
+    expect(body.state.runId).toBe('rid-abc');
+  });
+
+  it('returns 409 with the in-flight runId and workflowId when busy', async () => {
+    getWorkflowMock.mockResolvedValue(sampleWorkflow);
+    getStateMock.mockReturnValue({
+      ...runningState,
+      runId: 'rid-busy',
+      workflowId: 'wf-other',
+    });
+
+    const res = await POST(jsonRequest({ workflowId: 'wf-1' }));
+
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as {
+      error: string;
+      runId?: string;
+      workflowId?: string;
+    };
+    expect(body.error).toMatch(/already active|busy/i);
+    expect(body.runId).toBe('rid-busy');
+    expect(body.workflowId).toBe('wf-other');
+  });
 });
 
 describe('GET /api/run', () => {
   it('returns 200 with the engine state', async () => {
     getStateMock.mockReturnValue(idleState);
 
-    const res = await GET();
+    const res = await GET(new Request('http://localhost/api/run'));
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as { state: RunSnapshot };
@@ -191,7 +228,7 @@ describe('POST /api/run/stop', () => {
   it('calls engine.stop and returns 200 with state', async () => {
     getStateMock.mockReturnValue(idleState);
 
-    const res = await STOP();
+    const res = await STOP(new Request('http://localhost/api/run/stop', { method: 'POST' }));
 
     expect(res.status).toBe(200);
     expect(stopMock).toHaveBeenCalledTimes(1);
@@ -268,5 +305,37 @@ describe('POST /api/run — input validation', () => {
 
     expect(res.status).toBe(202);
     expect(startMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('POST /api/run with INFLOOP_API_TOKEN', () => {
+  const orig = process.env.INFLOOP_API_TOKEN;
+  afterAll(() => {
+    if (orig === undefined) delete process.env.INFLOOP_API_TOKEN;
+    else process.env.INFLOOP_API_TOKEN = orig;
+  });
+
+  it('returns 401 without the bearer header', async () => {
+    process.env.INFLOOP_API_TOKEN = 'shh';
+    const res = await POST(jsonRequest({ workflowId: 'wf-1' }));
+    expect(res.status).toBe(401);
+    expect(startMock).not.toHaveBeenCalled();
+  });
+
+  it('proceeds with the correct bearer header', async () => {
+    process.env.INFLOOP_API_TOKEN = 'shh';
+    getWorkflowMock.mockResolvedValue(sampleWorkflow);
+    // First call: conflict guard (idle — allow start); second call: post-start state.
+    getStateMock
+      .mockReturnValueOnce(idleState)
+      .mockReturnValueOnce({ ...runningState, runId: 'rid' });
+
+    const req = new Request('http://localhost/api/run', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer shh' },
+      body: JSON.stringify({ workflowId: 'wf-1' }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(202);
   });
 });

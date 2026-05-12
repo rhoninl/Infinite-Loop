@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/server/auth';
 import { workflowEngine } from '@/lib/server/workflow-engine';
 import { getWorkflow } from '@/lib/server/workflow-store';
 import {
@@ -7,6 +8,9 @@ import {
 } from '@/lib/shared/resolve-run-inputs';
 
 export async function POST(req: Request) {
+  const unauth = requireAuth(req);
+  if (unauth) return unauth;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -57,9 +61,14 @@ export async function POST(req: Request) {
     throw err;
   }
 
-  if (workflowEngine.getState().status === 'running') {
+  const currentState = workflowEngine.getState();
+  if (currentState.status === 'running') {
     return NextResponse.json(
-      { error: 'a run is already active' },
+      {
+        error: 'a run is already active',
+        runId: currentState.runId,
+        workflowId: currentState.workflowId,
+      },
       { status: 409 },
     );
   }
@@ -68,12 +77,18 @@ export async function POST(req: Request) {
     console.error('[api/run] engine.start failed:', err);
   });
 
+  const stateAfter = workflowEngine.getState();
   return NextResponse.json(
-    { state: workflowEngine.getState() },
+    {
+      runId: stateAfter.runId,
+      state: stateAfter,
+    },
     { status: 202 },
   );
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const unauth = requireAuth(req);
+  if (unauth) return unauth;
   return NextResponse.json({ state: workflowEngine.getState() }, { status: 200 });
 }
