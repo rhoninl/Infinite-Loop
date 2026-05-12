@@ -216,7 +216,7 @@ describe('GET /api/run', () => {
   it('returns 200 with the engine state', async () => {
     getStateMock.mockReturnValue(idleState);
 
-    const res = await GET();
+    const res = await GET(new Request('http://localhost/api/run'));
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as { state: RunSnapshot };
@@ -228,7 +228,7 @@ describe('POST /api/run/stop', () => {
   it('calls engine.stop and returns 200 with state', async () => {
     getStateMock.mockReturnValue(idleState);
 
-    const res = await STOP();
+    const res = await STOP(new Request('http://localhost/api/run/stop', { method: 'POST' }));
 
     expect(res.status).toBe(200);
     expect(stopMock).toHaveBeenCalledTimes(1);
