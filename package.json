@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
     "@xyflow/react": "^12.10.2",
     "next": "15.5.15",
     "react": "19.0.0",

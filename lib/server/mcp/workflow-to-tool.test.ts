@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import type { Workflow } from '../../lib/shared/workflow';
+import type { Workflow } from '../../shared/workflow';
 import { workflowToTool, sanitizeToolName, deconflictNames } from './workflow-to-tool';
 
 function wf(partial: Partial<Workflow>): Workflow {

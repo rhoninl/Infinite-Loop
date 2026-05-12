@@ -1,4 +1,4 @@
-import type { Workflow, WorkflowInputDecl } from '../../lib/shared/workflow';
+import type { Workflow, WorkflowInputDecl } from '../../shared/workflow';
 
 export interface McpToolSpec {
   name: string;
