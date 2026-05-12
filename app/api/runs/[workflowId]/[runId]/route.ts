@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/server/auth';
 import { getRun } from '@/lib/server/run-store';
 import { isNotFoundError } from '@/app/api/workflows/validate';
 import { workflowEngine } from '@/lib/server/workflow-engine';
 
 export async function GET(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ workflowId: string; runId: string }> },
 ) {
+  const unauth = requireAuth(req);
+  if (unauth) return unauth;
+
   const { workflowId, runId } = await ctx.params;
 
   try {

@@ -307,3 +307,35 @@ describe('POST /api/run — input validation', () => {
     expect(startMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('POST /api/run with INFLOOP_API_TOKEN', () => {
+  const orig = process.env.INFLOOP_API_TOKEN;
+  afterAll(() => {
+    if (orig === undefined) delete process.env.INFLOOP_API_TOKEN;
+    else process.env.INFLOOP_API_TOKEN = orig;
+  });
+
+  it('returns 401 without the bearer header', async () => {
+    process.env.INFLOOP_API_TOKEN = 'shh';
+    const res = await POST(jsonRequest({ workflowId: 'wf-1' }));
+    expect(res.status).toBe(401);
+    expect(startMock).not.toHaveBeenCalled();
+  });
+
+  it('proceeds with the correct bearer header', async () => {
+    process.env.INFLOOP_API_TOKEN = 'shh';
+    getWorkflowMock.mockResolvedValue(sampleWorkflow);
+    // First call: conflict guard (idle — allow start); second call: post-start state.
+    getStateMock
+      .mockReturnValueOnce(idleState)
+      .mockReturnValueOnce({ ...runningState, runId: 'rid' });
+
+    const req = new Request('http://localhost/api/run', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer shh' },
+      body: JSON.stringify({ workflowId: 'wf-1' }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(202);
+  });
+});
