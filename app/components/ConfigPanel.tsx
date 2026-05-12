@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { useWorkflowStore } from '@/lib/client/workflow-store-client';
 import FolderPicker from './FolderPicker';
+import SelectMenu from './SelectMenu';
 import TemplateField from './TemplateField';
 import {
   availableVariables,
@@ -276,23 +277,22 @@ function StartForm({ workflow }: { workflow: Workflow | null }) {
                   onChange={(e) => patchRow(idx, { name: e.target.value })}
                 />
               </label>
-              <label className="bni-type">
-                type
-                <select
+              <div className="bni-type">
+                <span className="bni-type-label">type</span>
+                <SelectMenu<WorkflowInputDecl['type']>
                   value={row.type}
-                  onChange={(e) =>
-                    patchRow(idx, {
-                      type: e.target.value as WorkflowInputDecl['type'],
-                      default: undefined,
-                    })
+                  ariaLabel={`type for input ${row.name || idx}`}
+                  options={[
+                    { value: 'string', label: 'string' },
+                    { value: 'text', label: 'text' },
+                    { value: 'number', label: 'number' },
+                    { value: 'boolean', label: 'boolean' },
+                  ]}
+                  onChange={(next) =>
+                    patchRow(idx, { type: next, default: undefined })
                   }
-                >
-                  <option value="string">string</option>
-                  <option value="text">text</option>
-                  <option value="number">number</option>
-                  <option value="boolean">boolean</option>
-                </select>
-              </label>
+                />
+              </div>
               <button
                 type="button"
                 className="btn btn-ghost bni-remove"
@@ -391,22 +391,24 @@ function DefaultEditor({
         />
       );
     }
-    case 'boolean':
+    case 'boolean': {
+      const v: 'unset' | 'true' | 'false' =
+        row.default === true ? 'true' : row.default === false ? 'false' : 'unset';
       return (
-        <select
-          value={
-            row.default === true ? 'true' : row.default === false ? 'false' : ''
+        <SelectMenu<'unset' | 'true' | 'false'>
+          value={v}
+          ariaLabel="default value"
+          options={[
+            { value: 'unset', label: '(unset)' },
+            { value: 'true', label: 'true' },
+            { value: 'false', label: 'false' },
+          ]}
+          onChange={(next) =>
+            onChange(next === 'true' ? true : next === 'false' ? false : undefined)
           }
-          onChange={(e) => {
-            const v = e.target.value;
-            onChange(v === 'true' ? true : v === 'false' ? false : undefined);
-          }}
-        >
-          <option value="">(unset)</option>
-          <option value="true">true</option>
-          <option value="false">false</option>
-        </select>
+        />
       );
+    }
   }
 }
 

@@ -2827,8 +2827,7 @@ input[type='number'].no-spin {
 }
 .bni-row input[type='text'],
 .bni-row input[type='number'],
-.bni-row textarea,
-.bni-row select {
+.bni-row textarea {
   font-family: var(--mono);
   font-size: 14px;
   color: var(--fg);
@@ -2840,16 +2839,9 @@ input[type='number'].no-spin {
   letter-spacing: normal;
   transition: border-color 120ms ease, background 120ms ease;
 }
-.bni-row select {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  padding-right: 28px;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%23867866' stroke-width='1.4' fill='none' stroke-linecap='square'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  background-size: 10px 6px;
-  cursor: pointer;
+.bni-type-label {
+  display: block;
+  margin-bottom: 4px;
 }
 .bni-row textarea {
   resize: vertical;
@@ -3005,4 +2997,102 @@ input[type='number'].no-spin {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 4px;
+}
+
+/* ─── SelectMenu (custom <select> replacement) ──────────────────
+ * Trigger button + listbox panel. Matches the project's mono-on-
+ * parchment palette and uses the same accent-glow treatment as
+ * .wf-menu-panel for the open state. */
+.select-menu {
+  position: relative;
+  display: inline-block;
+  font-family: var(--mono);
+}
+.select-menu-trigger {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 100%;
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--fg);
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.select-menu-trigger:hover {
+  border-color: var(--accent-live);
+}
+.select-menu-trigger[aria-expanded='true'] {
+  border-color: var(--accent-live);
+  background: var(--bg-input-focus);
+  box-shadow: 0 0 0 1px var(--accent-live-glow);
+}
+.select-menu-trigger-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.select-menu-trigger-caret {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--fg-dim);
+  transition: transform 120ms ease, color 120ms ease;
+}
+.select-menu-trigger[aria-expanded='true'] .select-menu-trigger-caret {
+  transform: rotate(180deg);
+  color: var(--accent-live);
+}
+.select-menu-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  min-width: 100%;
+  z-index: 30;
+  background: var(--bg-deep);
+  border: 1px solid var(--accent-live);
+  box-shadow: 0 0 12px var(--accent-live-glow);
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.select-menu-item {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--fg-soft);
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+  transition: background 100ms ease, color 100ms ease;
+}
+.select-menu-item:last-child {
+  border-bottom: 0;
+}
+.select-menu-item:hover,
+.select-menu-item:focus-visible {
+  background: var(--hover-tint);
+  color: var(--accent-live);
+  outline: none;
+}
+.select-menu-item[data-active='true'] {
+  background: rgba(255, 158, 100, 0.08);
+  color: var(--accent-live);
 }
