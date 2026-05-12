@@ -589,3 +589,30 @@ describe('undo / redo', () => {
     expect(useWorkflowStore.getState().selectedNodeId).toBeNull();
   });
 });
+
+describe('setWorkflowInputs', () => {
+  it('replaces workflow.inputs and bumps updatedAt', () => {
+    const wf = makeWorkflow(); // updatedAt: 0, no inputs
+    useWorkflowStore.getState().loadWorkflow(wf);
+
+    const decls = [{ name: 'topic', type: 'string' as const, default: 'cats' }];
+    useWorkflowStore.getState().setWorkflowInputs(decls);
+
+    const next = useWorkflowStore.getState().currentWorkflow!;
+    expect(next.inputs).toEqual(decls);
+    expect(next.updatedAt).toBeGreaterThanOrEqual(0);
+  });
+
+  it('clears inputs when passed an empty array', () => {
+    const wf: Workflow = {
+      ...makeWorkflow(),
+      inputs: [{ name: 'topic', type: 'string' }],
+    };
+    useWorkflowStore.getState().loadWorkflow(wf);
+
+    useWorkflowStore.getState().setWorkflowInputs([]);
+
+    const next = useWorkflowStore.getState().currentWorkflow!;
+    expect(next.inputs).toEqual([]);
+  });
+});
