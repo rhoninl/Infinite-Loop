@@ -487,7 +487,7 @@ function CanvasInner() {
   // enough for xyflow to know which edge Backspace targets.
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
 
-  const { screenToFlowPosition, fitView } = useReactFlow();
+  const { screenToFlowPosition, fitView, getNode } = useReactFlow();
 
   // Sync xyflow's color mode with the app theme (set on
   // `document.documentElement.dataset.theme` by the pre-paint script in
@@ -528,6 +528,24 @@ function CanvasInner() {
     });
     return () => cancelAnimationFrame(raf);
   }, [currentWorkflow?.id, currentWorkflow?.nodes?.length, fitView]);
+
+  // Pan-to-node requests from outside the canvas (e.g. clicking a node card
+  // in the recorded run history). The `seq` field on `panRequest` advances on
+  // every call so the effect re-fires for repeat clicks on the same node.
+  // Guard against a node id that isn't in the currently-loaded workflow
+  // (recorded runs can reference renamed/deleted nodes) — fitView would
+  // silently no-op, leaving the user wondering why the canvas didn't move.
+  const panRequest = useWorkflowStore((s) => s.panRequest);
+  useEffect(() => {
+    if (!panRequest) return;
+    if (!getNode(panRequest.nodeId)) return;
+    fitView({
+      nodes: [{ id: panRequest.nodeId }],
+      padding: 0.3,
+      maxZoom: 1.2,
+      duration: 250,
+    });
+  }, [panRequest, fitView, getNode]);
 
   // Memoize the nodeTypes map so xyflow doesn't warn / re-create internals.
   const nodeTypes = useMemo(() => NODE_TYPES, []);

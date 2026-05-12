@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { RunRecord, RunSummary } from '../../lib/shared/workflow';
+import { useWorkflowStore } from '../../lib/client/workflow-store-client';
 import RunHistory from './RunHistory';
 
 const SUMMARY_A: RunSummary = {
@@ -14,23 +15,28 @@ const SUMMARY_A: RunSummary = {
   eventCount: 4,
 };
 
+const LONG_PROMPT = 'a'.repeat(300);
+
 const RECORD_A: RunRecord = {
   ...SUMMARY_A,
-  scope: { 'agent-1': { ok: true } },
+  scope: {
+    inputs: { topic: 'demo' },
+    'agent-1': { ok: true, summary: 'done' },
+  },
   events: [
     { type: 'run_started', workflowId: 'wf-1', workflowName: 'Demo' },
     {
       type: 'node_started',
       nodeId: 'agent-1',
       nodeType: 'agent',
-      resolvedConfig: {},
+      resolvedConfig: { providerId: 'claude', prompt: LONG_PROMPT },
     },
     {
       type: 'node_finished',
       nodeId: 'agent-1',
       nodeType: 'agent',
       branch: 'next',
-      outputs: {},
+      outputs: { ok: true, summary: 'done' },
       durationMs: 1200,
     },
     { type: 'run_finished', status: 'succeeded', scope: {} },
@@ -47,6 +53,9 @@ const originalFetch = globalThis.fetch;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  // Selection state lives in the module-scoped Zustand store; clear so one
+  // test's selection doesn't leak filter behaviour into the next.
+  useWorkflowStore.setState({ selectedNodeId: null, panRequest: null });
 });
 
 describe('RunHistory', () => {
@@ -116,6 +125,130 @@ describe('RunHistory', () => {
     await waitFor(() =>
       expect(screen.getByLabelText('run history')).toBeInTheDocument(),
     );
+  });
+
+  it('filters cards to the selected node when it has events in this run', async () => {
+    render(<RunHistory workflowId="wf-1" />);
+    fireEvent.click(await screen.findByLabelText('run r-a'));
+    await screen.findByLabelText('event log');
+
+    // No filter yet — run_started/run_finished rows are visible.
+    const logBefore = screen.getByLabelText('event log');
+    expect(logBefore).toHaveTextContent('run_started');
+
+    act(() => {
+      useWorkflowStore.getState().selectNode('agent-1');
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText('filtered to node agent-1'),
+      ).toBeInTheDocument(),
+    );
+    const logAfter = screen.getByLabelText('event log');
+    // Header/footer rows are suppressed in the filtered view.
+    expect(logAfter).not.toHaveTextContent('run_started');
+    expect(logAfter).not.toHaveTextContent('run_finished');
+    expect(screen.getByLabelText('node card agent-1')).toBeInTheDocument();
+  });
+
+  it('clear chip removes the filter and restores the full log', async () => {
+    render(<RunHistory workflowId="wf-1" />);
+    fireEvent.click(await screen.findByLabelText('run r-a'));
+    await screen.findByLabelText('event log');
+
+    act(() => {
+      useWorkflowStore.getState().selectNode('agent-1');
+    });
+    const clearBtn = await screen.findByLabelText('clear node filter');
+    fireEvent.click(clearBtn);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('event log')).toHaveTextContent(
+        'run_started',
+      ),
+    );
+    expect(useWorkflowStore.getState().selectedNodeId).toBe(null);
+  });
+
+  it('ignores selection that has no events in the open run', async () => {
+    render(<RunHistory workflowId="wf-1" />);
+    fireEvent.click(await screen.findByLabelText('run r-a'));
+    await screen.findByLabelText('event log');
+
+    act(() => {
+      useWorkflowStore.getState().selectNode('ghost-node');
+    });
+
+    // Filter chip should NOT appear; the full log keeps rendering.
+    await waitFor(() =>
+      expect(screen.getByLabelText('event log')).toHaveTextContent(
+        'run_started',
+      ),
+    );
+    expect(screen.queryByLabelText(/^filtered to node /)).toBeNull();
+  });
+
+  it('renders a scope block that expands to show the full record.scope', async () => {
+    render(<RunHistory workflowId="wf-1" />);
+    fireEvent.click(await screen.findByLabelText('run r-a'));
+    const scopeToggle = await screen.findByLabelText('expand scope');
+    expect(scopeToggle).toHaveTextContent(/2 keys/i);
+    fireEvent.click(scopeToggle);
+
+    const scopeRegion = screen.getByLabelText('run scope');
+    expect(scopeRegion).toHaveTextContent('"inputs"');
+    expect(scopeRegion).toHaveTextContent('"agent-1"');
+    expect(scopeRegion).toHaveTextContent('"summary"');
+    expect(scopeRegion).toHaveTextContent('"done"');
+  });
+
+  it('renders an i/o block that expands to show input + output JSON', async () => {
+    render(<RunHistory workflowId="wf-1" />);
+    fireEvent.click(await screen.findByLabelText('run r-a'));
+    const card = await screen.findByLabelText('node card agent-1');
+
+    // Open the card so the body (including the i/o toggle) is reachable.
+    fireEvent.click(card.querySelector('button.event-card-head-toggle')!);
+    const ioToggle = await screen.findByLabelText('expand i/o');
+    fireEvent.click(ioToggle);
+
+    expect(screen.getByLabelText('input')).toBeInTheDocument();
+    expect(screen.getByLabelText('output')).toBeInTheDocument();
+    // Short string from outputs renders verbatim.
+    expect(screen.getByLabelText('output')).toHaveTextContent('"summary"');
+    expect(screen.getByLabelText('output')).toHaveTextContent('"done"');
+  });
+
+  it('collapses long strings behind a show-more affordance', async () => {
+    render(<RunHistory workflowId="wf-1" />);
+    fireEvent.click(await screen.findByLabelText('run r-a'));
+    const card = await screen.findByLabelText('node card agent-1');
+    fireEvent.click(card.querySelector('button.event-card-head-toggle')!);
+    fireEvent.click(await screen.findByLabelText('expand i/o'));
+
+    const inputBlock = screen.getByLabelText('input');
+    // Preview: first 200 chars of LONG_PROMPT, not the full 300.
+    expect(inputBlock.textContent).not.toContain('a'.repeat(300));
+    expect(inputBlock.textContent).toContain('a'.repeat(200));
+
+    fireEvent.click(screen.getByLabelText('show more'));
+    expect(inputBlock.textContent).toContain('a'.repeat(300));
+  });
+
+  it('clicking a node card header selects the node and requests a pan', async () => {
+    render(<RunHistory workflowId="wf-1" />);
+    fireEvent.click(await screen.findByLabelText('run r-a'));
+    const card = await screen.findByLabelText('node card agent-1');
+    // The header is rendered as a toggle button (card has body events).
+    const header = card.querySelector('button.event-card-head-toggle');
+    expect(header).not.toBeNull();
+    fireEvent.click(header!);
+
+    expect(useWorkflowStore.getState().selectedNodeId).toBe('agent-1');
+    expect(useWorkflowStore.getState().panRequest).toMatchObject({
+      nodeId: 'agent-1',
+    });
   });
 
   it('surfaces a failure from /api/runs as an inline error', async () => {

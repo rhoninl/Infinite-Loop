@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RunRecord, RunSummary } from '../../lib/shared/workflow';
-import { GroupedEventLog } from './RunLog';
+import { useWorkflowStore } from '../../lib/client/workflow-store-client';
+import { eventNodeId } from '../../lib/client/group-events';
+import { GroupedEventLog, JsonView } from './RunLog';
 
 interface Props {
   workflowId: string | undefined;
@@ -30,6 +32,19 @@ export default function RunHistory({ workflowId }: Props) {
   const [record, setRecord] = useState<RunRecord | null>(null);
   const [recordLoading, setRecordLoading] = useState(false);
   const [recordError, setRecordError] = useState<string | null>(null);
+
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
+  const selectNode = useWorkflowStore((s) => s.selectNode);
+  const requestPanToNode = useWorkflowStore((s) => s.requestPanToNode);
+
+  // Filter is only active if a node is selected AND that node has events in
+  // the currently-loaded run record. A selection from an earlier/later run
+  // shouldn't blank out an unrelated run's log.
+  const nodeHasEventsInRun = useMemo(() => {
+    if (!record || !selectedNodeId) return false;
+    return record.events.some((ev) => eventNodeId(ev) === selectedNodeId);
+  }, [record, selectedNodeId]);
+  const filterActive = !!selectedNodeId && nodeHasEventsInRun;
 
   // Track which workflow the most recent in-flight list fetch was for, so a
   // stale response (older workflow's data arriving after the user switched)
@@ -122,6 +137,21 @@ export default function RunHistory({ workflowId }: Props) {
               <span className="dot" /> {record.status}
             </span>
           ) : null}
+          {filterActive ? (
+            <span className="run-history-filter-chip" role="status">
+              <span aria-label={`filtered to node ${selectedNodeId}`}>
+                filtered: {selectedNodeId}
+              </span>
+              <button
+                type="button"
+                className="run-history-filter-clear"
+                aria-label="clear node filter"
+                onClick={() => selectNode(null)}
+              >
+                ×
+              </button>
+            </span>
+          ) : null}
         </header>
 
         {recordLoading && (
@@ -167,7 +197,16 @@ export default function RunHistory({ workflowId }: Props) {
               </div>
             ) : null}
 
-            <RecordedEventLog record={record} />
+            <ScopeBlock scope={record.scope} />
+
+            <RecordedEventLog
+              record={record}
+              filterNodeId={filterActive ? selectedNodeId ?? undefined : undefined}
+              onCardActivate={(nodeId) => {
+                selectNode(nodeId);
+                requestPanToNode(nodeId);
+              }}
+            />
           </>
         )}
       </aside>
@@ -219,10 +258,57 @@ export default function RunHistory({ workflowId }: Props) {
   );
 }
 
-function RecordedEventLog({ record }: { record: RunRecord }) {
+/** Collapsible "scope" view above the event log: shows the run's entire
+ * accumulated scope (node outputs + seeded `inputs`/`globals`) as pretty
+ * JSON. Reuses JsonView for long-string handling. Omitted entirely when
+ * scope is empty so the panel stays uncluttered for trivial runs. */
+function ScopeBlock({ scope }: { scope: Record<string, Record<string, unknown>> }) {
+  const [open, setOpen] = useState(false);
+  const keys = Object.keys(scope);
+  if (keys.length === 0) return null;
+  return (
+    <section className="iob iob-scope" aria-label="run scope">
+      <button
+        type="button"
+        className="iob-toggle"
+        aria-expanded={open}
+        aria-label={`${open ? 'collapse' : 'expand'} scope`}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="iob-toggle-label">scope</span>
+        <span className="iob-toggle-hint">
+          {keys.length} {keys.length === 1 ? 'key' : 'keys'}
+        </span>
+        <span className="iob-toggle-fold" aria-hidden="true">
+          {open ? '▾' : '▸'}
+        </span>
+      </button>
+      {open ? (
+        <div className="iob-body">
+          <JsonView value={scope} />
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function RecordedEventLog({
+  record,
+  filterNodeId,
+  onCardActivate,
+}: {
+  record: RunRecord;
+  filterNodeId?: string;
+  onCardActivate?: (nodeId: string) => void;
+}) {
   return (
     <div className="run-view-log" aria-label="event log">
-      <GroupedEventLog events={record.events} />
+      <GroupedEventLog
+        events={record.events}
+        filterNodeId={filterNodeId}
+        onCardActivate={onCardActivate}
+        showIO
+      />
     </div>
   );
 }
