@@ -80,7 +80,10 @@ async function discoverWorkflowTools(): Promise<RegisteredWorkflowTool[]> {
   let summaries: Awaited<ReturnType<typeof listWorkflows>>;
   try {
     summaries = await listWorkflows();
-  } catch {
+  } catch (err) {
+    console.error(
+      `[mcp] workflow discovery failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return [];
   }
 
@@ -128,17 +131,23 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json(
       { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } },
-      { status: 400 },
+      { status: 200 },
     );
   }
 
   const rpc = body as { jsonrpc?: string; id?: unknown; method?: string; params?: unknown };
+  const isNotification = !('id' in rpc);
   const id = rpc.id ?? null;
   const method = rpc.method;
   const params = (rpc.params ?? {}) as Record<string, unknown>;
 
   if (rpc.jsonrpc !== '2.0' || typeof method !== 'string') {
     return jsonRpcError(id, -32600, 'Invalid Request');
+  }
+
+  // ── JSON-RPC notifications: MUST NOT respond (spec §4) ─────────────────────
+  if (isNotification) {
+    return new Response(null, { status: 204 });
   }
 
   // ── initialize ──────────────────────────────────────────────────────────────
@@ -148,11 +157,6 @@ export async function POST(req: Request) {
       serverInfo: { name: 'inflooop', version: '0.1.0' },
       capabilities: { tools: {} },
     });
-  }
-
-  // ── notifications/initialized (client ack — no response needed) ─────────────
-  if (method === 'notifications/initialized') {
-    return new Response(null, { status: 204 });
   }
 
   // ── tools/list ──────────────────────────────────────────────────────────────

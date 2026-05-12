@@ -121,7 +121,7 @@ export async function runWorkflowTool(opts: RunToolOptions): Promise<RunToolResu
       status: record.status,
       runId,
       durationMs: record.durationMs,
-      outputs: filterOutputs(record.scope as Record<string, unknown>),
+      outputs: filterOutputs(record.scope),
       errorMessage: record.errorMessage,
     };
   } catch {
@@ -135,7 +135,7 @@ export async function runWorkflowTool(opts: RunToolOptions): Promise<RunToolResu
       status: settled.status,
       runId,
       durationMs,
-      outputs: filterOutputs(settled.scope as Record<string, unknown>),
+      outputs: filterOutputs(settled.scope),
       errorMessage: finishedSnap.errorMessage,
     };
   }

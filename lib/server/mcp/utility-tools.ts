@@ -20,7 +20,7 @@ export async function getRunStatus(args: {
       status: run.status,
       runId: run.runId,
       durationMs: run.durationMs,
-      outputs: filterOutputs(run.scope as Record<string, unknown>),
+      outputs: filterOutputs(run.scope),
       errorMessage: run.errorMessage,
     };
   } catch {
@@ -36,7 +36,7 @@ export async function getRunStatus(args: {
         snap.finishedAt != null && snap.startedAt != null
           ? snap.finishedAt - snap.startedAt
           : undefined,
-      outputs: filterOutputs(snap.scope as Record<string, unknown>),
+      outputs: filterOutputs(snap.scope),
       errorMessage: snap.errorMessage,
     };
   }
