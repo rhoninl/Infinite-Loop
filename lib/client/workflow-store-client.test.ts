@@ -44,8 +44,30 @@ beforeEach(() => {
     runStatus: 'idle',
     runEvents: [],
     connectionStatus: 'connecting',
+    panRequest: null,
     past: [],
     future: [],
+  });
+});
+
+describe('requestPanToNode', () => {
+  it('starts at seq=1 and advances on every call, even for the same node', () => {
+    const s = () => useWorkflowStore.getState();
+    expect(s().panRequest).toBeNull();
+    s().requestPanToNode('agent-1');
+    expect(s().panRequest).toEqual({ nodeId: 'agent-1', seq: 1 });
+    s().requestPanToNode('agent-1');
+    expect(s().panRequest).toEqual({ nodeId: 'agent-1', seq: 2 });
+    s().requestPanToNode('cond-1');
+    expect(s().panRequest).toEqual({ nodeId: 'cond-1', seq: 3 });
+  });
+
+  it('emits a new object reference per call so React effects re-fire', () => {
+    const s = () => useWorkflowStore.getState();
+    s().requestPanToNode('n1');
+    const first = s().panRequest;
+    s().requestPanToNode('n1');
+    expect(s().panRequest).not.toBe(first);
   });
 });
 

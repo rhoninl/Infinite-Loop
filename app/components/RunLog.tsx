@@ -6,20 +6,41 @@ import { groupEventsByNode, type NodeCard } from '../../lib/client/group-events'
 
 /** Render header → per-node cards → footer for an already-collected event
  * stream. Both the live RunView and the recorded RunHistory detail view
- * use this so the layout stays in lock-step. */
-export function GroupedEventLog({ events }: { events: WorkflowEvent[] }) {
+ * use this so the layout stays in lock-step.
+ *
+ * `filterNodeId` (recorded view only): when set, only the matching node card
+ * is rendered; header/footer rows are suppressed so the view focuses on the
+ * single card. `onCardActivate` (recorded view only): invoked when the user
+ * clicks a node card's header, in addition to the existing fold toggle. */
+export function GroupedEventLog({
+  events,
+  filterNodeId,
+  onCardActivate,
+}: {
+  events: WorkflowEvent[];
+  filterNodeId?: string;
+  onCardActivate?: (nodeId: string) => void;
+}) {
   const grouped = groupEventsByNode(events);
+  const cards = filterNodeId
+    ? grouped.cards.filter((c) => c.nodeId === filterNodeId)
+    : grouped.cards;
+  const showSurround = !filterNodeId;
   return (
     <>
-      {grouped.header.map((ev, idx) => (
-        <EventRow key={`h-${idx}`} ev={ev} />
+      {showSurround
+        ? grouped.header.map((ev, idx) => (
+            <EventRow key={`h-${idx}`} ev={ev} />
+          ))
+        : null}
+      {cards.map((card) => (
+        <NodeCardView key={card.nodeId} card={card} onActivate={onCardActivate} />
       ))}
-      {grouped.cards.map((card) => (
-        <NodeCardView key={card.nodeId} card={card} />
-      ))}
-      {grouped.footer.map((ev, idx) => (
-        <EventRow key={`f-${idx}`} ev={ev} />
-      ))}
+      {showSurround
+        ? grouped.footer.map((ev, idx) => (
+            <EventRow key={`f-${idx}`} ev={ev} />
+          ))
+        : null}
     </>
   );
 }
@@ -44,7 +65,13 @@ export function EventRow({ ev }: { ev: WorkflowEvent }) {
   );
 }
 
-export function NodeCardView({ card }: { card: NodeCard }) {
+export function NodeCardView({
+  card,
+  onActivate,
+}: {
+  card: NodeCard;
+  onActivate?: (nodeId: string) => void;
+}) {
   const body = renderCardEvents(card);
   const hasBody = body.length > 0;
 
@@ -70,25 +97,41 @@ export function NodeCardView({ card }: { card: NodeCard }) {
     </>
   );
 
+  // Single-click semantics chosen during brainstorming: header click both
+  // locates the canvas card AND toggles fold. We make the header a button
+  // whenever there's *anything* to click on — either body to fold, or an
+  // activate handler. Cards with no body and no handler keep the plain
+  // <header> so we don't introduce a useless focusable element.
+  const interactive = hasBody || !!onActivate;
+
   return (
     <section
       className="event-card"
       data-state={card.status}
       aria-label={`node card ${card.nodeId}`}
     >
-      {hasBody ? (
+      {interactive ? (
         <button
           type="button"
           className="event-card-head event-card-head-toggle"
-          aria-expanded={open}
-          aria-controls={`card-body-${card.nodeId}`}
-          aria-label={`${open ? 'collapse' : 'expand'} node card ${card.nodeId}`}
-          onClick={() => setOpen((v) => !v)}
+          aria-expanded={hasBody ? open : undefined}
+          aria-controls={hasBody ? `card-body-${card.nodeId}` : undefined}
+          aria-label={
+            hasBody
+              ? `${open ? 'collapse' : 'expand'} node card ${card.nodeId}`
+              : `locate node ${card.nodeId} on canvas`
+          }
+          onClick={() => {
+            if (onActivate) onActivate(card.nodeId);
+            if (hasBody) setOpen((v) => !v);
+          }}
         >
           {head}
-          <span className="event-card-fold" aria-hidden="true">
-            {open ? '▾' : '▸'}
-          </span>
+          {hasBody ? (
+            <span className="event-card-fold" aria-hidden="true">
+              {open ? '▾' : '▸'}
+            </span>
+          ) : null}
         </button>
       ) : (
         <header className="event-card-head">{head}</header>

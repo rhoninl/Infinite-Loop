@@ -1,7 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RunRecord, RunSummary } from '../../lib/shared/workflow';
+import { useWorkflowStore } from '../../lib/client/workflow-store-client';
+import { eventNodeId } from '../../lib/client/group-events';
 import { GroupedEventLog } from './RunLog';
 
 interface Props {
@@ -30,6 +32,19 @@ export default function RunHistory({ workflowId }: Props) {
   const [record, setRecord] = useState<RunRecord | null>(null);
   const [recordLoading, setRecordLoading] = useState(false);
   const [recordError, setRecordError] = useState<string | null>(null);
+
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
+  const selectNode = useWorkflowStore((s) => s.selectNode);
+  const requestPanToNode = useWorkflowStore((s) => s.requestPanToNode);
+
+  // Filter is only active if a node is selected AND that node has events in
+  // the currently-loaded run record. A selection from an earlier/later run
+  // shouldn't blank out an unrelated run's log.
+  const nodeHasEventsInRun = useMemo(() => {
+    if (!record || !selectedNodeId) return false;
+    return record.events.some((ev) => eventNodeId(ev) === selectedNodeId);
+  }, [record, selectedNodeId]);
+  const filterActive = !!selectedNodeId && nodeHasEventsInRun;
 
   // Track which workflow the most recent in-flight list fetch was for, so a
   // stale response (older workflow's data arriving after the user switched)
@@ -122,6 +137,21 @@ export default function RunHistory({ workflowId }: Props) {
               <span className="dot" /> {record.status}
             </span>
           ) : null}
+          {filterActive ? (
+            <span className="run-history-filter-chip" role="status">
+              <span aria-label={`filtered to node ${selectedNodeId}`}>
+                filtered: {selectedNodeId}
+              </span>
+              <button
+                type="button"
+                className="run-history-filter-clear"
+                aria-label="clear node filter"
+                onClick={() => selectNode(null)}
+              >
+                ×
+              </button>
+            </span>
+          ) : null}
         </header>
 
         {recordLoading && (
@@ -167,7 +197,14 @@ export default function RunHistory({ workflowId }: Props) {
               </div>
             ) : null}
 
-            <RecordedEventLog record={record} />
+            <RecordedEventLog
+              record={record}
+              filterNodeId={filterActive ? selectedNodeId ?? undefined : undefined}
+              onCardActivate={(nodeId) => {
+                selectNode(nodeId);
+                requestPanToNode(nodeId);
+              }}
+            />
           </>
         )}
       </aside>
@@ -219,10 +256,22 @@ export default function RunHistory({ workflowId }: Props) {
   );
 }
 
-function RecordedEventLog({ record }: { record: RunRecord }) {
+function RecordedEventLog({
+  record,
+  filterNodeId,
+  onCardActivate,
+}: {
+  record: RunRecord;
+  filterNodeId?: string;
+  onCardActivate?: (nodeId: string) => void;
+}) {
   return (
     <div className="run-view-log" aria-label="event log">
-      <GroupedEventLog events={record.events} />
+      <GroupedEventLog
+        events={record.events}
+        filterNodeId={filterNodeId}
+        onCardActivate={onCardActivate}
+      />
     </div>
   );
 }

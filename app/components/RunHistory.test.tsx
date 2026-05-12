@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { RunRecord, RunSummary } from '../../lib/shared/workflow';
+import { useWorkflowStore } from '../../lib/client/workflow-store-client';
 import RunHistory from './RunHistory';
 
 const SUMMARY_A: RunSummary = {
@@ -47,6 +48,9 @@ const originalFetch = globalThis.fetch;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  // Selection state lives in the module-scoped Zustand store; clear so one
+  // test's selection doesn't leak filter behaviour into the next.
+  useWorkflowStore.setState({ selectedNodeId: null, panRequest: null });
 });
 
 describe('RunHistory', () => {
@@ -116,6 +120,83 @@ describe('RunHistory', () => {
     await waitFor(() =>
       expect(screen.getByLabelText('run history')).toBeInTheDocument(),
     );
+  });
+
+  it('filters cards to the selected node when it has events in this run', async () => {
+    render(<RunHistory workflowId="wf-1" />);
+    fireEvent.click(await screen.findByLabelText('run r-a'));
+    await screen.findByLabelText('event log');
+
+    // No filter yet — run_started/run_finished rows are visible.
+    const logBefore = screen.getByLabelText('event log');
+    expect(logBefore).toHaveTextContent('run_started');
+
+    act(() => {
+      useWorkflowStore.getState().selectNode('agent-1');
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText('filtered to node agent-1'),
+      ).toBeInTheDocument(),
+    );
+    const logAfter = screen.getByLabelText('event log');
+    // Header/footer rows are suppressed in the filtered view.
+    expect(logAfter).not.toHaveTextContent('run_started');
+    expect(logAfter).not.toHaveTextContent('run_finished');
+    expect(screen.getByLabelText('node card agent-1')).toBeInTheDocument();
+  });
+
+  it('clear chip removes the filter and restores the full log', async () => {
+    render(<RunHistory workflowId="wf-1" />);
+    fireEvent.click(await screen.findByLabelText('run r-a'));
+    await screen.findByLabelText('event log');
+
+    act(() => {
+      useWorkflowStore.getState().selectNode('agent-1');
+    });
+    const clearBtn = await screen.findByLabelText('clear node filter');
+    fireEvent.click(clearBtn);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('event log')).toHaveTextContent(
+        'run_started',
+      ),
+    );
+    expect(useWorkflowStore.getState().selectedNodeId).toBe(null);
+  });
+
+  it('ignores selection that has no events in the open run', async () => {
+    render(<RunHistory workflowId="wf-1" />);
+    fireEvent.click(await screen.findByLabelText('run r-a'));
+    await screen.findByLabelText('event log');
+
+    act(() => {
+      useWorkflowStore.getState().selectNode('ghost-node');
+    });
+
+    // Filter chip should NOT appear; the full log keeps rendering.
+    await waitFor(() =>
+      expect(screen.getByLabelText('event log')).toHaveTextContent(
+        'run_started',
+      ),
+    );
+    expect(screen.queryByLabelText(/^filtered to node /)).toBeNull();
+  });
+
+  it('clicking a node card header selects the node and requests a pan', async () => {
+    render(<RunHistory workflowId="wf-1" />);
+    fireEvent.click(await screen.findByLabelText('run r-a'));
+    const card = await screen.findByLabelText('node card agent-1');
+    // The header is rendered as a toggle button (card has body events).
+    const header = card.querySelector('button.event-card-head-toggle');
+    expect(header).not.toBeNull();
+    fireEvent.click(header!);
+
+    expect(useWorkflowStore.getState().selectedNodeId).toBe('agent-1');
+    expect(useWorkflowStore.getState().panRequest).toMatchObject({
+      nodeId: 'agent-1',
+    });
   });
 
   it('surfaces a failure from /api/runs as an inline error', async () => {

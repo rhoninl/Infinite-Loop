@@ -25,6 +25,12 @@ export interface WorkflowStoreState {
   runEvents: WorkflowEvent[];
   connectionStatus: WsStatus;
 
+  /** Cross-component "pan canvas to this node" signal. `seq` advances on each
+   * call so a repeat request for the same node id still fires the canvas
+   * effect — without it React would dedupe equal state and the second click
+   * would silently no-op. */
+  panRequest: { nodeId: string; seq: number } | null;
+
   /** Past snapshots — the head is the most-recent prior `currentWorkflow`. */
   past: Workflow[];
   /** Future snapshots — populated on undo, cleared on any new mutation. */
@@ -42,6 +48,9 @@ export interface WorkflowStoreState {
   addEdge: (edge: WorkflowEdge) => void;
   removeEdge: (id: string) => void;
   selectNode: (id: string | null) => void;
+  /** Ask the canvas to pan-to-fit the given node. The canvas subscribes to
+   * `panRequest` and calls `fitView` whenever the reference changes. */
+  requestPanToNode: (id: string) => void;
   /** Replace the current workflow's `globals` map. Pass an empty object
    * to clear all globals. Tracked in undo history. */
   setGlobals: (next: Record<string, string>) => void;
@@ -262,6 +271,7 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
   runStatus: 'idle',
   runEvents: [],
   connectionStatus: 'connecting',
+  panRequest: null,
   past: [],
   future: [],
 
@@ -435,6 +445,11 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
     }),
 
   selectNode: (id) => set({ selectedNodeId: id }),
+
+  requestPanToNode: (id) =>
+    set((s) => ({
+      panRequest: { nodeId: id, seq: (s.panRequest?.seq ?? 0) + 1 },
+    })),
 
   setGlobals: (next) =>
     set((s) => {

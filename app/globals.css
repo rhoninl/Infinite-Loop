@@ -517,6 +517,40 @@ body {
   color: var(--fg-dim);
 }
 
+/* Filter-by-node chip in the recorded-run detail header. Matches the
+ * understated `.tag` look (same height, padding, type scale) with a dashed
+ * border to read as a transient filter state, not a status. */
+.run-history-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding-inline: 8px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  border: 1px dashed var(--border);
+  background: transparent;
+}
+
+.run-history-filter-clear {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--fg-dim);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.run-history-filter-clear:hover {
+  color: var(--fg);
+}
+
 /* "Currently running" strip — phosphor block at the top of the panel
  * showing whatever node is live, styled like a HUD readout. */
 .run-view-current {
