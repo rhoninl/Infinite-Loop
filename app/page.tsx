@@ -8,6 +8,7 @@ import {
   type CSSProperties,
 } from 'react';
 import Canvas from './components/canvas/Canvas';
+import RunInputsModal from './components/RunInputsModal';
 import Palette from './components/Palette';
 import ConfigPanel from './components/ConfigPanel';
 import RunView from './components/RunView';
@@ -63,6 +64,8 @@ export default function Page() {
 
   const [rightWidth, setRightWidth] = useState<number>(RIGHT_WIDTH_DEFAULT);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [runModalOpen, setRunModalOpen] = useState(false);
+  const [runChevronOpen, setRunChevronOpen] = useState(false);
   const dragStateRef = useRef<{ active: boolean }>({ active: false });
   const showRightPanel = isRunning || historyOpen || !!selectedNodeId;
 
@@ -140,13 +143,33 @@ export default function Page() {
     document.body.style.userSelect = 'none';
   }, []);
 
-  async function handleRun() {
+  async function postRun(inputs?: Record<string, unknown>) {
     if (!currentWorkflow) return;
     await fetch('/api/run', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ workflowId: currentWorkflow.id }),
+      body: JSON.stringify({
+        workflowId: currentWorkflow.id,
+        ...(inputs ? { inputs } : {}),
+      }),
     });
+  }
+
+  function handleRun() {
+    if (!currentWorkflow) return;
+    const declared = currentWorkflow.inputs ?? [];
+    const needsPrompt = declared.some((i) => i.default === undefined);
+    if (needsPrompt) {
+      setRunModalOpen(true);
+    } else {
+      void postRun();
+    }
+  }
+
+  function handleRunWithInputs() {
+    if (!currentWorkflow) return;
+    setRunChevronOpen(false);
+    setRunModalOpen(true);
   }
 
   async function handleStop() {
@@ -203,20 +226,59 @@ export default function Page() {
               Stop
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={handleRun}
-              className="btn"
-              aria-label="run workflow"
-              disabled={!currentWorkflow}
-              title={
-                !currentWorkflow
-                  ? 'Open or create a workflow first'
-                  : undefined
-              }
-            >
-              Run
-            </button>
+            <div className="run-group" style={{ position: 'relative', display: 'inline-flex' }}>
+              <button
+                type="button"
+                onClick={handleRun}
+                className="btn"
+                aria-label="run workflow"
+                disabled={!currentWorkflow}
+                title={
+                  !currentWorkflow
+                    ? 'Open or create a workflow first'
+                    : undefined
+                }
+              >
+                Run
+              </button>
+              {(currentWorkflow?.inputs?.length ?? 0) > 0 && (
+                <>
+                  <button
+                    type="button"
+                    className="btn"
+                    aria-label="run options"
+                    aria-haspopup="menu"
+                    aria-expanded={runChevronOpen}
+                    onClick={() => setRunChevronOpen((v) => !v)}
+                    style={{ padding: '0 6px' }}
+                  >
+                    ▾
+                  </button>
+                  {runChevronOpen && (
+                    <div
+                      role="menu"
+                      style={{
+                        position: 'absolute',
+                        top: '100%',
+                        right: 0,
+                        background: 'var(--bg)',
+                        border: '1px solid var(--border-soft)',
+                        padding: 4,
+                        zIndex: 10,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={handleRunWithInputs}
+                      >
+                        Run with inputs…
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           )}
         </div>
       </header>
@@ -247,6 +309,16 @@ export default function Page() {
           </>
         )}
       </div>
+      {runModalOpen && currentWorkflow && (
+        <RunInputsModal
+          declared={currentWorkflow.inputs ?? []}
+          onSubmit={(values) => {
+            setRunModalOpen(false);
+            void postRun(values);
+          }}
+          onCancel={() => setRunModalOpen(false)}
+        />
+      )}
     </>
   );
 }
