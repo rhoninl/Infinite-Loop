@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { IconType } from 'react-icons';
 import {
+  LuCode,
   LuColumns3,
   LuFilter,
   LuGitBranch,
@@ -80,6 +81,13 @@ const STATIC_CATEGORIES: PaletteCategory[] = [
       { type: 'parallel', name: 'Parallel', Icon: LuColumns3, glyph: '⫲', description: 'fan out concurrent branches' },
       { type: 'subworkflow', name: 'Subworkflow', Icon: LuLayers, glyph: '⊞', description: 'call another workflow' },
       { type: 'judge', name: 'Judge', Icon: LuScale, glyph: '⚖', description: 'pick best of N candidates' },
+    ],
+  },
+  {
+    id: 'scripts',
+    heading: 'Scripts',
+    items: [
+      { type: 'script', name: 'Script', Icon: LuCode, glyph: '⌨', description: 'run inline TypeScript (Bun) or Python (python3)' },
     ],
   },
   {

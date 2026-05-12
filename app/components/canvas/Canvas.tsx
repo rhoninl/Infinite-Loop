@@ -25,6 +25,7 @@ import type {
   NodeConfigByType,
   NodeType,
   ParallelConfig,
+  ScriptConfig,
   SidenoteConfig,
   StartConfig,
   SubworkflowConfig,
@@ -40,6 +41,7 @@ import EndNode from './nodes/EndNode';
 import JudgeNode from './nodes/JudgeNode';
 import LoopNode from './nodes/LoopNode';
 import ParallelNode from './nodes/ParallelNode';
+import ScriptNode from './nodes/ScriptNode';
 import SidenoteNode from './nodes/SidenoteNode';
 import StartNode from './nodes/StartNode';
 import SubworkflowNode from './nodes/SubworkflowNode';
@@ -97,6 +99,20 @@ const DEFAULT_CONFIG: { [K in NodeType]: () => NodeConfigByType[K] } = {
     providerId: 'claude',
   }),
   sidenote: (): SidenoteConfig => ({ text: '' }),
+  script: (): ScriptConfig => ({
+    language: 'ts',
+    // The default seeds two named inputs and one named output, so the user
+    // sees the function-shaped contract straight away without consulting
+    // docs. Args arrive in declaration order; the returned object's keys
+    // are matched against `outputs[]` and stored on this node's scope.
+    inputs: { arg1: '', arg2: '' },
+    outputs: ['output1'],
+    code:
+      'function run(arg1, arg2) {\n' +
+      '  return { output1: `echo: ${arg1} + ${arg2}` };\n' +
+      '}\n',
+    timeoutMs: 60_000,
+  }),
 };
 
 /** Default config object for a fresh node of a given type. */
@@ -452,6 +468,7 @@ const NODE_TYPES = {
   subworkflow: SubworkflowNode,
   judge: JudgeNode,
   sidenote: SidenoteNode,
+  script: ScriptNode,
 } as const;
 
 function CanvasInner() {

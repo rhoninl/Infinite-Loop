@@ -72,14 +72,24 @@ describe('ConfigPanel', () => {
     reset();
   });
 
-  it('renders the empty placeholder when nothing is selected', () => {
+  it('renders the empty placeholder when no workflow is loaded', () => {
     render(<ConfigPanel />);
     expect(screen.getByLabelText('config panel')).toBeInTheDocument();
-    // Terminal-prompt placeholder: "› select a node to configure_". Match
-    // the meaningful inner text rather than the prompt + cursor decoration.
+    // Without a workflow, the panel prompts the user to open one.
     expect(
-      screen.getByText(/select a node to configure/i),
+      screen.getByText(/open a workflow to configure/i),
     ).toBeInTheDocument();
+  });
+
+  it('renders the workflow globals editor when a workflow is loaded but no node is selected', () => {
+    const wf = makeWorkflow([startNode]);
+    act(() => {
+      useWorkflowStore.getState().loadWorkflow(wf);
+      useWorkflowStore.getState().selectNode(null);
+    });
+    render(<ConfigPanel />);
+    expect(screen.getByText(/workflow · globals/i)).toBeInTheDocument();
+    expect(screen.getByText(/\{\{globals\.NAME\}\}/)).toBeInTheDocument();
   });
 
   it('renders Agent config fields when an Agent node is selected', () => {

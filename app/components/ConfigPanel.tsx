@@ -11,6 +11,11 @@ import {
 } from 'react';
 import { useWorkflowStore } from '@/lib/client/workflow-store-client';
 import FolderPicker from './FolderPicker';
+import TemplateField from './TemplateField';
+import {
+  availableVariables,
+  type TemplateRef,
+} from '@/lib/shared/template-refs';
 import type { ProviderInfo } from '@/lib/server/providers/types';
 import type {
   AgentConfig,
@@ -24,6 +29,8 @@ import type {
   ParallelConfig,
   ParallelMode,
   ParallelOnError,
+  ScriptConfig,
+  ScriptLanguage,
   SidenoteConfig,
   SubworkflowConfig,
   Workflow,
@@ -487,14 +494,113 @@ function WorkflowPicker({
   );
 }
 
+/* ─── working-directory field ───────────────────────────────
+ * Shared between AgentForm (CLI providers) and ScriptForm. Renders the
+ * read-only tail-truncated preview backed by FolderPicker. The truncation
+ * math + invalid-path warning live here so any future cwd consumer gets
+ * the same behavior without re-implementing it. */
+function CwdField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [display, setDisplay] = useState(value);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !value) {
+      setDisplay(value);
+      return;
+    }
+    const recompute = () => {
+      const cs = getComputedStyle(el);
+      const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const usable = el.clientWidth - padX;
+      if (usable <= 0) return;
+      const probe = document.createElement('span');
+      probe.style.font = cs.font;
+      probe.style.visibility = 'hidden';
+      probe.style.position = 'absolute';
+      probe.style.whiteSpace = 'pre';
+      probe.textContent = 'M';
+      document.body.appendChild(probe);
+      const charW = probe.getBoundingClientRect().width;
+      document.body.removeChild(probe);
+      if (charW <= 0) return;
+      const fits = Math.floor(usable / charW);
+      if (value.length <= fits) {
+        setDisplay(value);
+      } else {
+        setDisplay('…' + value.slice(value.length - (fits - 1)));
+      }
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [value]);
+
+  const invalid = value.length > 0 && !value.startsWith('/');
+
+  return (
+    <div className="field" style={{ position: 'relative' }}>
+      <span className="field-label">Working directory</span>
+      <div
+        ref={ref}
+        role="button"
+        tabIndex={0}
+        aria-label="Working directory"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-invalid={invalid || undefined}
+        title={value || undefined}
+        data-tooltip={value || undefined}
+        className={`field-readonly cwd-preview${value ? '' : ' is-empty'}`}
+        onClick={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
+      >
+        {value ? display : '(no folder selected — click to choose)'}
+      </div>
+      {invalid && (
+        <span className="field-hint" style={{ color: 'var(--accent-err)' }}>
+          Must start with /
+        </span>
+      )}
+      {open && (
+        <FolderPicker
+          initialPath={value && value.startsWith('/') ? value : undefined}
+          onSelect={(picked) => {
+            onChange(picked);
+            setOpen(false);
+          }}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 function AgentForm({
   config,
   refs,
+  templateRefs,
+  selfId,
   providerInfo,
   onPatch,
 }: {
   config: AgentConfig;
   refs: string[];
+  templateRefs: readonly TemplateRef[];
+  selfId: string;
   /** Provider metadata for `config.providerId`, fetched once at the panel
    * level. `null` while the panel-level fetch is in flight, or if the id
    * doesn't match any known provider. */
@@ -511,58 +617,7 @@ function AgentForm({
   const [agent, setAgent] = useDebouncedString(config.agent ?? '', (next) =>
     onPatch({ ...config, agent: next.trim() ? next.trim() : undefined }),
   );
-  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
 
-  // Tail-truncate the cwd preview in JS — the previous direction:rtl CSS
-  // trick is unreliable when the path starts with `/` (a bidi-neutral
-  // character that the algorithm treats as a run boundary). Measure the
-  // available width with a hidden monospace probe, count how many chars
-  // fit, slice the path's tail to that length and prefix with an ellipsis.
-  const cwdRef = useRef<HTMLDivElement | null>(null);
-  const [cwdDisplay, setCwdDisplay] = useState(cwd);
-  useLayoutEffect(() => {
-    const el = cwdRef.current;
-    if (!el || !cwd) {
-      setCwdDisplay(cwd);
-      return;
-    }
-
-    const recompute = () => {
-      const cs = getComputedStyle(el);
-      const padX =
-        parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
-      const usable = el.clientWidth - padX;
-      if (usable <= 0) return;
-
-      // Probe the rendered character width once per recompute (mono so any
-      // glyph is the same width — `M` is just a stable reference).
-      const probe = document.createElement('span');
-      probe.style.font = cs.font;
-      probe.style.visibility = 'hidden';
-      probe.style.position = 'absolute';
-      probe.style.whiteSpace = 'pre';
-      probe.textContent = 'M';
-      document.body.appendChild(probe);
-      const charW = probe.getBoundingClientRect().width;
-      document.body.removeChild(probe);
-      if (charW <= 0) return;
-
-      const fits = Math.floor(usable / charW);
-      if (cwd.length <= fits) {
-        setCwdDisplay(cwd);
-      } else {
-        // Reserve one slot for the leading ellipsis glyph.
-        setCwdDisplay('…' + cwd.slice(cwd.length - (fits - 1)));
-      }
-    };
-
-    recompute();
-    const ro = new ResizeObserver(recompute);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [cwd]);
-
-  const cwdInvalid = cwd.length > 0 && !cwd.startsWith('/');
   const providerId = config.providerId ?? 'claude';
   const isHttpProvider = providerInfo?.transport === 'http';
 
@@ -665,70 +720,20 @@ function AgentForm({
 
       <div className="field">
         <span className="field-label">Prompt</span>
-        <textarea
-          aria-label="Prompt"
-          required
+        <TemplateField
+          multiline
           rows={5}
+          ariaLabel="Prompt"
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
+          onChange={setPrompt}
+          selfId={selfId}
+          refs={templateRefs}
+          fieldPath="prompt"
         />
         <RefChips refs={refs} />
       </div>
 
-      {!isHttpProvider && (
-      <div className="field" style={{ position: 'relative' }}>
-        <span className="field-label">Working directory</span>
-        {/* Read-only preview of the resolved cwd. The only way to mutate it
-         * is to open the picker (click, Enter, or Space) — the popover
-         * handles both manual path entry and tree navigation, with the two
-         * views live-synced. */}
-        {/* Rendered as a div (not <input>) so CSS truncation can show the
-         * TAIL of the path. Long cwds like
-         * "/Users/liyuqi/project/Codecase/InfLoop" should anchor to
-         * "…/Codecase/InfLoop" — the inner folder is what the user is
-         * orienting on. `<input>` doesn't honour text-overflow: ellipsis
-         * reliably and resets scrollLeft on focus, so a div is more honest. */}
-        <div
-          ref={cwdRef}
-          role="button"
-          tabIndex={0}
-          aria-label="Working directory"
-          aria-haspopup="dialog"
-          aria-expanded={folderPickerOpen}
-          aria-invalid={cwdInvalid || undefined}
-          // `title` is the screen-reader / OS-level tooltip; the visible
-          // hover tooltip is CSS-only via `::after` reading data-tooltip.
-          // We carry both so the full path is always discoverable.
-          title={cwd || undefined}
-          data-tooltip={cwd || undefined}
-          className={`field-readonly cwd-preview${cwd ? '' : ' is-empty'}`}
-          onClick={() => setFolderPickerOpen(true)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setFolderPickerOpen(true);
-            }
-          }}
-        >
-          {cwd ? cwdDisplay : '(no folder selected — click to choose)'}
-        </div>
-        {cwdInvalid && (
-          <span className="field-hint" style={{ color: 'var(--accent-err)' }}>
-            Must start with /
-          </span>
-        )}
-        {folderPickerOpen && (
-          <FolderPicker
-            initialPath={cwd && cwd.startsWith('/') ? cwd : undefined}
-            onSelect={(picked) => {
-              setCwd(picked);
-              setFolderPickerOpen(false);
-            }}
-            onClose={() => setFolderPickerOpen(false)}
-          />
-        )}
-      </div>
-      )}
+      {!isHttpProvider && <CwdField value={cwd} onChange={setCwd} />}
 
       {!isHttpProvider && (
         <div className="field">
@@ -783,10 +788,14 @@ function AgentForm({
 function ConditionForm({
   config,
   refs,
+  templateRefs,
+  selfId,
   onPatch,
 }: {
   config: ConditionConfig;
   refs: string[];
+  templateRefs: readonly TemplateRef[];
+  selfId: string;
   onPatch: (next: ConditionConfig) => void;
 }) {
   const kind: ConditionKind = config.kind ?? 'sentinel';
@@ -902,12 +911,14 @@ function ConditionForm({
 
       <div className="field">
         <span className="field-label">Against</span>
-        <input
-          aria-label="Against"
-          type="text"
+        <TemplateField
+          ariaLabel="Against"
           value={against}
+          onChange={setAgainst}
+          selfId={selfId}
+          refs={templateRefs}
+          fieldPath="against"
           placeholder="{{<previous-node>.stdout}}"
-          onChange={(e) => setAgainst(e.target.value)}
         />
         <RefChips refs={refs} />
       </div>
@@ -975,10 +986,14 @@ function LoopForm({
 function BranchForm({
   config,
   refs,
+  templateRefs,
+  selfId,
   onPatch,
 }: {
   config: BranchConfig;
   refs: string[];
+  templateRefs: readonly TemplateRef[];
+  selfId: string;
   onPatch: (next: BranchConfig) => void;
 }) {
   const [lhs, setLhs] = useDebouncedString(config.lhs ?? '', (next) =>
@@ -993,11 +1008,13 @@ function BranchForm({
     <>
       <div className="field">
         <span className="field-label">Left</span>
-        <input
-          aria-label="Left"
-          type="text"
+        <TemplateField
+          ariaLabel="Left"
           value={lhs}
-          onChange={(e) => setLhs(e.target.value)}
+          onChange={setLhs}
+          selfId={selfId}
+          refs={templateRefs}
+          fieldPath="lhs"
           placeholder="{{claude-1.stdout}}"
         />
         <RefChips refs={refs} />
@@ -1017,11 +1034,13 @@ function BranchForm({
 
       <div className="field">
         <span className="field-label">Right</span>
-        <input
-          aria-label="Right"
-          type="text"
+        <TemplateField
+          ariaLabel="Right"
           value={rhs}
-          onChange={(e) => setRhs(e.target.value)}
+          onChange={setRhs}
+          selfId={selfId}
+          refs={templateRefs}
+          fieldPath="rhs"
           placeholder={op === 'matches' ? '^DONE' : 'DONE'}
         />
         <RefChips refs={refs} />
@@ -1146,6 +1165,10 @@ interface KvRowsEditorProps {
   valuePlaceholder?: string;
   valueDescription?: string;
   addLabel: string;
+  /** When set, the value cell uses TemplateField with autocomplete + lint
+   * driven by these args. Leave undefined for plain text values (e.g.
+   * subworkflow output paths). */
+  template?: { selfId: string; refs: readonly TemplateRef[]; fieldPath: (name: string) => string };
 }
 
 /* Per-row component so each cell carries its own debounced text buffer —
@@ -1158,6 +1181,7 @@ function KvRow({
   valueLabel,
   valuePlaceholder,
   valueDescription,
+  template,
   onCommit,
   onRemove,
 }: {
@@ -1168,6 +1192,7 @@ function KvRow({
   valueLabel: string;
   valuePlaceholder?: string;
   valueDescription?: string;
+  template?: KvRowsEditorProps['template'];
   onCommit: (patch: Partial<KvRowData>) => void;
   onRemove: () => void;
 }) {
@@ -1194,13 +1219,25 @@ function KvRow({
         placeholder={nameLabel}
       />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <input
-          aria-label={`${valueLabel} ${index}`}
-          type="text"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder={valuePlaceholder}
-        />
+        {template ? (
+          <TemplateField
+            ariaLabel={`${valueLabel} ${index}`}
+            value={value}
+            onChange={setValue}
+            selfId={template.selfId}
+            refs={template.refs}
+            fieldPath={template.fieldPath(name)}
+            placeholder={valuePlaceholder}
+          />
+        ) : (
+          <input
+            aria-label={`${valueLabel} ${index}`}
+            type="text"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={valuePlaceholder}
+          />
+        )}
         {isLast && valueDescription ? (
           <span className="field-hint">{valueDescription}</span>
         ) : null}
@@ -1225,6 +1262,7 @@ function KvRowsEditor({
   valuePlaceholder,
   valueDescription,
   addLabel,
+  template,
 }: KvRowsEditorProps) {
   const updateRow = (rowId: string, patch: Partial<KvRowData>) => {
     onChange(
@@ -1250,6 +1288,7 @@ function KvRowsEditor({
           valueLabel={valueLabel}
           valuePlaceholder={valuePlaceholder}
           valueDescription={valueDescription}
+          template={template}
           onCommit={(patch) => updateRow(row.rowId, patch)}
           onRemove={() => removeRow(row.rowId)}
         />
@@ -1268,9 +1307,13 @@ function KvRowsEditor({
 
 function SubworkflowForm({
   config,
+  templateRefs,
+  selfId,
   onPatch,
 }: {
   config: SubworkflowConfig;
+  templateRefs: readonly TemplateRef[];
+  selfId: string;
   onPatch: (next: SubworkflowConfig) => void;
 }) {
   const currentWorkflowId = useWorkflowStore(
@@ -1357,6 +1400,11 @@ function SubworkflowForm({
           valueLabel="value template"
           valuePlaceholder="{{claude-1.stdout}}"
           addLabel="add input"
+          template={{
+            selfId,
+            refs: templateRefs,
+            fieldPath: (name) => `inputs.${name || '?'}`,
+          }}
         />
       </div>
 
@@ -1385,11 +1433,13 @@ function SubworkflowForm({
 function CandidateRow({
   index,
   value,
+  template,
   onCommit,
   onRemove,
 }: {
   index: number;
   value: string;
+  template?: { selfId: string; refs: readonly TemplateRef[] };
   onCommit: (next: string) => void;
   onRemove: () => void;
 }) {
@@ -1422,12 +1472,25 @@ function CandidateRow({
           remove
         </button>
       </div>
-      <textarea
-        aria-label={`candidate ${index}`}
-        rows={2}
-        value={v}
-        onChange={(e) => setV(e.target.value)}
-      />
+      {template ? (
+        <TemplateField
+          multiline
+          rows={2}
+          ariaLabel={`candidate ${index}`}
+          value={v}
+          onChange={setV}
+          selfId={template.selfId}
+          refs={template.refs}
+          fieldPath={`candidates.${index}`}
+        />
+      ) : (
+        <textarea
+          aria-label={`candidate ${index}`}
+          rows={2}
+          value={v}
+          onChange={(e) => setV(e.target.value)}
+        />
+      )}
     </div>
   );
 }
@@ -1435,10 +1498,14 @@ function CandidateRow({
 function JudgeForm({
   config,
   refs,
+  templateRefs,
+  selfId,
   onPatch,
 }: {
   config: JudgeNodeConfig;
   refs: string[];
+  templateRefs: readonly TemplateRef[];
+  selfId: string;
   onPatch: (next: JudgeNodeConfig) => void;
 }) {
   const [criteria, setCriteria] = useDebouncedString(
@@ -1493,11 +1560,15 @@ function JudgeForm({
     <>
       <div className="field">
         <span className="field-label">Criteria</span>
-        <textarea
-          aria-label="Criteria"
+        <TemplateField
+          multiline
           rows={4}
+          ariaLabel="Criteria"
           value={criteria}
-          onChange={(e) => setCriteria(e.target.value)}
+          onChange={setCriteria}
+          selfId={selfId}
+          refs={templateRefs}
+          fieldPath="criteria"
         />
         <RefChips refs={refs} />
       </div>
@@ -1513,6 +1584,7 @@ function JudgeForm({
               key={i}
               index={i}
               value={c}
+              template={{ selfId, refs: templateRefs }}
               onCommit={(next) => updateCandidate(i, next)}
               onRemove={() => removeCandidate(i)}
             />
@@ -1549,11 +1621,15 @@ function JudgeForm({
       {overridePrompt && (
         <div className="field">
           <span className="field-label">Judge prompt</span>
-          <textarea
-            aria-label="Judge prompt"
+          <TemplateField
+            multiline
             rows={4}
+            ariaLabel="Judge prompt"
             value={judgePrompt}
-            onChange={(e) => setJudgePrompt(e.target.value)}
+            onChange={setJudgePrompt}
+            selfId={selfId}
+            refs={templateRefs}
+            fieldPath="judgePrompt"
           />
         </div>
       )}
@@ -1580,6 +1656,326 @@ function JudgeForm({
         />
       </div>
     </>
+  );
+}
+
+/* ─── script form ──────────────────────────────────────────── */
+
+/** Per-output-name row. Local debounced buffer so cell edits don't slam
+ * the store on every keystroke. */
+function OutputNameRow({
+  index,
+  value,
+  onCommit,
+  onRemove,
+}: {
+  index: number;
+  value: string;
+  onCommit: (next: string) => void;
+  onRemove: () => void;
+}) {
+  const [v, setV] = useDebouncedString(value, onCommit);
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr auto',
+        gap: 8,
+        alignItems: 'center',
+      }}
+    >
+      <input
+        aria-label={`output name ${index}`}
+        type="text"
+        value={v}
+        placeholder="output name"
+        onChange={(e) => setV(e.target.value)}
+      />
+      <button
+        type="button"
+        className="btn btn-ghost"
+        onClick={onRemove}
+        aria-label={`remove output ${index}`}
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+function ScriptForm({
+  config,
+  refs,
+  templateRefs,
+  selfId,
+  onPatch,
+}: {
+  config: ScriptConfig;
+  refs: string[];
+  templateRefs: readonly TemplateRef[];
+  selfId: string;
+  onPatch: (next: ScriptConfig) => void;
+}) {
+  const language: ScriptLanguage = config.language ?? 'ts';
+  const [code, setCode] = useDebouncedString(config.code ?? '', (next) =>
+    onPatch({ ...config, code: next }),
+  );
+  const [cwd, setCwd] = useDebouncedString(config.cwd ?? '', (next) =>
+    onPatch({ ...config, cwd: next || undefined }),
+  );
+
+  // Inputs are a name → templated-value Record; UI mirrors subworkflow.inputs.
+  // Local KvRow state carries stable rowIds so cell edits don't re-key the
+  // entry on every keystroke. Re-sync from upstream when the upstream
+  // reference changes (node switch / undo).
+  const [inputRows, setInputRows] = useState<KvRowData[]>(() =>
+    recordToRows(config.inputs),
+  );
+  const lastInputs = useRef(config.inputs);
+  useEffect(() => {
+    if (config.inputs !== lastInputs.current) {
+      lastInputs.current = config.inputs;
+      setInputRows(recordToRows(config.inputs));
+    }
+  }, [config.inputs]);
+  const commitInputs = (rows: KvRowData[]) => {
+    setInputRows(rows);
+    const rec = rowsToRecord(rows);
+    lastInputs.current = rec;
+    onPatch({ ...config, inputs: rec });
+  };
+
+  // Outputs are an ordered list of names. The user implements `run(...)`
+  // returning an object; each declared name is pulled into scope.
+  const outputs = Array.isArray(config.outputs) ? config.outputs : [];
+  const updateOutput = (idx: number, next: string) => {
+    const arr = outputs.slice();
+    arr[idx] = next;
+    onPatch({ ...config, outputs: arr });
+  };
+  const removeOutput = (idx: number) => {
+    const arr = outputs.slice();
+    arr.splice(idx, 1);
+    onPatch({ ...config, outputs: arr });
+  };
+  const addOutput = () => {
+    onPatch({ ...config, outputs: [...outputs, ''] });
+  };
+
+  const timeoutMsRaw = config.timeoutMs ?? 60_000;
+  const [timeoutUnit, setTimeoutUnit] = useState<TimeoutUnit>(() =>
+    pickInitialTimeoutUnit(timeoutMsRaw),
+  );
+  const timeoutDisplay = Number(
+    (timeoutMsRaw / TIMEOUT_UNIT_MS[timeoutUnit]).toFixed(2),
+  );
+  const onTimeoutChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    if (raw === '') return;
+    const value = Number(raw);
+    if (Number.isFinite(value) && value > 0) {
+      const ms = Math.max(1000, Math.round(value * TIMEOUT_UNIT_MS[timeoutUnit]));
+      onPatch({ ...config, timeoutMs: ms });
+    }
+  };
+
+  // Show the user the function signature their `run(...)` should match,
+  // derived from the input names. Updates as they rename inputs.
+  const argList = Object.keys(config.inputs ?? {}).join(', ') || '/* no inputs */';
+  const sigHint =
+    language === 'ts'
+      ? `function run(${argList}) { return { ${(outputs[0] ?? 'output1')}: "…" } }`
+      : `def run(${argList}):\n    return { "${(outputs[0] ?? 'output1')}": "…" }`;
+
+  return (
+    <>
+      <Segmented<ScriptLanguage>
+        label="Language"
+        value={language}
+        options={[
+          { value: 'ts', label: 'TypeScript (Bun)' },
+          { value: 'py', label: 'Python (python3)' },
+        ]}
+        onChange={(next) => onPatch({ ...config, language: next })}
+      />
+
+      <div className="field">
+        <span className="field-label">Inputs</span>
+        <KvRowsEditor
+          rows={inputRows}
+          onChange={commitInputs}
+          nameLabel="arg name"
+          valueLabel="value template"
+          valuePlaceholder="{{claude-1.stdout}}"
+          addLabel="add input"
+          template={{
+            selfId,
+            refs: templateRefs,
+            fieldPath: (name) => `inputs.${name || '?'}`,
+          }}
+        />
+        <RefChips refs={refs} />
+      </div>
+
+      <div className="field">
+        <span className="field-label">Outputs</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {outputs.map((name, i) => (
+            <OutputNameRow
+              key={i}
+              index={i}
+              value={name}
+              onCommit={(next) => updateOutput(i, next)}
+              onRemove={() => removeOutput(i)}
+            />
+          ))}
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={addOutput}
+            style={{ alignSelf: 'flex-start' }}
+          >
+            + add output
+          </button>
+        </div>
+        <span className="field-hint">
+          The function returns an object; each declared name is copied into
+          this node&apos;s scope under the same key.
+        </span>
+      </div>
+
+      <div className="field">
+        <span className="field-label">Code</span>
+        <textarea
+          aria-label="Code"
+          rows={12}
+          spellCheck={false}
+          style={{ fontFamily: 'var(--mono)', fontSize: 12 }}
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+        />
+        <span
+          className="field-hint"
+          style={{ fontFamily: 'var(--mono)', whiteSpace: 'pre-wrap' }}
+        >
+          {sigHint}
+        </span>
+        <span className="field-hint">
+          Not templated. Define <code>run(…)</code> taking the inputs as
+          positional args; return an object with the declared output keys.
+        </span>
+      </div>
+
+      <CwdField value={cwd} onChange={setCwd} />
+
+      <div className="field">
+        <span className="field-label">Timeout</span>
+        <div className="field-row">
+          <input
+            aria-label="Timeout"
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="any"
+            value={timeoutDisplay}
+            onChange={onTimeoutChange}
+            className="no-spin"
+          />
+          <div className="seg-tight" role="group" aria-label="Timeout unit">
+            {TIMEOUT_UNITS.map((u) => (
+              <button
+                key={u}
+                type="button"
+                data-active={timeoutUnit === u}
+                aria-pressed={timeoutUnit === u}
+                onClick={() => setTimeoutUnit(u)}
+              >
+                {u}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ─── globals panel ────────────────────────────────────────── */
+
+/** Shown in the right-hand pane when no node is selected. Lets the user
+ * define `{{globals.NAME}}` variables that any node in the workflow can
+ * reference. Values are literal strings — NOT templated, since globals
+ * have no scope to template against. */
+function GlobalsPanel({ workflow }: { workflow: Workflow | null }) {
+  const setGlobals = useWorkflowStore((s) => s.setGlobals);
+  const [rows, setRows] = useState<KvRowData[]>(() =>
+    recordToRows(workflow?.globals),
+  );
+  const lastGlobals = useRef(workflow?.globals);
+  useEffect(() => {
+    if (workflow?.globals !== lastGlobals.current) {
+      lastGlobals.current = workflow?.globals;
+      setRows(recordToRows(workflow?.globals));
+    }
+  }, [workflow?.globals]);
+
+  const commit = (next: KvRowData[]) => {
+    setRows(next);
+    const rec = rowsToRecord(next);
+    lastGlobals.current = rec;
+    setGlobals(rec);
+  };
+
+  if (!workflow) {
+    return (
+      <aside aria-label="config panel" className="config-stub">
+        <p className="config-empty">
+          <span className="config-empty-prompt">›</span> open a workflow to
+          configure<span className="crt-cursor" aria-hidden="true" />
+        </p>
+      </aside>
+    );
+  }
+
+  return (
+    <aside aria-label="config panel" className="config-stub">
+      <header
+        className="serif"
+        style={{
+          fontFamily: 'var(--mono)',
+          fontSize: 11,
+          letterSpacing: '0.22em',
+          textTransform: 'uppercase',
+          color: 'var(--fg-soft)',
+          marginBottom: 18,
+        }}
+      >
+        workflow · globals
+      </header>
+      <form className="task-form" onSubmit={(e) => e.preventDefault()}>
+        <p
+          className="field-hint"
+          style={{ marginBottom: 12, color: 'var(--fg-dim)' }}
+        >
+          Workflow-level variables available to every node as{' '}
+          <code style={{ fontFamily: 'var(--mono)' }}>
+            {'{{globals.NAME}}'}
+          </code>
+          . Values are literal strings — they aren&apos;t templated.
+        </p>
+        <KvRowsEditor
+          rows={rows}
+          onChange={commit}
+          nameLabel="name"
+          valueLabel="value"
+          valuePlaceholder="literal value"
+          addLabel="add global"
+        />
+        <p className="field-hint" style={{ marginTop: 16 }}>
+          Select a node on the canvas to edit its config.
+        </p>
+      </form>
+    </aside>
   );
 }
 
@@ -1625,15 +2021,16 @@ export default function ConfigPanel() {
     [currentWorkflow, node],
   );
 
+  // Structured ref list for the TemplateField autocomplete dropdown.
+  // `refs` (string[]) remains for the lightweight RefChips hint line —
+  // both stay in sync because both derive from the workflow + selfId.
+  const templateRefs: TemplateRef[] = useMemo(
+    () => (node ? availableVariables(currentWorkflow, node.id) : []),
+    [currentWorkflow, node],
+  );
+
   if (!node) {
-    return (
-      <aside aria-label="config panel" className="config-stub">
-        <p className="config-empty">
-          <span className="config-empty-prompt">›</span> select a node to
-          configure<span className="crt-cursor" aria-hidden="true" />
-        </p>
-      </aside>
-    );
+    return <GlobalsPanel workflow={currentWorkflow} />;
   }
 
   const patchConfig = (nextConfig: WorkflowNode['config']) => {
@@ -1681,6 +2078,8 @@ export default function ConfigPanel() {
           <AgentForm
             config={node.config as AgentConfig}
             refs={refs}
+            templateRefs={templateRefs}
+            selfId={node.id}
             providerInfo={
               providers.find(
                 (p) => p.id === ((node.config as AgentConfig).providerId ?? 'claude'),
@@ -1693,6 +2092,8 @@ export default function ConfigPanel() {
           <ConditionForm
             config={node.config as ConditionConfig}
             refs={refs}
+            templateRefs={templateRefs}
+            selfId={node.id}
             onPatch={patchConfig}
           />
         )}
@@ -1706,6 +2107,8 @@ export default function ConfigPanel() {
           <BranchForm
             config={node.config as BranchConfig}
             refs={refs}
+            templateRefs={templateRefs}
+            selfId={node.id}
             onPatch={patchConfig}
           />
         )}
@@ -1718,6 +2121,8 @@ export default function ConfigPanel() {
         {node.type === 'subworkflow' && (
           <SubworkflowForm
             config={node.config as SubworkflowConfig}
+            templateRefs={templateRefs}
+            selfId={node.id}
             onPatch={patchConfig}
           />
         )}
@@ -1725,12 +2130,23 @@ export default function ConfigPanel() {
           <JudgeForm
             config={node.config as JudgeNodeConfig}
             refs={refs}
+            templateRefs={templateRefs}
+            selfId={node.id}
             onPatch={patchConfig}
           />
         )}
         {node.type === 'sidenote' && (
           <SidenoteForm
             config={node.config as SidenoteConfig}
+            onPatch={patchConfig}
+          />
+        )}
+        {node.type === 'script' && (
+          <ScriptForm
+            config={node.config as ScriptConfig}
+            refs={refs}
+            templateRefs={templateRefs}
+            selfId={node.id}
             onPatch={patchConfig}
           />
         )}

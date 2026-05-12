@@ -38,6 +38,10 @@ const STATIC_GROUPS: Array<{ heading: string; items: ContextMenuItem[] }> = [
     ],
   },
   {
+    heading: 'Scripts',
+    items: [{ type: 'script', label: 'Script' }],
+  },
+  {
     heading: 'Annotations',
     items: [{ type: 'sidenote', label: 'Note' }],
   },

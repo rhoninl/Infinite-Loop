@@ -42,6 +42,9 @@ export interface WorkflowStoreState {
   addEdge: (edge: WorkflowEdge) => void;
   removeEdge: (id: string) => void;
   selectNode: (id: string | null) => void;
+  /** Replace the current workflow's `globals` map. Pass an empty object
+   * to clear all globals. Tracked in undo history. */
+  setGlobals: (next: Record<string, string>) => void;
   saveCurrentWorkflow: () => Promise<void>;
   /** Rename the current workflow and immediately persist via PUT. The full
    * workflow body is sent, so any pending edits are flushed alongside the
@@ -432,6 +435,15 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
     }),
 
   selectNode: (id) => set({ selectedNodeId: id }),
+
+  setGlobals: (next) =>
+    set((s) => {
+      if (!s.currentWorkflow) return {};
+      return {
+        currentWorkflow: bumpUpdated({ ...s.currentWorkflow, globals: next }),
+        ...pushPast(s, s.currentWorkflow),
+      };
+    }),
 
   saveCurrentWorkflow: async () => {
     const wf = get().currentWorkflow;

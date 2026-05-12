@@ -53,6 +53,7 @@
   --node-condition: #7dcfff;         /* cyan — predicate */
   --node-loop: #bb9af7;              /* mauve — iteration */
   --node-branch: #e0af68;            /* amber — branch */
+  --node-script: #f7768e;            /* magenta — inline script */
 
   --hover-tint: rgba(240, 237, 228, 0.05);
 
@@ -114,6 +115,7 @@
   --node-condition: #166775;
   --node-loop: #5a3e8e;
   --node-branch: #8f5e15;
+  --node-script: #b03056;
 
   --hover-tint: rgba(60, 52, 36, 0.05);
 
@@ -938,6 +940,8 @@ button.event-card-head-toggle:focus-visible {
 .wf-node[data-node-type='loop'] .wf-node-title { color: var(--node-loop); }
 .wf-node[data-node-type='branch'] { border-left: 2px solid var(--node-branch); }
 .wf-node[data-node-type='branch'] .wf-node-title { color: var(--node-branch); }
+.wf-node[data-node-type='script'] { border-left: 2px solid var(--node-script); }
+.wf-node[data-node-type='script'] .wf-node-title { color: var(--node-script); }
 /* Run state still wins over the type color when the run is active, so the
  * user can spot which node is hot at a glance. */
 .wf-node[data-state='live'] .wf-node-title { color: var(--accent-live); }
