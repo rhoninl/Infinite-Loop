@@ -860,6 +860,12 @@ button.event-card-head-toggle:focus-visible {
   margin: 2px 0 8px;
 }
 
+/* Run-level scope block sits above the event log, not inside a card —
+ * a bit more spacing helps it read as a separate region. */
+.iob-scope {
+  margin: 8px 0 12px;
+}
+
 .iob-toggle {
   appearance: none;
   display: flex;

@@ -217,22 +217,29 @@ function IoBlock({
           {io.input ? (
             <div className="iob-section" aria-label="input">
               <span className="iob-section-label">input</span>
-              <pre className="iob-json">
-                <JsonValue value={io.input} depth={0} />
-              </pre>
+              <JsonView value={io.input} />
             </div>
           ) : null}
           {io.output ? (
             <div className="iob-section" aria-label="output">
               <span className="iob-section-label">output</span>
-              <pre className="iob-json">
-                <JsonValue value={io.output} depth={0} />
-              </pre>
+              <JsonView value={io.output} />
             </div>
           ) : null}
         </div>
       ) : null}
     </section>
+  );
+}
+
+/** Pretty-print any JSON-shaped value as a <pre> with per-string collapse
+ * (`[more]`/`[less]`) for strings longer than `LONG_STRING_LIMIT`. Used by
+ * the per-card i/o block and the run-level scope block. */
+export function JsonView({ value }: { value: unknown }) {
+  return (
+    <pre className="iob-json">
+      <JsonValue value={value} depth={0} />
+    </pre>
   );
 }
 

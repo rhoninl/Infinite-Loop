@@ -19,7 +19,10 @@ const LONG_PROMPT = 'a'.repeat(300);
 
 const RECORD_A: RunRecord = {
   ...SUMMARY_A,
-  scope: { 'agent-1': { ok: true } },
+  scope: {
+    inputs: { topic: 'demo' },
+    'agent-1': { ok: true, summary: 'done' },
+  },
   events: [
     { type: 'run_started', workflowId: 'wf-1', workflowName: 'Demo' },
     {
@@ -184,6 +187,20 @@ describe('RunHistory', () => {
       ),
     );
     expect(screen.queryByLabelText(/^filtered to node /)).toBeNull();
+  });
+
+  it('renders a scope block that expands to show the full record.scope', async () => {
+    render(<RunHistory workflowId="wf-1" />);
+    fireEvent.click(await screen.findByLabelText('run r-a'));
+    const scopeToggle = await screen.findByLabelText('expand scope');
+    expect(scopeToggle).toHaveTextContent(/2 keys/i);
+    fireEvent.click(scopeToggle);
+
+    const scopeRegion = screen.getByLabelText('run scope');
+    expect(scopeRegion).toHaveTextContent('"inputs"');
+    expect(scopeRegion).toHaveTextContent('"agent-1"');
+    expect(scopeRegion).toHaveTextContent('"summary"');
+    expect(scopeRegion).toHaveTextContent('"done"');
   });
 
   it('renders an i/o block that expands to show input + output JSON', async () => {
