@@ -633,3 +633,50 @@ describe('WorkflowEngine — subworkflow child inputs alias', () => {
     });
   });
 });
+
+describe('runId on snapshot', () => {
+  it('exposes runId after start() and keeps it on terminal status', async () => {
+    const engine = new WorkflowEngine();
+    expect(engine.getState().runId).toBeUndefined();
+
+    const wf: Workflow = {
+      id: 'wf-runid',
+      name: 'runid test',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [
+        { id: 's', type: 'start', position: { x: 0, y: 0 }, config: {} },
+        { id: 'e', type: 'end', position: { x: 0, y: 0 }, config: { outcome: 'succeeded' } },
+      ],
+      edges: [{ id: 'e1', source: 's', sourceHandle: 'next', target: 'e' }],
+    };
+    await engine.start(wf);
+
+    const after = engine.getState();
+    expect(typeof after.runId).toBe('string');
+    expect(after.runId!.length).toBeGreaterThan(8);
+    expect(after.status).toBe('succeeded');
+  });
+
+  it('overwrites runId on the next start()', async () => {
+    const engine = new WorkflowEngine();
+    const wf: Workflow = {
+      id: 'wf-runid-2',
+      name: 'runid test 2',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [
+        { id: 's', type: 'start', position: { x: 0, y: 0 }, config: {} },
+        { id: 'e', type: 'end', position: { x: 0, y: 0 }, config: { outcome: 'succeeded' } },
+      ],
+      edges: [{ id: 'e1', source: 's', sourceHandle: 'next', target: 'e' }],
+    };
+    await engine.start(wf);
+    const first = engine.getState().runId;
+    await engine.start(wf);
+    const second = engine.getState().runId;
+    expect(second).not.toBe(first);
+  });
+});

@@ -282,6 +282,10 @@ export type Scope = Record<string, Record<string, unknown>>;
 
 export interface RunSnapshot {
   status: RunStatus;
+  /** Stable id of the current or most-recent run. Set on `start()`,
+   *  preserved on terminal statuses, overwritten by the next `start()`.
+   *  `undefined` only on a fresh engine that has never run anything. */
+  runId?: string;
   workflowId?: string;
   currentNodeId?: string;
   iterationByLoopId: Record<string, number>;
