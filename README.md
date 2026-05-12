@@ -232,6 +232,67 @@ how to spawn an external CLI (`bin`, `args`, `promptVia`) or an HTTP endpoint
 stdout). Drop a new JSON file in to add a runner; the palette shows its
 brand mark and the agent's config panel exposes it as a selectable provider.
 
+## Triggering workflows from agents (MCP)
+
+InfLoop ships a small MCP server that exposes each saved workflow as its
+own tool, with input schema derived from the workflow's declared
+`inputs[]`. Any MCP-speaking client (Claude Code, Cursor, Cline, …) can
+discover and invoke InfLoop workflows by name.
+
+The server lives in `mcp/inflooop-mcp/`. It is a long-lived stdio process
+spawned by the MCP client; it talks to a running InfLoop over HTTP.
+
+### Install in Claude Code
+
+```bash
+claude mcp add inflooop -- bun run /absolute/path/to/InfLoop/mcp/inflooop-mcp/index.ts
+```
+
+For other MCP clients, the equivalent `mcpServers` block:
+
+```json
+{
+  "mcpServers": {
+    "inflooop": {
+      "command": "bun",
+      "args": ["run", "/absolute/path/to/InfLoop/mcp/inflooop-mcp/index.ts"],
+      "env": {
+        "INFLOOP_BASE_URL": "http://localhost:3000"
+      }
+    }
+  }
+}
+```
+
+### Configuration
+
+| Env var | Default | Purpose |
+|---|---|---|
+| `INFLOOP_BASE_URL` | `http://localhost:3000` | Where InfLoop is reachable. |
+| `INFLOOP_API_TOKEN` | unset | If set, forwarded as `Authorization: Bearer …` on every call. Must match the InfLoop server's `INFLOOP_API_TOKEN`. |
+| `INFLOOP_TOOL_TIMEOUT_MS` | `600000` | How long a per-workflow tool call waits before returning a timeout result with the `runId`. |
+| `INFLOOP_POLL_INTERVAL_MS` | `500` | Base polling cadence (jittered ±20%). |
+
+### Tools exposed
+
+- **One tool per workflow** — named after the workflow id (sanitized to
+  `[a-z0-9_]`), with inputs derived from the workflow's `inputs[]`.
+  Calling the tool starts a run and blocks until it settles (or the
+  configured timeout fires), then returns `{ runId, status, outputs }`.
+- **`inflooop_get_run_status({ workflowId, runId })`** — read a run's
+  current status and outputs.
+- **`inflooop_list_runs({ workflowId? })`** — list recent runs.
+- **`inflooop_cancel_run({ workflowId, runId })`** — cancel an in-flight
+  run if the runId matches.
+
+### Limitations
+
+- The engine runs one workflow at a time. A second concurrent tool call
+  gets a busy error naming the in-flight `runId`; use `inflooop_get_run_status`
+  to wait for it.
+- Workflow discovery happens at MCP-server startup. Add a new workflow
+  → restart the MCP server. Live refresh is a planned follow-up.
+
 ## Tech stack
 
 - **Runtime:** Bun
