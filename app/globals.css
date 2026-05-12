@@ -1532,6 +1532,8 @@ button.event-card-head-toggle:focus-visible {
   padding: 10px 12px;
   outline: none;
   transition: border-color 120ms ease, background 120ms ease;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .field textarea {
