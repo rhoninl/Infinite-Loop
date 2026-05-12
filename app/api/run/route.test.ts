@@ -112,7 +112,7 @@ describe('POST /api/run', () => {
     expect(body.state).toEqual(idleState);
     expect(getWorkflowMock).toHaveBeenCalledWith('wf-1');
     expect(startMock).toHaveBeenCalledTimes(1);
-    expect(startMock).toHaveBeenCalledWith(sampleWorkflow);
+    expect(startMock).toHaveBeenCalledWith(sampleWorkflow, { resolvedInputs: {} });
   });
 
   it('returns 400 when body is invalid JSON', async () => {
@@ -197,5 +197,76 @@ describe('POST /api/run/stop', () => {
     expect(stopMock).toHaveBeenCalledTimes(1);
     const body = (await res.json()) as { state: RunSnapshot };
     expect(body.state).toEqual(idleState);
+  });
+});
+
+describe('POST /api/run — input validation', () => {
+  const workflowWithStringInput: Workflow = {
+    id: 'wf-inputs-1',
+    name: 'inputs test',
+    version: 1,
+    inputs: [{ name: 'topic', type: 'string' }],
+    nodes: [
+      { id: 'start-1', type: 'start', position: { x: 0, y: 0 }, config: {} },
+    ],
+    edges: [],
+    createdAt: 0,
+    updatedAt: 0,
+  };
+
+  const workflowWithNumberInput: Workflow = {
+    id: 'wf-inputs-2',
+    name: 'inputs test number',
+    version: 1,
+    inputs: [{ name: 'count', type: 'number' }],
+    nodes: [
+      { id: 'start-1', type: 'start', position: { x: 0, y: 0 }, config: {} },
+    ],
+    edges: [],
+    createdAt: 0,
+    updatedAt: 0,
+  };
+
+  it('returns 400 invalid-inputs when a required input is missing', async () => {
+    getWorkflowMock.mockResolvedValue(workflowWithStringInput);
+    getStateMock.mockReturnValue(idleState);
+
+    const res = await POST(jsonRequest({ workflowId: 'wf-inputs-1' }));
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBe('invalid-inputs');
+    expect(body.field).toBe('topic');
+    expect(body.reason).toBe('required');
+    expect(startMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 invalid-inputs on type mismatch', async () => {
+    getWorkflowMock.mockResolvedValue(workflowWithNumberInput);
+    getStateMock.mockReturnValue(idleState);
+
+    const res = await POST(
+      jsonRequest({ workflowId: 'wf-inputs-2', inputs: { count: 'abc' } }),
+    );
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBe('invalid-inputs');
+    expect(body.field).toBe('count');
+    expect(body.reason).toBe('type');
+    expect(body.expected).toBe('number');
+    expect(startMock).not.toHaveBeenCalled();
+  });
+
+  it('accepts a valid inputs payload and starts the run', async () => {
+    getWorkflowMock.mockResolvedValue(workflowWithStringInput);
+    getStateMock.mockReturnValue(idleState);
+
+    const res = await POST(
+      jsonRequest({ workflowId: 'wf-inputs-1', inputs: { topic: 'cats' } }),
+    );
+
+    expect(res.status).toBe(202);
+    expect(startMock).toHaveBeenCalledTimes(1);
   });
 });
