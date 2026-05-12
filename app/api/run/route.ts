@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { workflowEngine } from '@/lib/server/workflow-engine';
 import { getWorkflow } from '@/lib/server/workflow-store';
+import {
+  resolveRunInputs,
+  WorkflowInputError,
+} from '@/lib/shared/resolve-run-inputs';
 
 export async function POST(req: Request) {
   let body: unknown;
@@ -10,16 +14,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'invalid JSON body' }, { status: 400 });
   }
 
-  const workflowId =
-    body && typeof body === 'object'
-      ? (body as Record<string, unknown>).workflowId
-      : undefined;
+  const obj = (body && typeof body === 'object') ? body as Record<string, unknown> : {};
+  const workflowId = obj.workflowId;
   if (typeof workflowId !== 'string' || workflowId.length === 0) {
     return NextResponse.json(
       { error: 'workflowId is required' },
       { status: 400 },
     );
   }
+
+  const suppliedInputs =
+    obj.inputs && typeof obj.inputs === 'object' && !Array.isArray(obj.inputs)
+      ? (obj.inputs as Record<string, unknown>)
+      : {};
 
   let workflow;
   try {
@@ -31,6 +38,25 @@ export async function POST(req: Request) {
     );
   }
 
+  let resolvedInputs;
+  try {
+    resolvedInputs = resolveRunInputs(workflow.inputs ?? [], suppliedInputs);
+  } catch (err) {
+    if (err instanceof WorkflowInputError) {
+      return NextResponse.json(
+        {
+          error: 'invalid-inputs',
+          field: err.field,
+          reason: err.reason,
+          ...(err.expected ? { expected: err.expected } : {}),
+          ...(err.got ? { got: err.got } : {}),
+        },
+        { status: 400 },
+      );
+    }
+    throw err;
+  }
+
   if (workflowEngine.getState().status === 'running') {
     return NextResponse.json(
       { error: 'a run is already active' },
@@ -38,8 +64,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // Fire-and-forget; the engine emits progress over the WS bus.
-  workflowEngine.start(workflow).catch((err) => {
+  workflowEngine.start(workflow, { resolvedInputs }).catch((err) => {
     console.error('[api/run] engine.start failed:', err);
   });
 

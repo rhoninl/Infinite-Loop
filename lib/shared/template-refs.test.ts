@@ -264,6 +264,39 @@ describe('lintWorkflowTemplates', () => {
   });
 });
 
+describe('availableVariables — workflow inputs', () => {
+  it('surfaces declared inputs at the top of the list', () => {
+    const wf: Workflow = {
+      ...baseWorkflow,
+      inputs: [
+        { name: 'topic', type: 'string' },
+        { name: 'max', type: 'number', default: 5 },
+      ],
+    };
+    const refs = availableVariables(wf, 'claude-1');
+    const inputRefs = refs.filter((r) => r.nodeId === 'inputs');
+    expect(inputRefs.map((r) => r.ref)).toEqual([
+      'inputs.topic',
+      'inputs.max',
+    ]);
+    expect(inputRefs.every((r) => r.inScope)).toBe(true);
+  });
+});
+
+describe('lintField — workflow inputs', () => {
+  it('reports missing-input for undeclared input refs', () => {
+    const wf: Workflow = { ...baseWorkflow, inputs: [{ name: 'topic', type: 'string' }] };
+    const warnings = lintField(wf, 'claude-1', 'prompt', '{{inputs.unknown}}');
+    expect(warnings.map((w) => w.reason)).toEqual(['missing-input']);
+  });
+
+  it('accepts declared input refs', () => {
+    const wf: Workflow = { ...baseWorkflow, inputs: [{ name: 'topic', type: 'string' }] };
+    const warnings = lintField(wf, 'claude-1', 'prompt', '{{inputs.topic}}');
+    expect(warnings).toEqual([]);
+  });
+});
+
 describe('findTemplateSlot', () => {
   it('returns the slot when caret sits inside open braces', () => {
     // Text: "hello {{x.y}} world", caret right after "{{"

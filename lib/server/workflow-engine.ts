@@ -35,6 +35,7 @@ import type {
   WorkflowEvent,
   WorkflowNode,
 } from '../shared/workflow';
+import type { ResolvedInputs } from '../shared/resolve-run-inputs';
 import { eventBus } from './event-bus';
 import { nodeExecutors } from './nodes/index';
 import { saveRun } from './run-store';
@@ -108,7 +109,10 @@ export class WorkflowEngine {
     return { ...this.snapshot, events: this.recentEvents };
   }
 
-  async start(workflow: Workflow): Promise<void> {
+  async start(
+    workflow: Workflow,
+    opts?: { resolvedInputs?: ResolvedInputs },
+  ): Promise<void> {
     if (this.snapshot.status === 'running') {
       throw new Error('a run is already active');
     }
@@ -130,6 +134,11 @@ export class WorkflowEngine {
     const seedScope: Scope = {};
     if (workflow.globals && typeof workflow.globals === 'object') {
       seedScope.globals = { ...workflow.globals };
+    }
+    if (opts?.resolvedInputs && typeof opts.resolvedInputs === 'object') {
+      // Pre-resolved by the caller (API route or subworkflow executor); the
+      // engine does no validation here — it just seeds.
+      seedScope.inputs = { ...opts.resolvedInputs };
     }
     this.snapshot = {
       status: 'running',
@@ -733,7 +742,17 @@ export class WorkflowEngine {
     }
 
     // 3. Build child scope and walk.
-    const childScope: Scope = { __inputs: resolvedInputs };
+    // Child scope exposes the resolved inputs under both `inputs.NAME`
+    // (the new top-level convention) AND `__inputs.NAME` (preserved for
+    // back-compat with existing subworkflow JSONs that still reference
+    // `{{__inputs.NAME}}`). Values are pass-through from the parent's
+    // templated `cfg.inputs`; strict typed validation against
+    // `child.inputs` declarations is intentionally not applied here —
+    // see the design doc for the rationale.
+    const childScope: Scope = {
+      inputs: { ...resolvedInputs },
+      __inputs: { ...resolvedInputs },
+    };
     const childExec: ExecutionScope = {
       subworkflowStack: [...(exec.subworkflowStack ?? []), node.id],
     };

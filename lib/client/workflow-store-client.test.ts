@@ -589,3 +589,60 @@ describe('undo / redo', () => {
     expect(useWorkflowStore.getState().selectedNodeId).toBeNull();
   });
 });
+
+describe('setWorkflowInputs', () => {
+  it('replaces workflow.inputs and bumps updatedAt', () => {
+    const wf = makeWorkflow(); // updatedAt: 0, no inputs
+    useWorkflowStore.getState().loadWorkflow(wf);
+
+    const decls = [{ name: 'topic', type: 'string' as const, default: 'cats' }];
+    useWorkflowStore.getState().setWorkflowInputs(decls);
+
+    const next = useWorkflowStore.getState().currentWorkflow!;
+    expect(next.inputs).toEqual(decls);
+    expect(next.updatedAt).toBeGreaterThanOrEqual(0);
+  });
+
+  it('clears inputs when passed an empty array', () => {
+    const wf: Workflow = {
+      ...makeWorkflow(),
+      inputs: [{ name: 'topic', type: 'string' }],
+    };
+    useWorkflowStore.getState().loadWorkflow(wf);
+
+    useWorkflowStore.getState().setWorkflowInputs([]);
+
+    const next = useWorkflowStore.getState().currentWorkflow!;
+    expect(next.inputs).toEqual([]);
+  });
+
+  // Regression: without isDirty, autosave (which watches the flag) never
+  // fires after an inputs edit, so the API run reads a stale on-disk
+  // workflow and the engine seeds an empty `inputs` scope — every
+  // {{inputs.NAME}} ref then warns missingKey at runtime.
+  it('marks the workflow dirty so autosave fires', () => {
+    useWorkflowStore.getState().loadWorkflow(makeWorkflow());
+    // loadWorkflow may set isDirty if geometry normalization mutated the
+    // input; clear it so we observe only the setter's effect.
+    useWorkflowStore.setState({ isDirty: false });
+
+    useWorkflowStore
+      .getState()
+      .setWorkflowInputs([{ name: 'topic', type: 'string', default: 'cats' }]);
+
+    expect(useWorkflowStore.getState().isDirty).toBe(true);
+  });
+});
+
+describe('setGlobals', () => {
+  // Same regression as setWorkflowInputs — globals edits must trigger
+  // autosave so the run reads the updated declaration.
+  it('marks the workflow dirty so autosave fires', () => {
+    useWorkflowStore.getState().loadWorkflow(makeWorkflow());
+    useWorkflowStore.setState({ isDirty: false });
+
+    useWorkflowStore.getState().setGlobals({ KEY: 'value' });
+
+    expect(useWorkflowStore.getState().isDirty).toBe(true);
+  });
+});

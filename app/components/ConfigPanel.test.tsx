@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import FakeTimers, { type InstalledClock } from '@sinonjs/fake-timers';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useWorkflowStore } from '@/lib/client/workflow-store-client';
-import type { Workflow, WorkflowNode } from '@/lib/shared/workflow';
+import type { Workflow, WorkflowInputDecl, WorkflowNode } from '@/lib/shared/workflow';
 import ConfigPanel from './ConfigPanel';
 
 function makeWorkflow(nodes: WorkflowNode[]): Workflow {
@@ -222,7 +222,7 @@ describe('ConfigPanel', () => {
     expect(stored2.infinite).toBe(false);
   });
 
-  it('Start node shows the descriptor copy and only the Display name field', () => {
+  it('Start node shows the workflow inputs editor', () => {
     const wf = makeWorkflow([startNode]);
     act(() => {
       useWorkflowStore.getState().loadWorkflow(wf);
@@ -231,11 +231,11 @@ describe('ConfigPanel', () => {
 
     render(<ConfigPanel />);
 
-    expect(screen.getByText('Begin the workflow.')).toBeInTheDocument();
-    // Display name (renames the canvas card title) is shared across all
-    // node types — that's the only textbox a Start node carries. No other
-    // type-specific text/number inputs.
+    // The inputs editor is rendered for the Begin node.
+    expect(screen.getByRole('button', { name: /add input/i })).toBeInTheDocument();
+    // Display name (renames the canvas card title) is shared across all node types.
     expect(screen.getByLabelText('Display name')).toBeInTheDocument();
+    // With no declared inputs, no extra textboxes beyond Display name.
     expect(screen.queryAllByRole('textbox')).toHaveLength(1);
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
   });
@@ -264,5 +264,59 @@ describe('ConfigPanel', () => {
     expect(screen.getByLabelText('Working directory')).toHaveTextContent(
       '/work',
     );
+  });
+
+  it('renders existing declared inputs as rows', () => {
+    const inputs: WorkflowInputDecl[] = [
+      { name: 'topic', type: 'string', default: 'cats' },
+      { name: 'count', type: 'number' },
+    ];
+    const wf: Workflow = { ...makeWorkflow([startNode]), inputs };
+    act(() => {
+      useWorkflowStore.getState().loadWorkflow(wf);
+      useWorkflowStore.getState().selectNode('start-1');
+    });
+
+    render(<ConfigPanel />);
+
+    expect(screen.getByDisplayValue('topic')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('count')).toBeInTheDocument();
+  });
+
+  it('lets the user add a new input row', () => {
+    const wf: Workflow = { ...makeWorkflow([startNode]), inputs: [] };
+    act(() => {
+      useWorkflowStore.getState().loadWorkflow(wf);
+      useWorkflowStore.getState().selectNode('start-1');
+    });
+
+    render(<ConfigPanel />);
+
+    const addBtn = screen.getByRole('button', { name: /add input/i });
+    act(() => {
+      fireEvent.click(addBtn);
+    });
+
+    // After clicking add, at least one name input field should exist.
+    const nameInputs = screen
+      .getAllByRole('textbox')
+      .filter((el) => (el as HTMLInputElement).placeholder === 'name');
+    expect(nameInputs.length).toBeGreaterThan(0);
+  });
+
+  it('surfaces duplicate-name validation', () => {
+    const inputs: WorkflowInputDecl[] = [
+      { name: 'topic', type: 'string' },
+      { name: 'topic', type: 'number' },
+    ];
+    const wf: Workflow = { ...makeWorkflow([startNode]), inputs };
+    act(() => {
+      useWorkflowStore.getState().loadWorkflow(wf);
+      useWorkflowStore.getState().selectNode('start-1');
+    });
+
+    render(<ConfigPanel />);
+
+    expect(screen.getAllByText(/duplicate name/i).length).toBeGreaterThan(0);
   });
 });

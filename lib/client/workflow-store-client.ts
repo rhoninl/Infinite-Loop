@@ -6,6 +6,7 @@ import type {
   Workflow,
   WorkflowEdge,
   WorkflowEvent,
+  WorkflowInputDecl,
   WorkflowNode,
   WsStatus,
 } from '../shared/workflow';
@@ -45,6 +46,9 @@ export interface WorkflowStoreState {
   /** Replace the current workflow's `globals` map. Pass an empty object
    * to clear all globals. Tracked in undo history. */
   setGlobals: (next: Record<string, string>) => void;
+  /** Replace the current workflow's `inputs` array. Pass an empty
+   * array to clear all declared inputs. Tracked in undo history. */
+  setWorkflowInputs: (next: WorkflowInputDecl[]) => void;
   saveCurrentWorkflow: () => Promise<void>;
   /** Rename the current workflow and immediately persist via PUT. The full
    * workflow body is sent, so any pending edits are flushed alongside the
@@ -441,6 +445,17 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
       if (!s.currentWorkflow) return {};
       return {
         currentWorkflow: bumpUpdated({ ...s.currentWorkflow, globals: next }),
+        isDirty: true,
+        ...pushPast(s, s.currentWorkflow),
+      };
+    }),
+
+  setWorkflowInputs: (next) =>
+    set((s) => {
+      if (!s.currentWorkflow) return {};
+      return {
+        currentWorkflow: bumpUpdated({ ...s.currentWorkflow, inputs: next }),
+        isDirty: true,
         ...pushPast(s, s.currentWorkflow),
       };
     }),
