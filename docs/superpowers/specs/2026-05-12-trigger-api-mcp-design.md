@@ -338,3 +338,29 @@ short section.
 - **Streaming via MCP progress notifications** would let agents see
   partial tokens. Wiring engine events through the MCP server is
   straightforward but deferred to keep v1 tight.
+
+## Update — 2026-05-12 (later)
+
+The standalone stdio package (`mcp/inflooop-mcp/`) was deleted and
+replaced with an in-process HTTP route at `POST /api/mcp`
+(`app/api/mcp/route.ts`).
+
+The original justification for a standalone process (§2) was that MCP
+clients speak stdio and spawn the server as a child. That held when
+stdio was the dominant transport, but Streamable HTTP is now broadly
+supported by Claude Code, Cursor, Cline, and most other MCP clients. We
+already run a Next.js HTTP server, so the stdio package was adding a
+separate process, a separate runtime requirement (`bun` on the client
+host), and a separate auth surface for no real benefit.
+
+Outcomes of the pivot:
+- **In-process tools** — no HTTP round-trips between the MCP handler
+  and the workflow engine. Tools call `workflow-store`, `run-store`, and
+  `workflow-engine` directly.
+- **Per-request workflow discovery** — `tools/list` rebuilds the tool
+  list on every call. Adding a workflow is immediately visible to MCP
+  clients; no MCP restart needed.
+- **One auth surface** — the same `INFLOOP_API_TOKEN` env var used by
+  the rest of the API gates the MCP endpoint. No extra env vars.
+- **No client-side install** — clients point at a URL. Nothing to
+  install on the agent host.

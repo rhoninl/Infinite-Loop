@@ -234,147 +234,122 @@ brand mark and the agent's config panel exposes it as a selectable provider.
 
 ## Triggering workflows from agents (MCP)
 
-InfLoop ships a small MCP server that exposes each saved workflow as its
-own tool, with input schema derived from the workflow's declared
-`inputs[]`. Any MCP-speaking client (Claude Code, Cursor, Cline, …) can
-discover and invoke InfLoop workflows by name.
-
-The server lives in `mcp/inflooop-mcp/`. It is a long-lived stdio process
-spawned by the MCP client; it talks to a running InfLoop over HTTP.
+InfLoop exposes each saved workflow as its own MCP tool via a Streamable
+HTTP endpoint at `POST /api/mcp`. Input schema is derived from the
+workflow's declared `inputs[]`. Any MCP-speaking client (Claude Code,
+Cursor, Cline, …) can discover and invoke InfLoop workflows by name.
+The tools run in-process — no separate process to install or manage.
+Workflow discovery happens per `tools/list` call, so a newly added
+workflow is immediately visible without restarting anything.
 
 ### The contract
 
-The server is one stdio process. An MCP client spawns it as a child, exchanges JSON-RPC over stdin/stdout, and calls workflow tools by name. To wire it up to any client you only need three things:
+Clients need two things: a **URL** and optionally a **bearer token**.
+No `command`/`args` pair, no `bun` install, no source code on the
+client's machine.
 
 | Field | Value |
 |---|---|
-| **command** | `bun` |
-| **args** | `["run", "/absolute/path/to/InfLoop/mcp/inflooop-mcp/index.ts"]` |
-| **env** | `INFLOOP_BASE_URL` (where InfLoop runs), optionally `INFLOOP_API_TOKEN`, `INFLOOP_TOOL_TIMEOUT_MS`, `INFLOOP_POLL_INTERVAL_MS` |
-
-If your client manages MCP servers via a JSON config (`mcpServers` map), drop in:
-
-```json
-{
-  "mcpServers": {
-    "inflooop": {
-      "command": "bun",
-      "args": ["run", "/absolute/path/to/InfLoop/mcp/inflooop-mcp/index.ts"],
-      "env": {
-        "INFLOOP_BASE_URL": "http://localhost:3000"
-      }
-    }
-  }
-}
-```
-
-If your client only takes a single shell command, use:
-
-```bash
-bun run /absolute/path/to/InfLoop/mcp/inflooop-mcp/index.ts
-```
-
-with `INFLOOP_BASE_URL` exported in the same shell.
+| **url** | `http://localhost:3000/api/mcp` (or wherever InfLoop runs) |
+| **auth** | `Authorization: Bearer <INFLOOP_API_TOKEN>` — only required if `INFLOOP_API_TOKEN` is set on the InfLoop server |
 
 ### Examples
 
 **Claude Code:**
 
 ```bash
-claude mcp add inflooop -- bun run /absolute/path/to/InfLoop/mcp/inflooop-mcp/index.ts
+claude mcp add --transport http inflooop http://localhost:3000/api/mcp
 ```
+
+The exact flag name for Streamable HTTP transport may vary across Claude Code versions. If the above does not work, try `--transport streamable-http`. Run `claude mcp add --help` to see the flags your version accepts.
 
 Then list available tools in any session: `/mcp` (Claude Code shows the registered server and its tool count) or just ask the model "what inflooop tools do you have?".
 
-**Cursor** — open `~/.cursor/mcp.json` (or `<project>/.cursor/mcp.json`) and add the JSON block from "The contract" above. Restart Cursor.
-
-**Cline (VS Code)** — open the MCP-servers settings panel and paste the same JSON block. Cline reloads servers automatically.
-
-**Zed** — `~/.config/zed/settings.json` under `"context_servers"`:
-
-```json
-{
-  "context_servers": {
-    "inflooop": {
-      "command": {
-        "path": "bun",
-        "args": ["run", "/absolute/path/to/InfLoop/mcp/inflooop-mcp/index.ts"],
-        "env": { "INFLOOP_BASE_URL": "http://localhost:3000" }
-      }
-    }
-  }
-}
-```
-
-**Continue.dev, OpenAI Codex CLI, and other generic MCP consumers** — they all read the same `mcpServers` shape. Use the JSON block from "The contract" verbatim.
-
-**Hermes (or any custom agent runtime that consumes MCP):** Hermes-style runtimes typically expect either an `mcpServers` JSON map or a YAML equivalent. Both forms reduce to the same three fields — `command`, `args`, `env` — so the JSON block above works as-is. If your runtime spawns MCP servers from a YAML manifest, the equivalent is:
-
-```yaml
-mcp_servers:
-  inflooop:
-    command: bun
-    args:
-      - run
-      - /absolute/path/to/InfLoop/mcp/inflooop-mcp/index.ts
-    env:
-      INFLOOP_BASE_URL: http://localhost:3000
-```
-
-Most runtimes also let you pass extra env vars (`INFLOOP_API_TOKEN`, `INFLOOP_TOOL_TIMEOUT_MS`) without needing client-specific syntax.
-
-### Running InfLoop and the MCP client on different hosts
-
-By default the MCP server talks to `http://localhost:3000`. If InfLoop runs on a different machine (a server, a container, a Tailscale peer), point the MCP server at it via `INFLOOP_BASE_URL`:
+**Cursor, Cline, Zed, Continue.dev, OpenAI Codex CLI** — open your client's `mcpServers` config and add:
 
 ```json
 {
   "mcpServers": {
     "inflooop": {
-      "command": "bun",
-      "args": ["run", "/absolute/path/to/InfLoop/mcp/inflooop-mcp/index.ts"],
-      "env": {
-        "INFLOOP_BASE_URL": "http://infloop.lan:3000",
-        "INFLOOP_API_TOKEN": "<same token as the InfLoop server>"
+      "url": "http://localhost:3000/api/mcp"
+    }
+  }
+}
+```
+
+That's the entire entry — just a `url` key. No `command`, no `args`, no local runtime required.
+
+**Hermes or any runtime that accepts an MCP URL** — use the same `url` field. If your runtime expects YAML, the equivalent is:
+
+```yaml
+mcp_servers:
+  inflooop:
+    url: http://localhost:3000/api/mcp
+```
+
+This is considerably simpler than the previous stdio approach: no `bun` on the agent host, no source code shipping, just a reachable URL.
+
+### Authenticating
+
+If `INFLOOP_API_TOKEN` is set on the InfLoop server, clients must send
+the token on every request. Some MCP clients accept a `headers` map in
+the `mcpServers` entry:
+
+```json
+{
+  "mcpServers": {
+    "inflooop": {
+      "url": "http://localhost:3000/api/mcp",
+      "headers": {
+        "Authorization": "Bearer <your-token>"
       }
     }
   }
 }
 ```
 
-Note that the MCP **client** still spawns the server locally — `bun` and the `mcp/inflooop-mcp/` source must be present on the machine that runs the MCP client. Only the HTTP traffic crosses the network.
-
-### Verify without an MCP client
-
-You can confirm the server boots and registers tools without installing anything by piping a `tools/list` JSON-RPC sequence directly into it:
-
-```bash
-printf '%s\n' \
-  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke-test","version":"0.0.0"}}}' \
-  '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
-  '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
-  | bun run mcp/inflooop-mcp/index.ts
-```
-
-The MCP server keeps its stdio transport open after `tools/list` (real clients hold the pipe open for follow-up `tools/call` requests). For a one-shot probe, kill the process with `Ctrl-C` after stdout shows the `tools/list` response, or pipe through `head -n 2` to close stdin once two response lines have arrived.
-
-Expected: stderr prints `[inflooop-mcp] connected — N workflow tool(s) registered`, stdout prints a `tools/list` response listing every saved workflow plus the three `inflooop_*` utility tools.
-
-### Configuration
-
-| Env var | Default | Purpose |
-|---|---|---|
-| `INFLOOP_BASE_URL` | `http://localhost:3000` | Where InfLoop is reachable. |
-| `INFLOOP_API_TOKEN` | unset | If set, forwarded as `Authorization: Bearer …` on every call. Must match the InfLoop server's `INFLOOP_API_TOKEN`. |
-| `INFLOOP_TOOL_TIMEOUT_MS` | `600000` | How long a per-workflow tool call waits before returning a timeout result with the `runId`. |
-| `INFLOOP_POLL_INTERVAL_MS` | `500` | Base polling cadence (jittered ±20%). |
+Consult your client's docs for the exact field name if `headers` is not recognized.
 
 > **Note.** Setting `INFLOOP_API_TOKEN` on the InfLoop server protects
 > the HTTP API against off-host callers but **disables the browser
-> UI** for that server (the UI doesn't forward the token, and the SSE
-> stream isn't auth-gated). Use this only when the UI doesn't need to
-> work — e.g. an InfLoop instance that exists purely to back the MCP
-> server.
+> UI** for that server (the UI doesn't forward the token). Use this
+> only when the UI doesn't need to work — e.g. an InfLoop instance
+> that exists purely to serve agent traffic.
+
+### Running InfLoop on another host
+
+When InfLoop runs on a remote machine (a server, a container, a
+Tailscale peer), change the URL in the `mcpServers` entry to point at
+that host:
+
+```json
+{
+  "mcpServers": {
+    "inflooop": {
+      "url": "http://infloop.lan:3000/api/mcp",
+      "headers": {
+        "Authorization": "Bearer <token>"
+      }
+    }
+  }
+}
+```
+
+Nothing needs to be installed on the client's machine. The MCP tools
+live inside the InfLoop server.
+
+### Verify without an MCP client
+
+Send a `tools/list` JSON-RPC request directly with `curl`:
+
+```bash
+curl -s -X POST http://localhost:3000/api/mcp \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | jq
+```
+
+Expected: a `tools/list` response listing every saved workflow plus the
+three `inflooop_*` utility tools.
 
 ### Tools exposed
 
@@ -391,10 +366,8 @@ Expected: stderr prints `[inflooop-mcp] connected — N workflow tool(s) registe
 ### Limitations
 
 - The engine runs one workflow at a time. A second concurrent tool call
-  gets a busy error naming the in-flight `runId`; use `inflooop_get_run_status`
-  to wait for it.
-- Workflow discovery happens at MCP-server startup. Add a new workflow
-  → restart the MCP server. Live refresh is a planned follow-up.
+  gets a busy error naming the in-flight `runId`; use
+  `inflooop_get_run_status` to wait for it.
 
 ## Tech stack
 
