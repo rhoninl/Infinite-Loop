@@ -18,7 +18,7 @@ const settled: PersistedRun = {
 describe('getRunStatus', () => {
   it('returns status + filtered outputs', async () => {
     const c = clientWith({
-      getRun: mock(async () => ({ ok: true, run: settled })),
+      getRun: mock(async () => ({ ok: true as const, run: settled })),
     });
     const out = await getRunStatus(c, { workflowId: 'wf', runId: 'r' });
     expect(out.status).toBe('succeeded');
@@ -27,7 +27,7 @@ describe('getRunStatus', () => {
 
   it('surfaces not-found cleanly', async () => {
     const c = clientWith({
-      getRun: mock(async () => ({ ok: false, kind: 'not-found' as const })),
+      getRun: mock(async () => ({ ok: false as const, kind: 'not-found' as const })),
     });
     const out = await getRunStatus(c, { workflowId: 'wf', runId: 'r' });
     expect(out.status).toBe('error');
@@ -49,7 +49,7 @@ describe('cancelRun', () => {
   it('returns cancelled:true when the runId matches the in-flight run', async () => {
     const c = clientWith({
       getRun: mock(async () => ({
-        ok: true,
+        ok: true as const,
         run: { ...settled, status: 'running', runId: 'r' } as PersistedRun,
       })),
       cancelRun: mock(async () => ({ ok: true as const })),
@@ -60,7 +60,7 @@ describe('cancelRun', () => {
 
   it('returns cancelled:false when the run already settled', async () => {
     const c = clientWith({
-      getRun: mock(async () => ({ ok: true, run: settled })),
+      getRun: mock(async () => ({ ok: true as const, run: settled })),
     });
     const out = await cancelRun(c, { workflowId: 'wf', runId: 'r' });
     expect(out.cancelled).toBe(false);
@@ -69,7 +69,7 @@ describe('cancelRun', () => {
 
   it('returns cancelled:false when the runId does not match the current run', async () => {
     const c = clientWith({
-      getRun: mock(async () => ({ ok: false, kind: 'not-found' as const })),
+      getRun: mock(async () => ({ ok: false as const, kind: 'not-found' as const })),
     });
     const out = await cancelRun(c, { workflowId: 'wf', runId: 'rid-old' });
     expect(out.cancelled).toBe(false);

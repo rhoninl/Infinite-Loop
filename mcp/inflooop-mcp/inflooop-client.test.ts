@@ -75,11 +75,11 @@ describe('InflooopClient.startRun', () => {
 describe('InflooopClient.getRun', () => {
   it('returns the run record on 200', async () => {
     fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ run: { status: 'running', runId: 'r' } }), { status: 200 }),
+      new Response(JSON.stringify({ run: { status: 'running', runId: 'r', workflowId: 'wf' } }), { status: 200 }),
     );
     const c = new InflooopClient('http://infloop');
     const out = await c.getRun('wf', 'r');
-    expect(out).toEqual({ ok: true, run: { status: 'running', runId: 'r' } });
+    expect(out).toEqual({ ok: true, run: { status: 'running', runId: 'r', workflowId: 'wf' } });
   });
 
   it('returns { ok:false, kind:"not-found" } on 404', async () => {
