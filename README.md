@@ -242,13 +242,17 @@ discover and invoke InfLoop workflows by name.
 The server lives in `mcp/inflooop-mcp/`. It is a long-lived stdio process
 spawned by the MCP client; it talks to a running InfLoop over HTTP.
 
-### Install in Claude Code
+### The contract
 
-```bash
-claude mcp add inflooop -- bun run /absolute/path/to/InfLoop/mcp/inflooop-mcp/index.ts
-```
+The server is one stdio process. An MCP client spawns it as a child, exchanges JSON-RPC over stdin/stdout, and calls workflow tools by name. To wire it up to any client you only need three things:
 
-For other MCP clients, the equivalent `mcpServers` block:
+| Field | Value |
+|---|---|
+| **command** | `bun` |
+| **args** | `["run", "/absolute/path/to/InfLoop/mcp/inflooop-mcp/index.ts"]` |
+| **env** | `INFLOOP_BASE_URL` (where InfLoop runs), optionally `INFLOOP_API_TOKEN`, `INFLOOP_TOOL_TIMEOUT_MS`, `INFLOOP_POLL_INTERVAL_MS` |
+
+If your client manages MCP servers via a JSON config (`mcpServers` map), drop in:
 
 ```json
 {
@@ -263,6 +267,96 @@ For other MCP clients, the equivalent `mcpServers` block:
   }
 }
 ```
+
+If your client only takes a single shell command, use:
+
+```bash
+bun run /absolute/path/to/InfLoop/mcp/inflooop-mcp/index.ts
+```
+
+with `INFLOOP_BASE_URL` exported in the same shell.
+
+### Examples
+
+**Claude Code:**
+
+```bash
+claude mcp add inflooop -- bun run /absolute/path/to/InfLoop/mcp/inflooop-mcp/index.ts
+```
+
+Then list available tools in any session: `/mcp` (Claude Code shows the registered server and its tool count) or just ask the model "what inflooop tools do you have?".
+
+**Cursor** — open `~/.cursor/mcp.json` (or `<project>/.cursor/mcp.json`) and add the JSON block from "The contract" above. Restart Cursor.
+
+**Cline (VS Code)** — open the MCP-servers settings panel and paste the same JSON block. Cline reloads servers automatically.
+
+**Zed** — `~/.config/zed/settings.json` under `"context_servers"`:
+
+```json
+{
+  "context_servers": {
+    "inflooop": {
+      "command": {
+        "path": "bun",
+        "args": ["run", "/absolute/path/to/InfLoop/mcp/inflooop-mcp/index.ts"],
+        "env": { "INFLOOP_BASE_URL": "http://localhost:3000" }
+      }
+    }
+  }
+}
+```
+
+**Continue.dev, OpenAI Codex CLI, and other generic MCP consumers** — they all read the same `mcpServers` shape. Use the JSON block from "The contract" verbatim.
+
+**Hermes (or any custom agent runtime that consumes MCP):** Hermes-style runtimes typically expect either an `mcpServers` JSON map or a YAML equivalent. Both forms reduce to the same three fields — `command`, `args`, `env` — so the JSON block above works as-is. If your runtime spawns MCP servers from a YAML manifest, the equivalent is:
+
+```yaml
+mcp_servers:
+  inflooop:
+    command: bun
+    args:
+      - run
+      - /absolute/path/to/InfLoop/mcp/inflooop-mcp/index.ts
+    env:
+      INFLOOP_BASE_URL: http://localhost:3000
+```
+
+Most runtimes also let you pass extra env vars (`INFLOOP_API_TOKEN`, `INFLOOP_TOOL_TIMEOUT_MS`) without needing client-specific syntax.
+
+### Running InfLoop and the MCP client on different hosts
+
+By default the MCP server talks to `http://localhost:3000`. If InfLoop runs on a different machine (a server, a container, a Tailscale peer), point the MCP server at it via `INFLOOP_BASE_URL`:
+
+```json
+{
+  "mcpServers": {
+    "inflooop": {
+      "command": "bun",
+      "args": ["run", "/absolute/path/to/InfLoop/mcp/inflooop-mcp/index.ts"],
+      "env": {
+        "INFLOOP_BASE_URL": "http://infloop.lan:3000",
+        "INFLOOP_API_TOKEN": "<same token as the InfLoop server>"
+      }
+    }
+  }
+}
+```
+
+Note that the MCP **client** still spawns the server locally — `bun` and the `mcp/inflooop-mcp/` source must be present on the machine that runs the MCP client. Only the HTTP traffic crosses the network.
+
+### Verify without an MCP client
+
+You can confirm the server boots and registers tools without installing anything by piping a `tools/list` JSON-RPC sequence directly into it:
+
+```bash
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{}}}' \
+  '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+  | bun run mcp/inflooop-mcp/index.ts
+```
+
+Expected: stderr prints `[inflooop-mcp] connected — N workflow tool(s) registered`, stdout prints a `tools/list` response listing every saved workflow plus the three `inflooop_*` utility tools.
 
 ### Configuration
 
