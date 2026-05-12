@@ -273,6 +273,13 @@ For other MCP clients, the equivalent `mcpServers` block:
 | `INFLOOP_TOOL_TIMEOUT_MS` | `600000` | How long a per-workflow tool call waits before returning a timeout result with the `runId`. |
 | `INFLOOP_POLL_INTERVAL_MS` | `500` | Base polling cadence (jittered ±20%). |
 
+> **Note.** Setting `INFLOOP_API_TOKEN` on the InfLoop server protects
+> the HTTP API against off-host callers but **disables the browser
+> UI** for that server (the UI doesn't forward the token, and the SSE
+> stream isn't auth-gated). Use this only when the UI doesn't need to
+> work — e.g. an InfLoop instance that exists purely to back the MCP
+> server.
+
 ### Tools exposed
 
 - **One tool per workflow** — named after the workflow id (sanitized to

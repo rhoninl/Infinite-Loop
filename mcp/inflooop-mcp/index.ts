@@ -170,7 +170,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
   return {
     content: [{ type: 'text', text: JSON.stringify(out, null, 2) }],
-    isError: out.status === 'error',
+    isError: out.status === 'error' || out.status === 'timeout',
   };
 });
 

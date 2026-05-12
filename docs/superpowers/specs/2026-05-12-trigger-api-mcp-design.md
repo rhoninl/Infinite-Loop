@@ -133,17 +133,16 @@ One env var: `INFLOOP_API_TOKEN`.
 - Unset (default) → no auth. Today's behavior; suitable for
   localhost / single-user dev.
 - Set → all `/api/run*` and `/api/runs*` routes require
-  `Authorization: Bearer <token>`. The browser UI is expected to run
-  same-origin; it reads the token via `NEXT_PUBLIC_INFLOOP_API_TOKEN`
-  and forwards it on its own requests.
+  `Authorization: Bearer <token>`. Intended for callers that *aren't* the
+  browser UI: external HTTP clients, the MCP server, agents on the LAN.
 
-> ⚠ **Important caveat.** `NEXT_PUBLIC_*` is inlined into the client
-> bundle, so this token is visible to anyone who can load the page.
-> Do **not** enable `INFLOOP_API_TOKEN` if your InfLoop UI is reachable
-> by anyone you would not give the token to. The token defends the API
-> against off-host callers (other devices on your LAN that can't load
-> the UI), not against anyone with a browser tab. A stronger
-> origin-cookie scheme is a follow-up.
+> ⚠ **Important.** The browser UI and the `/api/events` SSE stream are
+> not parameterised by this token (`EventSource` cannot send custom
+> headers, and there is no UI plumbing that forwards a token to
+> `fetch`). Enabling `INFLOOP_API_TOKEN` therefore breaks the browser UI
+> against the same origin. Treat this as a CLI/MCP-only hardening knob.
+> A future change can add a same-origin cookie or query-param scheme
+> that lets the UI authenticate too.
 
 The MCP server reads `INFLOOP_API_TOKEN` from its own env and forwards
 `Authorization: Bearer …` on every request.

@@ -69,7 +69,10 @@ export async function runWorkflowTool(
   while (true) {
     const polled = await client.getRun(opts.workflowId, runId);
     if (!polled.ok) {
-      // 404 means the engine moved on; treat as terminal-but-lost.
+      // 404 here means the engine has moved on (started a new run, or
+      // restarted). We intentionally do NOT retry — bounded latency
+      // matters more than catching transient races, and the user can
+      // re-invoke the tool to start a fresh run.
       return {
         status: 'error',
         runId,
