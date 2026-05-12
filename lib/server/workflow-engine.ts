@@ -742,7 +742,17 @@ export class WorkflowEngine {
     }
 
     // 3. Build child scope and walk.
-    const childScope: Scope = { __inputs: resolvedInputs };
+    // Child scope exposes the resolved inputs under both `inputs.NAME`
+    // (the new top-level convention) AND `__inputs.NAME` (preserved for
+    // back-compat with existing subworkflow JSONs that still reference
+    // `{{__inputs.NAME}}`). Values are pass-through from the parent's
+    // templated `cfg.inputs`; strict typed validation against
+    // `child.inputs` declarations is intentionally not applied here —
+    // see the design doc for the rationale.
+    const childScope: Scope = {
+      inputs: { ...resolvedInputs },
+      __inputs: { ...resolvedInputs },
+    };
     const childExec: ExecutionScope = {
       subworkflowStack: [...(exec.subworkflowStack ?? []), node.id],
     };

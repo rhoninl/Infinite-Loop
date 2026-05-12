@@ -547,3 +547,89 @@ describe('WorkflowEngine — workflow inputs', () => {
     expect(eng.getState().scope.inputs).toBeUndefined();
   });
 });
+
+describe('WorkflowEngine — subworkflow child inputs alias', () => {
+  beforeEach(() => {
+    eventBus.clear();
+  });
+
+  afterEach(() => {
+    eventBus.clear();
+  });
+
+  it('exposes parent-supplied inputs under both `inputs` and `__inputs`', async () => {
+    // Child workflow: start → end (trivial; we only care about scope seeding).
+    const childWf: Workflow = {
+      id: 'child-wf',
+      name: 'child',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [
+        { id: 'start-c', type: 'start', position: { x: 0, y: 0 }, config: {} },
+        { id: 'end-c', type: 'end', position: { x: 0, y: 0 }, config: {} },
+      ],
+      edges: [{ id: 'ec1', source: 'start-c', sourceHandle: 'next', target: 'end-c' }],
+    };
+
+    // Subworkflow node that:
+    //   - passes `topic: 'cats'` to the child
+    //   - copies `inputs.topic` and `__inputs.topic` back as named outputs
+    const subwfNode: WorkflowNode = {
+      id: 'sub-1',
+      type: 'subworkflow',
+      position: { x: 0, y: 0 },
+      config: {
+        workflowId: 'child-wf',
+        inputs: { topic: 'cats' },
+        outputs: {
+          topicViaInputs: 'inputs.topic',
+          topicViaLegacy: '__inputs.topic',
+        },
+      },
+    };
+
+    // Parent workflow: start → subworkflow → end
+    const parentWf: Workflow = {
+      id: 'parent-wf',
+      name: 'parent',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [
+        { id: 'start-p', type: 'start', position: { x: 0, y: 0 }, config: {} },
+        subwfNode,
+        { id: 'end-p', type: 'end', position: { x: 0, y: 0 }, config: {} },
+      ],
+      edges: [
+        { id: 'ep1', source: 'start-p', sourceHandle: 'next', target: 'sub-1' },
+        { id: 'ep2', source: 'sub-1', sourceHandle: 'next', target: 'end-p' },
+      ],
+    };
+
+    const eng = new WorkflowEngine(
+      {
+        start: exec(['next']),
+        end: exec(['next']),
+        agent: exec(['next']),
+        condition: exec(['next']),
+        loop: exec(['next']),
+      },
+      async (id: string) => {
+        if (id === 'child-wf') return childWf;
+        throw new Error(`unknown workflow: ${id}`);
+      },
+    );
+
+    await eng.start(parentWf);
+
+    expect(eng.getState().status).toBe('succeeded');
+    // Both `inputs.topic` and `__inputs.topic` must have been present in the
+    // child scope for the output-copy mechanism to populate these keys.
+    expect(eng.getState().scope['sub-1']).toMatchObject({
+      status: 'succeeded',
+      topicViaInputs: 'cats',
+      topicViaLegacy: 'cats',
+    });
+  });
+});
