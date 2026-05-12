@@ -2757,3 +2757,241 @@ input[type='number'].no-spin {
   color: var(--accent-live);
   outline: none;
 }
+
+/* ─── Begin-node inputs editor (bni-*) ─────────────────────────
+ * Renders inside ConfigPanel's StartForm. Each row is a fieldset
+ * with name/type/remove on one line, then default and description
+ * stacked beneath. Mirrors the visual language of .field — same
+ * mono font, same border treatment, same focus glow. */
+.bni-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.bni-blurb {
+  margin: 0;
+}
+.bni-code {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--bg-input);
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+}
+.bni-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--border-strong);
+  padding: 10px 12px;
+  margin: 0;
+  background: var(--bg-elevated);
+}
+.bni-row-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+.bni-name {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  font-family: var(--mono);
+}
+.bni-type {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  font-family: var(--mono);
+  min-width: 96px;
+}
+.bni-default,
+.bni-description {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  font-family: var(--mono);
+}
+.bni-row input[type='text'],
+.bni-row input[type='number'],
+.bni-row textarea,
+.bni-row select {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--fg);
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  padding: 8px 10px;
+  outline: none;
+  text-transform: none;
+  letter-spacing: normal;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.bni-row textarea {
+  resize: vertical;
+  line-height: 1.5;
+  min-height: 64px;
+}
+.bni-row input:focus,
+.bni-row textarea:focus,
+.bni-row select:focus {
+  border-color: var(--accent-live);
+  background: var(--bg-input-focus);
+  box-shadow: 0 0 0 1px var(--accent-live-glow);
+}
+.bni-remove {
+  flex: 0 0 auto;
+  padding-inline: 10px;
+  font-size: 16px;
+  line-height: 1;
+}
+.bni-add {
+  align-self: flex-start;
+}
+.field-error {
+  margin: 0;
+  font-size: 11.5px;
+  font-family: var(--mono);
+  color: var(--accent-err);
+  letter-spacing: 0.02em;
+}
+
+/* ─── Run-button group + chevron menu (run-*) ───────────────────
+ * The Run button gets a chevron sibling when the workflow declares
+ * inputs, opening a small floating menu with "Run with inputs…". */
+.run-group {
+  position: relative;
+  display: inline-flex;
+  gap: 0;
+}
+.run-chevron {
+  padding-inline: 8px;
+  margin-left: -1px;
+}
+.run-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  min-width: 180px;
+  padding: 4px 0;
+  font-family: var(--mono);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+.run-menu-item {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 8px 14px;
+  font-size: 12px;
+  text-align: left;
+  letter-spacing: 0.14em;
+  background: transparent;
+  border: 0;
+  color: var(--fg-soft);
+  text-transform: none;
+}
+.run-menu-item:hover:not(:disabled),
+.run-menu-item:focus-visible {
+  background: var(--hover-tint);
+  color: var(--accent-live);
+  outline: none;
+}
+
+/* ─── RunInputsModal (rim-*) ────────────────────────────────────
+ * Overlay that prompts for declared workflow inputs before kicking
+ * off a run. Modal styling mirrors HermesConnectionsModal's overlay
+ * + card pattern. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+}
+.modal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 420px;
+  max-width: 560px;
+  max-height: 80vh;
+  overflow: auto;
+  padding: 22px 24px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+  font-family: var(--mono);
+}
+.modal h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 22px;
+  letter-spacing: 0.02em;
+  color: var(--fg);
+}
+.modal .field {
+  gap: 4px;
+}
+.modal .field > label {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  font-family: var(--mono);
+}
+.modal .field input[type='text'],
+.modal .field input[type='number'],
+.modal .field textarea {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--fg);
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  padding: 8px 10px;
+  outline: none;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.modal .field input[type='checkbox'] {
+  align-self: flex-start;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-live);
+  cursor: pointer;
+}
+.modal .field textarea {
+  resize: vertical;
+  line-height: 1.5;
+  min-height: 80px;
+}
+.modal .field input:focus,
+.modal .field textarea:focus {
+  border-color: var(--accent-live);
+  background: var(--bg-input-focus);
+  box-shadow: 0 0 0 1px var(--accent-live-glow);
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
