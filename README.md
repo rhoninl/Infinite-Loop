@@ -37,13 +37,17 @@ It's the difference between *one Claude call* and *a Claude pipeline you can rer
 
 ## Features
 
-- 🎨 **Drag-and-drop canvas** — composable workflows with `@xyflow/react`. Drag containers, resize them, click an inner node and edit its config.
+- 🎨 **Drag-and-drop canvas** — composable workflows with `@xyflow/react`. Drag containers, resize them, click an inner node and edit its config. Right-click an empty area to add a node; `Cmd/Ctrl+Z` undoes edits.
 - ↻ **Built-in `Loop` container** — repeat a body until a `Condition` says stop, with a max-iteration cap. The default workflow ships as Start → Loop[Claude → Condition[sentinel "DONE"]] → End.
 - ⋔ **Branch / If-Else** — structured `lhs op rhs` predicates (`==`, `!=`, `contains`, `matches`) with templating in both sides. Routes to `true` / `false` / `error` ports.
 - ⟳ **Three Condition kinds** — `sentinel` (text match in stdout), `command` (shell exit 0), `judge` (a second Claude call that reads the output and decides).
-- 📡 **Real-time token streaming** — every token from `claude --print` lands in the right-side console as it's generated. Spawns claude with `--output-format stream-json --include-partial-messages` and parses text deltas live.
+- 🧩 **Multi-agent primitives** — `Parallel` fans children out (`wait-all` / `race` / `quorum`), `Subworkflow` calls another workflow as a single node with declared `inputs`/`outputs`, `Judge` picks a winner from N candidates with structured scoring.
+- 🐚 **Script node** — drop in TypeScript (run via Bun) or Python and read upstream outputs through a typed `inputs` object; the return value is stored under `script-N.result`.
+- 🔌 **Pluggable agent runners** — each agent node picks a provider from `providers/*.json` (Claude, Codex, or a custom HTTP runner like Hermes). The provider declares the binary, args template, and output parser.
+- 📡 **Real-time token streaming** — every token from the active runner lands in the right-side console as it's generated. For Claude: `--output-format stream-json --include-partial-messages` parsed live.
+- 🕘 **Run history** — completed runs are persisted under `runs/<workflowId>/<runId>/`; the History panel lists them, replays per-node input/output cards, and links each card back to its node on the canvas.
 - 🔁 **Refresh-safe** — close the tab and reopen mid-run; the engine keeps a sliding-window event buffer, the SSE first frame rehydrates the run status, the live-node highlight, and the streaming log.
-- 📝 **Templating in any text field** — `{{node-id.field}}` resolves against a flat scope keyed by node id, so a downstream Claude can read the upstream Claude's stdout.
+- 📝 **Templating in any text field** — `{{node-id.field}}` resolves against a flat scope keyed by node id, with autocomplete in the config panel. `__inputs.*` is reserved for subworkflow inputs.
 - 💾 **Workflows are JSON files** — saved under `workflows/<id>.json`, atomically written, version-bumped on each save, listable from a top-bar menu.
 - 🛂 **Cancellation** — Stop kills the active child process via `SIGTERM` → `SIGKILL` after a 2 s grace, settles the run as `cancelled`.
 - 🎛️ **Resizable right panel + smooth elapsed timer** — column-resize gutter, persisted to localStorage; elapsed counter updates every animation frame.
@@ -96,11 +100,13 @@ The default workflow `loop-claude-until-condition.json` loads automatically. Edi
 ### Other commands
 
 ```bash
-bun run test        # vitest run (currently 131 tests)
+bun run test        # bun:test
 bun run typecheck   # tsc --noEmit
 bun run build       # next build (production)
 bun run start       # NODE_ENV=production bun server.ts
 ```
+
+The dev server binds to all interfaces by default (LAN-accessible). If `PORT` is taken, it falls through to the next free port.
 
 ## Nodes
 
@@ -108,7 +114,8 @@ bun run start       # NODE_ENV=production bun server.ts
 |---|---|---|---|
 | **Start** | — | — | `next` |
 | **End** | `outcome: succeeded \| failed` | — | (terminal) |
-| **Claude** | `prompt`, `cwd`, `timeoutMs` | `stdout`, `stderr`, `exitCode`, `durationMs`, `timedOut` | `next` (exit 0) / `error` |
+| **Claude / Agent** | `prompt`, `cwd`, `timeoutMs`, `providerId` | `stdout`, `stderr`, `exitCode`, `durationMs`, `timedOut` | `next` (exit 0) / `error` |
+| **Script** | `language: ts \| py`, `code`, `inputs: Record<string,string>` (templated), `timeoutMs` | `result` (return value), `stdout`, `stderr`, `durationMs` | `next` / `error` |
 | **Condition** | `kind: sentinel \| command \| judge`, `against?`, plus per-kind config | `met`, `detail` | `met` / `not_met` / `error` |
 | **Loop** | `maxIterations`, `mode: while-not-met \| unbounded` | `iterations`, `broke` | `next` |
 | **Branch** | `lhs`, `op: == \| != \| contains \| matches`, `rhs` | `result`, `lhs`, `rhs`, `op` | `true` / `false` / `error` |
@@ -116,7 +123,7 @@ bun run start       # NODE_ENV=production bun server.ts
 | **Subworkflow** | `workflowId`, `inputs: Record<string,string>` (templated), `outputs: Record<string,string>` (dotted child paths) | declared output names mapped from child terminal scope, plus `status`, `errorMessage?` | `next` / `error` |
 | **Judge** | `criteria`, `candidates: string[]`, `judgePrompt?`, `model?`, `providerId?` | `winner_index`, `winner`, `scores`, `reasoning` | `next` / `error` |
 
-Both `lhs` and `rhs` of a Branch (and Claude's `prompt` and `cwd`, and Condition's `against`) are templating-aware. Write `{{claude-1.stdout}} contains "DONE"` and the engine resolves it against the run's flat scope before evaluating.
+Both `lhs` and `rhs` of a Branch (and an Agent's `prompt` and `cwd`, Condition's `against`, and a Script's `inputs.*`) are templating-aware. Write `{{claude-1.stdout}} contains "DONE"` and the engine resolves it against the run's flat scope before evaluating. The config-panel text fields autocomplete `{{…}}` references from the workflow's predecessor graph.
 
 **Multi-agent primitives.** `Parallel` is a container that runs N child branches concurrently with a configurable join (`wait-all`, `race`, or `quorum:N`) and error policy (`fail-fast` cancels siblings; `best-effort` lets them finish). `Subworkflow` calls another workflow as a single node with isolated I/O — declared `inputs` are templated from parent scope into the child's `__inputs`, and named `outputs` are copied back. `Judge` takes N candidate texts and asks a Claude judge to pick the best, exposing structured `winner_index`, `scores`, and `reasoning`.
 
@@ -208,25 +215,41 @@ Environment variables:
 
 | Var | Default | Purpose |
 |---|---|---|
-| `PORT` | `3000` | HTTP port |
+| `PORT` | `3000` (then next free) | HTTP port |
+| `HOST` | `0.0.0.0` | Bind address; set to `127.0.0.1` to disable LAN access |
 | `INFLOOP_CLAUDE_BIN` | `claude` | Path to the Claude binary; useful for testing with the bundled `tests/fixtures/fake-claude.sh` |
+| `INFLOOP_PYTHON_BIN` | `python3` | Interpreter for `Script` nodes with `language: py` |
+| `INFLOOP_BUN_BIN` | `bun` | Interpreter for `Script` nodes with `language: ts` |
 | `INFLOOP_WORKFLOWS_DIR` | `<cwd>/workflows` | Where workflow JSON files live |
+| `INFLOOP_RUNS_DIR` | `<cwd>/runs` | Where completed-run records are persisted |
+
+### Providers
+
+Each agent node picks a runner from `providers/*.json`. A provider declares
+how to spawn an external CLI (`bin`, `args`, `promptVia`) or an HTTP endpoint
+(`host`, `token`, `ports`), and which output format the engine should parse
+(`claude-stream-json` for token-by-token streaming, `plain` for end-of-process
+stdout). Drop a new JSON file in to add a runner; the palette shows its
+brand mark and the agent's config panel exposes it as a selectable provider.
 
 ## Tech stack
 
 - **Runtime:** Bun
 - **Server:** Next.js 15 (App Router) + custom server (`server.ts`)
-- **Frontend:** React 19, Zustand for state, `@xyflow/react` v12 for the canvas, hand-written CSS (no Tailwind)
+- **Frontend:** React 19, Zustand for state, `@xyflow/react` v12 for the canvas, hand-written CSS with multi-hue Tokyo-Night-inspired tokens
 - **Transport:** Server-Sent Events (`/api/events`)
-- **Tests:** Vitest, `@testing-library/react`, jsdom
+- **Runners:** pluggable providers (subprocess via spawn, or HTTP — see `providers/`)
+- **Tests:** `bun:test`, `@testing-library/react`, `@happy-dom/global-registrator`
 
 ## Roadmap
 
 The current build ships **Phase 1** of the spec — 6 base node types (Start, End, Claude, Condition, Loop, Branch) and the live SSE pipeline — plus the Phase 1.5 multi-agent primitives. Future phases:
 
-- **Phase 1.5 (current):** `Parallel`, `Subworkflow`, and `Judge` are now first-class node types; ships with a Team preset workflow. See [`docs/superpowers/specs/2026-05-06-multi-agent-orchestration-design.md`](docs/superpowers/specs/2026-05-06-multi-agent-orchestration-design.md).
-- **Phase 2:** `Shell` (run arbitrary command), `SetVar` (write a named variable), `Catch` (run a subgraph on error before settling), predicate DSL with `&&` / `||` / `!`.
-- **Phase 3:** `Wait`, `HTTP`, `Switch` (multi-way).
+- **Phase 1.5:** `Parallel`, `Subworkflow`, and `Judge` are first-class node types; ships with a Team preset workflow. See [`docs/superpowers/specs/2026-05-06-multi-agent-orchestration-design.md`](docs/superpowers/specs/2026-05-06-multi-agent-orchestration-design.md).
+- **Phase 2 (in progress):** `Script` (TS/Python) and pluggable HTTP providers have landed. Still on deck: `Shell` (run arbitrary command), `SetVar` (write a named variable), `Catch` (run a subgraph on error before settling), predicate DSL with `&&` / `||` / `!`.
+- **Phase 3:** `Wait`, `HTTP` node, `Switch` (multi-way).
+
+Recent UI work — run history persistence, per-node input/output cards, and a canvas ↔ history-log link — is documented in [`docs/superpowers/specs/2026-05-12-canvas-history-link-design.md`](docs/superpowers/specs/2026-05-12-canvas-history-link-design.md).
 
 See [`docs/superpowers/specs/2026-04-28-workflow-dag-design.md`](docs/superpowers/specs/2026-04-28-workflow-dag-design.md) for the full design.
 
@@ -244,14 +267,19 @@ app/
   page.tsx              top bar + tri-pane layout (palette · canvas · right-panel)
 lib/
   shared/workflow.ts    immutable types contract (Workflow, WorkflowNode, ...)
-  client/               Zustand store + SSE hook
+  shared/template-refs  template-ref linting + scope graph
+  client/               Zustand store + SSE hook + undo/redo
   server/
     workflow-engine.ts  graph walker + Loop semantics + cancellation
     workflow-store.ts   filesystem-backed Workflow CRUD
+    run-store.ts        persists completed runs under runs/
     claude-runner.ts    spawns `claude --print`, parses stream-json
     event-bus.ts        typed pub/sub
-    nodes/              one executor per node type
+    nodes/              one executor per node type (agent, script, branch, …)
     conditions/         sentinel / command / judge strategies
+    providers/          loads and validates providers/*.json runner specs
+providers/              runner specs (Claude, Codex, Hermes, …) — drop a JSON file to add one
+runs/                   persisted run records, one folder per workflow
 docs/
   superpowers/specs/    design specs (this repo's history is in here)
 workflows/              the workflow JSON store (live data, gitignored on real installs)
