@@ -271,6 +271,7 @@ function RecordedEventLog({
         events={record.events}
         filterNodeId={filterNodeId}
         onCardActivate={onCardActivate}
+        showIO
       />
     </div>
   );

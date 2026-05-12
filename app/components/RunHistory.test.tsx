@@ -15,6 +15,8 @@ const SUMMARY_A: RunSummary = {
   eventCount: 4,
 };
 
+const LONG_PROMPT = 'a'.repeat(300);
+
 const RECORD_A: RunRecord = {
   ...SUMMARY_A,
   scope: { 'agent-1': { ok: true } },
@@ -24,14 +26,14 @@ const RECORD_A: RunRecord = {
       type: 'node_started',
       nodeId: 'agent-1',
       nodeType: 'agent',
-      resolvedConfig: {},
+      resolvedConfig: { providerId: 'claude', prompt: LONG_PROMPT },
     },
     {
       type: 'node_finished',
       nodeId: 'agent-1',
       nodeType: 'agent',
       branch: 'next',
-      outputs: {},
+      outputs: { ok: true, summary: 'done' },
       durationMs: 1200,
     },
     { type: 'run_finished', status: 'succeeded', scope: {} },
@@ -182,6 +184,39 @@ describe('RunHistory', () => {
       ),
     );
     expect(screen.queryByLabelText(/^filtered to node /)).toBeNull();
+  });
+
+  it('renders an i/o block that expands to show input + output JSON', async () => {
+    render(<RunHistory workflowId="wf-1" />);
+    fireEvent.click(await screen.findByLabelText('run r-a'));
+    const card = await screen.findByLabelText('node card agent-1');
+
+    // Open the card so the body (including the i/o toggle) is reachable.
+    fireEvent.click(card.querySelector('button.event-card-head-toggle')!);
+    const ioToggle = await screen.findByLabelText('expand i/o');
+    fireEvent.click(ioToggle);
+
+    expect(screen.getByLabelText('input')).toBeInTheDocument();
+    expect(screen.getByLabelText('output')).toBeInTheDocument();
+    // Short string from outputs renders verbatim.
+    expect(screen.getByLabelText('output')).toHaveTextContent('"summary"');
+    expect(screen.getByLabelText('output')).toHaveTextContent('"done"');
+  });
+
+  it('collapses long strings behind a show-more affordance', async () => {
+    render(<RunHistory workflowId="wf-1" />);
+    fireEvent.click(await screen.findByLabelText('run r-a'));
+    const card = await screen.findByLabelText('node card agent-1');
+    fireEvent.click(card.querySelector('button.event-card-head-toggle')!);
+    fireEvent.click(await screen.findByLabelText('expand i/o'));
+
+    const inputBlock = screen.getByLabelText('input');
+    // Preview: first 200 chars of LONG_PROMPT, not the full 300.
+    expect(inputBlock.textContent).not.toContain('a'.repeat(300));
+    expect(inputBlock.textContent).toContain('a'.repeat(200));
+
+    fireEvent.click(screen.getByLabelText('show more'));
+    expect(inputBlock.textContent).toContain('a'.repeat(300));
   });
 
   it('clicking a node card header selects the node and requests a pan', async () => {

@@ -850,6 +850,115 @@ button.event-card-head-toggle:focus-visible {
   padding: 4px 0 6px;
 }
 
+/* ─── i/o block inside a node card ───────────────────────
+ * Surfaces the node's resolvedConfig (input) and outputs in the recorded
+ * run-history view. Kept visually quieter than the surrounding stdout so
+ * the eye still lands on the actual run output first; the i/o is reference
+ * material the user opens deliberately. */
+.iob {
+  border: 1px dashed var(--border);
+  margin: 2px 0 8px;
+}
+
+.iob-toggle {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  background: transparent;
+  border: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  cursor: pointer;
+  text-align: left;
+}
+
+.iob-toggle:hover {
+  color: var(--fg);
+}
+
+.iob-toggle:focus-visible {
+  outline: 1px solid var(--border-strong);
+  outline-offset: -2px;
+}
+
+.iob-toggle-label {
+  color: var(--fg-soft);
+}
+
+.iob-toggle-hint {
+  font-size: 10.5px;
+  color: var(--fg-dim);
+  margin-left: auto;
+}
+
+.iob-toggle-fold {
+  font-size: 10px;
+  color: var(--fg-dim);
+}
+
+.iob-body {
+  padding: 4px 8px 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.iob-section + .iob-section {
+  margin-top: 6px;
+}
+
+.iob-section-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  margin-bottom: 2px;
+}
+
+.iob-json {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.iob-tok-key {
+  color: var(--fg-soft);
+}
+
+.iob-tok-str {
+  color: var(--accent-live);
+}
+
+.iob-tok-num,
+.iob-tok-bool,
+.iob-tok-null {
+  color: var(--fg-dim);
+}
+
+.iob-show-more {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+
+.iob-show-more:hover {
+  color: var(--fg);
+}
+
 /* ─── workflow node cards (canvas) ──────────────────────── */
 /* Each node card on the canvas reads as a thin instrument tile with a
  * phosphor LED in the head and a faint inner glow when live. Hard corners,
