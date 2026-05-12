@@ -247,20 +247,15 @@ function StartForm({ workflow }: { workflow: Workflow | null }) {
   const idRe = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
   return (
-    <div aria-label="workflow inputs">
-      <p
-        className="field-hint"
-        style={{ marginBottom: 12, color: 'var(--fg-dim)' }}
-      >
+    <div className="bni-panel" aria-label="workflow inputs">
+      <p className="field-hint bni-blurb">
         Inputs supplied per run. Reference them in templates as{' '}
-        <code style={{ fontFamily: 'var(--mono)' }}>
-          {'{{inputs.NAME}}'}
-        </code>
+        <code className="bni-code">{'{{inputs.NAME}}'}</code>
         . An input with no default is required at run time.
       </p>
 
       {declared.length === 0 && (
-        <p className="field-hint" style={{ color: 'var(--fg-dim)' }}>
+        <p className="field-hint">
           No inputs declared. The workflow will run with no parameters.
         </p>
       )}
@@ -270,17 +265,9 @@ function StartForm({ workflow }: { workflow: Workflow | null }) {
         const badId = !idRe.test(row.name);
         const defaultBad = row.default !== undefined && !validDefault(row);
         return (
-          <fieldset
-            key={idx}
-            style={{
-              border: '1px solid var(--border-soft)',
-              padding: '8px 10px',
-              marginBottom: 8,
-              borderRadius: 4,
-            }}
-          >
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <label style={{ flex: 1 }}>
+          <fieldset key={idx} className="bni-row">
+            <div className="bni-row-head">
+              <label className="bni-name">
                 name
                 <input
                   type="text"
@@ -289,7 +276,7 @@ function StartForm({ workflow }: { workflow: Workflow | null }) {
                   onChange={(e) => patchRow(idx, { name: e.target.value })}
                 />
               </label>
-              <label>
+              <label className="bni-type">
                 type
                 <select
                   value={row.type}
@@ -308,6 +295,7 @@ function StartForm({ workflow }: { workflow: Workflow | null }) {
               </label>
               <button
                 type="button"
+                className="btn btn-ghost bni-remove"
                 onClick={() => removeRow(idx)}
                 aria-label={`remove input ${row.name}`}
               >
@@ -315,12 +303,12 @@ function StartForm({ workflow }: { workflow: Workflow | null }) {
               </button>
             </div>
 
-            <label style={{ display: 'block', marginTop: 6 }}>
+            <label className="bni-default">
               default (empty = required)
               <DefaultEditor row={row} onChange={(d) => patchRow(idx, { default: d })} />
             </label>
 
-            <label style={{ display: 'block', marginTop: 6 }}>
+            <label className="bni-description">
               description
               <input
                 type="text"
@@ -345,7 +333,7 @@ function StartForm({ workflow }: { workflow: Workflow | null }) {
         );
       })}
 
-      <button type="button" onClick={addRow}>
+      <button type="button" className="btn btn-ghost bni-add" onClick={addRow}>
         + add input
       </button>
     </div>

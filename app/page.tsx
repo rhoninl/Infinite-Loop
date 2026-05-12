@@ -226,7 +226,7 @@ export default function Page() {
               Stop
             </button>
           ) : (
-            <div className="run-group" style={{ position: 'relative', display: 'inline-flex' }}>
+            <div className="run-group">
               <button
                 type="button"
                 onClick={handleRun}
@@ -245,31 +245,20 @@ export default function Page() {
                 <>
                   <button
                     type="button"
-                    className="btn"
+                    className="btn run-chevron"
                     aria-label="run options"
                     aria-haspopup="menu"
                     aria-expanded={runChevronOpen}
                     onClick={() => setRunChevronOpen((v) => !v)}
-                    style={{ padding: '0 6px' }}
                   >
                     ▾
                   </button>
                   {runChevronOpen && (
-                    <div
-                      role="menu"
-                      style={{
-                        position: 'absolute',
-                        top: '100%',
-                        right: 0,
-                        background: 'var(--bg)',
-                        border: '1px solid var(--border-soft)',
-                        padding: 4,
-                        zIndex: 10,
-                      }}
-                    >
+                    <div role="menu" className="run-menu">
                       <button
                         type="button"
                         role="menuitem"
+                        className="btn btn-ghost run-menu-item"
                         onClick={handleRunWithInputs}
                       >
                         Run with inputs…
