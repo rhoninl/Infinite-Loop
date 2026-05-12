@@ -173,6 +173,43 @@ describe('POST /api/run', () => {
     expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
+
+  it('includes runId in the 202 response when engine assigns one', async () => {
+    getWorkflowMock.mockResolvedValue(sampleWorkflow);
+    // First call: guard check (idle — allow start); second call: post-start state with runId.
+    getStateMock.mockReturnValueOnce(idleState).mockReturnValueOnce({
+      ...runningState,
+      runId: 'rid-abc',
+    });
+
+    const res = await POST(jsonRequest({ workflowId: 'wf-1' }));
+
+    expect(res.status).toBe(202);
+    const body = (await res.json()) as { runId?: string; state: RunSnapshot };
+    expect(body.runId).toBe('rid-abc');
+    expect(body.state.runId).toBe('rid-abc');
+  });
+
+  it('returns 409 with the in-flight runId and workflowId when busy', async () => {
+    getWorkflowMock.mockResolvedValue(sampleWorkflow);
+    getStateMock.mockReturnValue({
+      ...runningState,
+      runId: 'rid-busy',
+      workflowId: 'wf-other',
+    });
+
+    const res = await POST(jsonRequest({ workflowId: 'wf-1' }));
+
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as {
+      error: string;
+      runId?: string;
+      workflowId?: string;
+    };
+    expect(body.error).toMatch(/already active|busy/i);
+    expect(body.runId).toBe('rid-busy');
+    expect(body.workflowId).toBe('wf-other');
+  });
 });
 
 describe('GET /api/run', () => {

@@ -57,9 +57,14 @@ export async function POST(req: Request) {
     throw err;
   }
 
-  if (workflowEngine.getState().status === 'running') {
+  const currentState = workflowEngine.getState();
+  if (currentState.status === 'running') {
     return NextResponse.json(
-      { error: 'a run is already active' },
+      {
+        error: 'a run is already active',
+        runId: currentState.runId,
+        workflowId: currentState.workflowId,
+      },
       { status: 409 },
     );
   }
@@ -68,8 +73,12 @@ export async function POST(req: Request) {
     console.error('[api/run] engine.start failed:', err);
   });
 
+  const stateAfter = workflowEngine.getState();
   return NextResponse.json(
-    { state: workflowEngine.getState() },
+    {
+      runId: stateAfter.runId,
+      state: stateAfter,
+    },
     { status: 202 },
   );
 }
