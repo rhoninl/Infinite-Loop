@@ -66,25 +66,32 @@ function coerce(d: WorkflowInputDecl, raw: unknown): WorkflowInputValue {
         });
       }
       return raw;
-    case 'number':
-      if (typeof raw !== 'number' || !Number.isFinite(raw)) {
-        throw new WorkflowInputError({
-          field: d.name,
-          reason: 'type',
-          expected: 'number',
-          got: typeof raw,
-        });
+    case 'number': {
+      if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+      if (typeof raw === 'string' && raw.length > 0) {
+        const n = Number(raw);
+        if (Number.isFinite(n)) return n;
       }
-      return raw;
-    case 'boolean':
-      if (typeof raw !== 'boolean') {
-        throw new WorkflowInputError({
-          field: d.name,
-          reason: 'type',
-          expected: 'boolean',
-          got: typeof raw,
-        });
+      throw new WorkflowInputError({
+        field: d.name,
+        reason: 'type',
+        expected: 'number',
+        got: typeof raw,
+      });
+    }
+    case 'boolean': {
+      if (typeof raw === 'boolean') return raw;
+      if (typeof raw === 'string') {
+        const lower = raw.toLowerCase();
+        if (lower === 'true') return true;
+        if (lower === 'false') return false;
       }
-      return raw;
+      throw new WorkflowInputError({
+        field: d.name,
+        reason: 'type',
+        expected: 'boolean',
+        got: typeof raw,
+      });
+    }
   }
 }
