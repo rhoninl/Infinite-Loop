@@ -1,0 +1,119 @@
+{
+  "id": "github",
+  "displayName": "GitHub",
+  "icon": "github",
+  "eventHeader": "x-github-event",
+  "events": [
+    {
+      "type": "push",
+      "displayName": "Push",
+      "fields": [
+        { "path": "body.ref",                          "type": "string", "description": "Git ref pushed (e.g. refs/heads/main)" },
+        { "path": "body.after",                        "type": "string", "description": "Commit SHA after the push" },
+        { "path": "body.before",                       "type": "string", "description": "Commit SHA before the push" },
+        { "path": "body.repository.full_name",         "type": "string", "description": "owner/repo" },
+        { "path": "body.pusher.name",                  "type": "string", "description": "GitHub username pushing" },
+        { "path": "body.head_commit.author.name",      "type": "string" },
+        { "path": "body.head_commit.author.email",     "type": "string" },
+        { "path": "body.head_commit.message",          "type": "string" },
+        { "path": "body.head_commit.id",               "type": "string" },
+        { "path": "body.commits",                      "type": "array",  "description": "All commits in this push" }
+      ],
+      "examplePayload": {
+        "ref": "refs/heads/main",
+        "before": "0000000000000000000000000000000000000000",
+        "after": "abc123",
+        "repository": { "full_name": "owner/repo" },
+        "pusher": { "name": "you" },
+        "head_commit": {
+          "id": "abc123",
+          "author": { "name": "you", "email": "you@example.com" },
+          "message": "Update README"
+        },
+        "commits": []
+      }
+    },
+    {
+      "type": "issues",
+      "displayName": "Issue",
+      "fields": [
+        { "path": "body.action",               "type": "string", "description": "opened, closed, edited, reopened, …" },
+        { "path": "body.issue.number",         "type": "number" },
+        { "path": "body.issue.title",          "type": "string" },
+        { "path": "body.issue.body",           "type": "string" },
+        { "path": "body.issue.state",          "type": "string", "description": "open or closed" },
+        { "path": "body.issue.user.login",     "type": "string", "description": "issue author" },
+        { "path": "body.issue.html_url",       "type": "string" },
+        { "path": "body.repository.full_name", "type": "string" },
+        { "path": "body.sender.login",         "type": "string", "description": "who triggered this event" }
+      ],
+      "examplePayload": {
+        "action": "opened",
+        "issue": {
+          "number": 1,
+          "title": "Example issue",
+          "body": "Steps to reproduce …",
+          "state": "open",
+          "user": { "login": "you" },
+          "html_url": "https://github.com/owner/repo/issues/1"
+        },
+        "repository": { "full_name": "owner/repo" },
+        "sender": { "login": "you" }
+      }
+    },
+    {
+      "type": "issue_comment",
+      "displayName": "Issue comment",
+      "fields": [
+        { "path": "body.action",               "type": "string", "description": "created, edited, deleted" },
+        { "path": "body.issue.number",         "type": "number" },
+        { "path": "body.issue.title",          "type": "string" },
+        { "path": "body.comment.body",         "type": "string" },
+        { "path": "body.comment.user.login",   "type": "string" },
+        { "path": "body.comment.html_url",     "type": "string" },
+        { "path": "body.repository.full_name", "type": "string" }
+      ],
+      "examplePayload": {
+        "action": "created",
+        "issue": { "number": 1, "title": "Example issue" },
+        "comment": {
+          "user": { "login": "you" },
+          "body": "Nice work!",
+          "html_url": "https://github.com/owner/repo/issues/1#issuecomment-1"
+        },
+        "repository": { "full_name": "owner/repo" }
+      }
+    },
+    {
+      "type": "pull_request",
+      "displayName": "Pull request",
+      "fields": [
+        { "path": "body.action",                    "type": "string", "description": "opened, closed, reopened, synchronize, ready_for_review, …" },
+        { "path": "body.pull_request.number",       "type": "number" },
+        { "path": "body.pull_request.title",        "type": "string" },
+        { "path": "body.pull_request.body",         "type": "string" },
+        { "path": "body.pull_request.state",        "type": "string" },
+        { "path": "body.pull_request.merged",       "type": "boolean" },
+        { "path": "body.pull_request.user.login",   "type": "string" },
+        { "path": "body.pull_request.head.ref",     "type": "string", "description": "source branch" },
+        { "path": "body.pull_request.base.ref",     "type": "string", "description": "target branch" },
+        { "path": "body.pull_request.head.sha",     "type": "string" },
+        { "path": "body.repository.full_name",      "type": "string" }
+      ],
+      "examplePayload": {
+        "action": "opened",
+        "pull_request": {
+          "number": 1,
+          "title": "Example PR",
+          "body": "…",
+          "state": "open",
+          "merged": false,
+          "user": { "login": "you" },
+          "head": { "ref": "feat/x", "sha": "abc123" },
+          "base": { "ref": "main" }
+        },
+        "repository": { "full_name": "owner/repo" }
+      }
+    }
+  ]
+}
