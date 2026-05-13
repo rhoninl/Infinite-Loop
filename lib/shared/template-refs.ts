@@ -263,6 +263,20 @@ export function availableVariables(
     });
   }
 
+  // Workflow-level inputs — always in scope. Mirror the globals
+  // emission so the picker shows them at the top of the list.
+  const inputs = workflow.inputs ?? [];
+  for (const inp of inputs) {
+    inScope.push({
+      ref: `inputs.${inp.name}`,
+      nodeId: 'inputs',
+      field: inp.name,
+      description: inp.description ?? `workflow input (${inp.type})`,
+      inScope: true,
+      kind: 'global',
+    });
+  }
+
   walkAllNodes(workflow.nodes, (n) => {
     if (n.id === selfId) return;
     const isPred = showEverything || predecessors!.has(n.id);
@@ -326,7 +340,8 @@ export interface TemplateLintWarning {
     | 'missing-field'
     | 'self-ref'
     | 'out-of-scope'
-    | 'missing-global';
+    | 'missing-global'
+    | 'missing-input';
 }
 
 function classifyRef(
@@ -348,6 +363,14 @@ function classifyRef(
     const name = parts.slice(1).join('.');
     const globals = workflow.globals ?? {};
     if (!name || !(name in globals)) return 'missing-global';
+    return null;
+  }
+
+  // Workflow-level inputs.
+  if (head === 'inputs') {
+    const name = parts.slice(1).join('.');
+    const inputs = workflow.inputs ?? [];
+    if (!name || !inputs.some((i) => i.name === name)) return 'missing-input';
     return null;
   }
 

@@ -217,6 +217,25 @@ export interface WorkflowEdge {
   targetHandle?: string;
 }
 
+/** Type of a Begin-node–declared input. `text` is multiline string;
+ * all other values are stored exactly as their JS primitive. */
+export type WorkflowInputType = 'string' | 'number' | 'boolean' | 'text';
+
+/** Per-run input declared on the workflow root. The Begin (Start) node's
+ * config panel edits the workflow-level `inputs` array. Callers supply
+ * values via /api/run or via the subworkflow executor; if `default` is
+ * omitted the input is required. */
+export interface WorkflowInputDecl {
+  /** Identifier used in templates as `{{inputs.NAME}}`. Must match
+   *  /^[a-zA-Z_][a-zA-Z0-9_]*$/ and be unique within the workflow. */
+  name: string;
+  type: WorkflowInputType;
+  /** If omitted, the input is required: callers must supply a value
+   *  or the run is rejected before it starts. */
+  default?: string | number | boolean;
+  description?: string;
+}
+
 export interface Workflow {
   id: string;
   name: string;
@@ -230,6 +249,12 @@ export interface Workflow {
    * time the engine merges them into the scope under the `globals` key,
    * so any node can reference `{{globals.NAME}}`. */
   globals?: Record<string, string>;
+  /** Ordered list of Begin-node input declarations. At run time the
+   * engine seeds resolved values into the scope under the `inputs` key
+   * so any node can reference `{{inputs.NAME}}`. Unlike `globals`, the
+   * values come from the caller (API/subworkflow/UI), not from the
+   * workflow JSON. */
+  inputs?: WorkflowInputDecl[];
 }
 
 export interface WorkflowSummary {
@@ -257,6 +282,10 @@ export type Scope = Record<string, Record<string, unknown>>;
 
 export interface RunSnapshot {
   status: RunStatus;
+  /** Stable id of the current or most-recent run. Set on `start()`,
+   *  preserved on terminal statuses, overwritten by the next `start()`.
+   *  `undefined` only on a fresh engine that has never run anything. */
+  runId?: string;
   workflowId?: string;
   currentNodeId?: string;
   iterationByLoopId: Record<string, number>;

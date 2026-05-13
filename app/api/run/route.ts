@@ -1,8 +1,16 @@
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/server/auth';
 import { workflowEngine } from '@/lib/server/workflow-engine';
 import { getWorkflow } from '@/lib/server/workflow-store';
+import {
+  resolveRunInputs,
+  WorkflowInputError,
+} from '@/lib/shared/resolve-run-inputs';
 
 export async function POST(req: Request) {
+  const unauth = requireAuth(req);
+  if (unauth) return unauth;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -10,16 +18,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'invalid JSON body' }, { status: 400 });
   }
 
-  const workflowId =
-    body && typeof body === 'object'
-      ? (body as Record<string, unknown>).workflowId
-      : undefined;
+  const obj = (body && typeof body === 'object') ? body as Record<string, unknown> : {};
+  const workflowId = obj.workflowId;
   if (typeof workflowId !== 'string' || workflowId.length === 0) {
     return NextResponse.json(
       { error: 'workflowId is required' },
       { status: 400 },
     );
   }
+
+  const suppliedInputs =
+    obj.inputs && typeof obj.inputs === 'object' && !Array.isArray(obj.inputs)
+      ? (obj.inputs as Record<string, unknown>)
+      : {};
 
   let workflow;
   try {
@@ -31,24 +42,53 @@ export async function POST(req: Request) {
     );
   }
 
-  if (workflowEngine.getState().status === 'running') {
+  let resolvedInputs;
+  try {
+    resolvedInputs = resolveRunInputs(workflow.inputs ?? [], suppliedInputs);
+  } catch (err) {
+    if (err instanceof WorkflowInputError) {
+      return NextResponse.json(
+        {
+          error: 'invalid-inputs',
+          field: err.field,
+          reason: err.reason,
+          ...(err.expected ? { expected: err.expected } : {}),
+          ...(err.got ? { got: err.got } : {}),
+        },
+        { status: 400 },
+      );
+    }
+    throw err;
+  }
+
+  const currentState = workflowEngine.getState();
+  if (currentState.status === 'running') {
     return NextResponse.json(
-      { error: 'a run is already active' },
+      {
+        error: 'a run is already active',
+        runId: currentState.runId,
+        workflowId: currentState.workflowId,
+      },
       { status: 409 },
     );
   }
 
-  // Fire-and-forget; the engine emits progress over the WS bus.
-  workflowEngine.start(workflow).catch((err) => {
+  workflowEngine.start(workflow, { resolvedInputs }).catch((err) => {
     console.error('[api/run] engine.start failed:', err);
   });
 
+  const stateAfter = workflowEngine.getState();
   return NextResponse.json(
-    { state: workflowEngine.getState() },
+    {
+      runId: stateAfter.runId,
+      state: stateAfter,
+    },
     { status: 202 },
   );
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const unauth = requireAuth(req);
+  if (unauth) return unauth;
   return NextResponse.json({ state: workflowEngine.getState() }, { status: 200 });
 }

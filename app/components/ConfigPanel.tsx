@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { useWorkflowStore } from '@/lib/client/workflow-store-client';
 import FolderPicker from './FolderPicker';
+import SelectMenu from './SelectMenu';
 import TemplateField from './TemplateField';
 import {
   availableVariables,
@@ -34,6 +35,7 @@ import type {
   SidenoteConfig,
   SubworkflowConfig,
   Workflow,
+  WorkflowInputDecl,
   WorkflowNode,
   WorkflowSummary,
 } from '@/lib/shared/workflow';
@@ -212,12 +214,202 @@ function RefChips({ refs }: { refs: string[] }) {
 
 /* ─── per-type forms ───────────────────────────────────────── */
 
-function StartForm() {
+function StartForm({ workflow }: { workflow: Workflow | null }) {
+  const setWorkflowInputs = useWorkflowStore((s) => s.setWorkflowInputs);
+  const declared = workflow?.inputs ?? [];
+
+  const update = (next: WorkflowInputDecl[]) => {
+    setWorkflowInputs(next);
+  };
+
+  const addRow = () => {
+    const used = new Set(declared.map((d) => d.name));
+    let i = 1;
+    let name = `input${i}`;
+    while (used.has(name)) {
+      i += 1;
+      name = `input${i}`;
+    }
+    update([...declared, { name, type: 'string' }]);
+  };
+
+  const removeRow = (idx: number) => {
+    update(declared.filter((_, i) => i !== idx));
+  };
+
+  const patchRow = (idx: number, patch: Partial<WorkflowInputDecl>) => {
+    update(declared.map((d, i) => (i === idx ? { ...d, ...patch } : d)));
+  };
+
+  const nameCounts = new Map<string, number>();
+  for (const d of declared) {
+    nameCounts.set(d.name, (nameCounts.get(d.name) ?? 0) + 1);
+  }
+  const idRe = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
   return (
-    <p className="serif-italic" style={{ color: 'var(--fg-dim)' }}>
-      Begin the workflow.
-    </p>
+    <div className="bni-panel" aria-label="workflow inputs">
+      <p className="field-hint bni-blurb">
+        Inputs supplied per run. Reference them in templates as{' '}
+        <code className="bni-code">{'{{inputs.NAME}}'}</code>
+        . An input with no default is required at run time.
+      </p>
+
+      {declared.length === 0 && (
+        <p className="field-hint">
+          No inputs declared. The workflow will run with no parameters.
+        </p>
+      )}
+
+      {declared.map((row, idx) => {
+        const dup = (nameCounts.get(row.name) ?? 0) > 1;
+        const badId = !idRe.test(row.name);
+        const defaultBad = row.default !== undefined && !validDefault(row);
+        return (
+          <fieldset key={idx} className="bni-row">
+            <div className="bni-row-head">
+              <label className="bni-name">
+                name
+                <input
+                  type="text"
+                  value={row.name}
+                  placeholder="name"
+                  onChange={(e) => patchRow(idx, { name: e.target.value })}
+                />
+              </label>
+              <div className="bni-type">
+                <span className="bni-type-label">type</span>
+                <SelectMenu<WorkflowInputDecl['type']>
+                  value={row.type}
+                  ariaLabel={`type for input ${row.name || idx}`}
+                  options={[
+                    { value: 'string', label: 'string' },
+                    { value: 'text', label: 'text' },
+                    { value: 'number', label: 'number' },
+                    { value: 'boolean', label: 'boolean' },
+                  ]}
+                  onChange={(next) =>
+                    patchRow(idx, { type: next, default: undefined })
+                  }
+                />
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost bni-remove"
+                onClick={() => removeRow(idx)}
+                aria-label={`remove input ${row.name}`}
+              >
+                ×
+              </button>
+            </div>
+
+            <label className="bni-default">
+              default (empty = required)
+              <DefaultEditor row={row} onChange={(d) => patchRow(idx, { default: d })} />
+            </label>
+
+            <label className="bni-description">
+              description
+              <input
+                type="text"
+                value={row.description ?? ''}
+                placeholder="optional"
+                onChange={(e) =>
+                  patchRow(idx, { description: e.target.value || undefined })
+                }
+              />
+            </label>
+
+            {dup && <p className="field-error">duplicate name</p>}
+            {badId && (
+              <p className="field-error">
+                name must match /^[a-zA-Z_][a-zA-Z0-9_]*$/
+              </p>
+            )}
+            {defaultBad && (
+              <p className="field-error">default does not parse as {row.type}</p>
+            )}
+          </fieldset>
+        );
+      })}
+
+      <button type="button" className="btn btn-ghost bni-add" onClick={addRow}>
+        + add input
+      </button>
+    </div>
   );
+}
+
+function validDefault(row: WorkflowInputDecl): boolean {
+  if (row.default === undefined) return true;
+  switch (row.type) {
+    case 'string':
+    case 'text':
+      return typeof row.default === 'string';
+    case 'number':
+      return typeof row.default === 'number' && Number.isFinite(row.default);
+    case 'boolean':
+      return typeof row.default === 'boolean';
+  }
+}
+
+function DefaultEditor({
+  row,
+  onChange,
+}: {
+  row: WorkflowInputDecl;
+  onChange: (next: WorkflowInputDecl['default']) => void;
+}) {
+  switch (row.type) {
+    case 'string':
+      return (
+        <input
+          type="text"
+          value={typeof row.default === 'string' ? row.default : ''}
+          onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}
+        />
+      );
+    case 'text':
+      return (
+        <textarea
+          value={typeof row.default === 'string' ? row.default : ''}
+          onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}
+        />
+      );
+    case 'number': {
+      const v = typeof row.default === 'number' ? row.default : '';
+      return (
+        <input
+          type="number"
+          value={v}
+          onChange={(e) => {
+            const raw = e.target.value;
+            if (raw === '') return onChange(undefined);
+            const n = Number(raw);
+            onChange(Number.isFinite(n) ? n : undefined);
+          }}
+        />
+      );
+    }
+    case 'boolean': {
+      const v: 'unset' | 'true' | 'false' =
+        row.default === true ? 'true' : row.default === false ? 'false' : 'unset';
+      return (
+        <SelectMenu<'unset' | 'true' | 'false'>
+          value={v}
+          ariaLabel="default value"
+          options={[
+            { value: 'unset', label: '(unset)' },
+            { value: 'true', label: 'true' },
+            { value: 'false', label: 'false' },
+          ]}
+          onChange={(next) =>
+            onChange(next === 'true' ? true : next === 'false' ? false : undefined)
+          }
+        />
+      );
+    }
+  }
 }
 
 function EndForm({
@@ -2067,7 +2259,7 @@ export default function ConfigPanel() {
             })
           }
         />
-        {node.type === 'start' && <StartForm />}
+        {node.type === 'start' && <StartForm workflow={currentWorkflow} />}
         {node.type === 'end' && (
           <EndForm
             config={node.config as EndConfig}

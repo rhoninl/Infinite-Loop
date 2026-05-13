@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/server/auth';
 import { listRuns } from '@/lib/server/run-store';
 
 export async function GET(req: Request) {
+  const unauth = requireAuth(req);
+  if (unauth) return unauth;
+
   const url = new URL(req.url);
   const workflowId = url.searchParams.get('workflowId') ?? undefined;
 

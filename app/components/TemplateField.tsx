@@ -350,7 +350,9 @@ function TemplateWarningChips({
                 ? 'self-reference is always empty'
                 : w.reason === 'out-of-scope'
                   ? `out of scope — "${head}" is not a predecessor of this node`
-                  : `no global named "${w.ref.slice('globals.'.length)}"`;
+                  : w.reason === 'missing-input'
+                    ? `no input named "${w.ref.slice('inputs.'.length)}" declared on the Begin node`
+                    : `no global named "${w.ref.slice('globals.'.length)}"`;
         return (
           <span key={i} className="template-field-warning">
             ⚠ <code>{`{{${w.ref}}}`}</code> — {reason}

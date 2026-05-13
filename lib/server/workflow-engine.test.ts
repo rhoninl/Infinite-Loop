@@ -6,6 +6,7 @@ import type {
   WorkflowEvent,
   WorkflowNode,
 } from '../shared/workflow';
+import type { ResolvedInputs } from '../shared/resolve-run-inputs';
 
 // Capture the real modules up front; bun's `mock.module` is global to the
 // test process and replaces live ESM bindings, so anything captured AFTER the
@@ -485,5 +486,197 @@ describe('WorkflowEngine', () => {
     await expect(eng.start(wf)).rejects.toThrow(/already active/);
     release!();
     await first;
+  });
+});
+
+describe('WorkflowEngine — workflow inputs', () => {
+  beforeEach(() => {
+    eventBus.clear();
+  });
+
+  afterEach(() => {
+    eventBus.clear();
+  });
+
+  it('seeds resolved inputs into scope under `inputs`', async () => {
+    const wf: Workflow = {
+      id: 'w-inputs-1',
+      name: 'inputs-seed',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [startNode, endNode],
+      edges: [{ id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'end-1' }],
+    };
+    const eng = new WorkflowEngine({
+      start: exec(['next']),
+      end: exec(['next']),
+      agent: exec(['next']),
+      condition: exec(['next']),
+      loop: exec(['next']),
+    });
+
+    const resolvedInputs: ResolvedInputs = { topic: 'cats' };
+    await eng.start(wf, { resolvedInputs });
+
+    expect(eng.getState().status).toBe('succeeded');
+    expect(eng.getState().scope.inputs).toEqual({ topic: 'cats' });
+  });
+
+  it('omits scope.inputs entirely when none supplied and none declared', async () => {
+    const wf: Workflow = {
+      id: 'w-inputs-2',
+      name: 'inputs-none',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [startNode, endNode],
+      edges: [{ id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'end-1' }],
+    };
+    const eng = new WorkflowEngine({
+      start: exec(['next']),
+      end: exec(['next']),
+      agent: exec(['next']),
+      condition: exec(['next']),
+      loop: exec(['next']),
+    });
+
+    await eng.start(wf);
+
+    expect(eng.getState().status).toBe('succeeded');
+    expect(eng.getState().scope.inputs).toBeUndefined();
+  });
+});
+
+describe('WorkflowEngine — subworkflow child inputs alias', () => {
+  beforeEach(() => {
+    eventBus.clear();
+  });
+
+  afterEach(() => {
+    eventBus.clear();
+  });
+
+  it('exposes parent-supplied inputs under both `inputs` and `__inputs`', async () => {
+    // Child workflow: start → end (trivial; we only care about scope seeding).
+    const childWf: Workflow = {
+      id: 'child-wf',
+      name: 'child',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [
+        { id: 'start-c', type: 'start', position: { x: 0, y: 0 }, config: {} },
+        { id: 'end-c', type: 'end', position: { x: 0, y: 0 }, config: {} },
+      ],
+      edges: [{ id: 'ec1', source: 'start-c', sourceHandle: 'next', target: 'end-c' }],
+    };
+
+    // Subworkflow node that:
+    //   - passes `topic: 'cats'` to the child
+    //   - copies `inputs.topic` and `__inputs.topic` back as named outputs
+    const subwfNode: WorkflowNode = {
+      id: 'sub-1',
+      type: 'subworkflow',
+      position: { x: 0, y: 0 },
+      config: {
+        workflowId: 'child-wf',
+        inputs: { topic: 'cats' },
+        outputs: {
+          topicViaInputs: 'inputs.topic',
+          topicViaLegacy: '__inputs.topic',
+        },
+      },
+    };
+
+    // Parent workflow: start → subworkflow → end
+    const parentWf: Workflow = {
+      id: 'parent-wf',
+      name: 'parent',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [
+        { id: 'start-p', type: 'start', position: { x: 0, y: 0 }, config: {} },
+        subwfNode,
+        { id: 'end-p', type: 'end', position: { x: 0, y: 0 }, config: {} },
+      ],
+      edges: [
+        { id: 'ep1', source: 'start-p', sourceHandle: 'next', target: 'sub-1' },
+        { id: 'ep2', source: 'sub-1', sourceHandle: 'next', target: 'end-p' },
+      ],
+    };
+
+    const eng = new WorkflowEngine(
+      {
+        start: exec(['next']),
+        end: exec(['next']),
+        agent: exec(['next']),
+        condition: exec(['next']),
+        loop: exec(['next']),
+      },
+      async (id: string) => {
+        if (id === 'child-wf') return childWf;
+        throw new Error(`unknown workflow: ${id}`);
+      },
+    );
+
+    await eng.start(parentWf);
+
+    expect(eng.getState().status).toBe('succeeded');
+    // Both `inputs.topic` and `__inputs.topic` must have been present in the
+    // child scope for the output-copy mechanism to populate these keys.
+    expect(eng.getState().scope['sub-1']).toMatchObject({
+      status: 'succeeded',
+      topicViaInputs: 'cats',
+      topicViaLegacy: 'cats',
+    });
+  });
+});
+
+describe('runId on snapshot', () => {
+  it('exposes runId after start() and keeps it on terminal status', async () => {
+    const engine = new WorkflowEngine();
+    expect(engine.getState().runId).toBeUndefined();
+
+    const wf: Workflow = {
+      id: 'wf-runid',
+      name: 'runid test',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [
+        { id: 's', type: 'start', position: { x: 0, y: 0 }, config: {} },
+        { id: 'e', type: 'end', position: { x: 0, y: 0 }, config: { outcome: 'succeeded' } },
+      ],
+      edges: [{ id: 'e1', source: 's', sourceHandle: 'next', target: 'e' }],
+    };
+    await engine.start(wf);
+
+    const after = engine.getState();
+    expect(typeof after.runId).toBe('string');
+    expect(after.runId!.length).toBeGreaterThan(8);
+    expect(after.status).toBe('succeeded');
+  });
+
+  it('overwrites runId on the next start()', async () => {
+    const engine = new WorkflowEngine();
+    const wf: Workflow = {
+      id: 'wf-runid-2',
+      name: 'runid test 2',
+      version: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      nodes: [
+        { id: 's', type: 'start', position: { x: 0, y: 0 }, config: {} },
+        { id: 'e', type: 'end', position: { x: 0, y: 0 }, config: { outcome: 'succeeded' } },
+      ],
+      edges: [{ id: 'e1', source: 's', sourceHandle: 'next', target: 'e' }],
+    };
+    await engine.start(wf);
+    const first = engine.getState().runId;
+    await engine.start(wf);
+    const second = engine.getState().runId;
+    expect(second).not.toBe(first);
   });
 });
