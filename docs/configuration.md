@@ -37,8 +37,8 @@ The UI will refuse to load (browser can't forward the token), but MCP clients an
 **Custom storage paths:**
 
 ```bash
-INFLOOP_WORKFLOWS_DIR=/srv/infloop/workflows \
-INFLOOP_RUNS_DIR=/srv/infloop/runs \
-INFLOOP_TRIGGERS_DIR=/srv/infloop/triggers \
+INFLOOP_WORKFLOWS_DIR=/srv/infinite-loop/workflows \
+INFLOOP_RUNS_DIR=/srv/infinite-loop/runs \
+INFLOOP_TRIGGERS_DIR=/srv/infinite-loop/triggers \
 bun run start
 ```

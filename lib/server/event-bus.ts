@@ -33,13 +33,13 @@ class EventBus {
 // consumer (SSE route).
 declare global {
   // eslint-disable-next-line no-var
-  var __infloopEventBus: EventBus | undefined;
+  var __infiniteLoopEventBus: EventBus | undefined;
 }
 
 export const eventBus: EventBus =
-  globalThis.__infloopEventBus ?? new EventBus();
-if (!globalThis.__infloopEventBus) {
-  globalThis.__infloopEventBus = eventBus;
+  globalThis.__infiniteLoopEventBus ?? new EventBus();
+if (!globalThis.__infiniteLoopEventBus) {
+  globalThis.__infiniteLoopEventBus = eventBus;
 }
 
 export { EventBus };

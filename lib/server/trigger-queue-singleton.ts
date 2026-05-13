@@ -69,11 +69,11 @@ function createSingleton(): TriggerQueue {
 
 declare global {
   // eslint-disable-next-line no-var
-  var __infloopTriggerQueue: TriggerQueue | undefined;
+  var __infiniteLoopTriggerQueue: TriggerQueue | undefined;
 }
 
 export const triggerQueue: TriggerQueue =
-  globalThis.__infloopTriggerQueue ?? createSingleton();
-if (!globalThis.__infloopTriggerQueue) {
-  globalThis.__infloopTriggerQueue = triggerQueue;
+  globalThis.__infiniteLoopTriggerQueue ?? createSingleton();
+if (!globalThis.__infiniteLoopTriggerQueue) {
+  globalThis.__infiniteLoopTriggerQueue = triggerQueue;
 }

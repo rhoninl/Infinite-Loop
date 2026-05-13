@@ -11,7 +11,7 @@ import type {
   WorkflowNode,
 } from '../../lib/shared/workflow';
 
-const SUBWORKFLOW_PREF_KEY = 'infloop:runview:expandSubworkflows';
+const SUBWORKFLOW_PREF_KEY = 'infinite_loop:runview:expandSubworkflows';
 
 /** Per-branch state derived from the event stream for one parallel child. */
 interface BranchState {

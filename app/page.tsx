@@ -23,7 +23,7 @@ import { useWorkflowStore } from '../lib/client/workflow-store-client';
 import { useAutoSave } from '../lib/client/use-auto-save';
 
 const DEFAULT_WORKFLOW_ID = 'loop-claude-until-condition';
-const RIGHT_WIDTH_STORAGE_KEY = 'infloop:right-width';
+const RIGHT_WIDTH_STORAGE_KEY = 'infinite_loop:right-width';
 const RIGHT_WIDTH_DEFAULT = 440;
 const RIGHT_WIDTH_MIN = 280;
 const CANVAS_MIN_WIDTH = 360;

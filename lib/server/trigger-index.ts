@@ -43,11 +43,11 @@ class TriggerIndex {
 
 declare global {
   // eslint-disable-next-line no-var
-  var __infloopTriggerIndex: TriggerIndex | undefined;
+  var __infiniteLoopTriggerIndex: TriggerIndex | undefined;
 }
 
 export const triggerIndex: TriggerIndex =
-  globalThis.__infloopTriggerIndex ?? new TriggerIndex();
-if (!globalThis.__infloopTriggerIndex) {
-  globalThis.__infloopTriggerIndex = triggerIndex;
+  globalThis.__infiniteLoopTriggerIndex ?? new TriggerIndex();
+if (!globalThis.__infiniteLoopTriggerIndex) {
+  globalThis.__infiniteLoopTriggerIndex = triggerIndex;
 }

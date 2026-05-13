@@ -8,8 +8,8 @@ import { triggerQueue } from '@/lib/server/trigger-queue-singleton';
 import { saveTrigger } from '@/lib/server/trigger-store';
 import { pluginIndex } from '@/lib/server/webhook-plugins';
 
-const tmpWfDir = path.join(os.tmpdir(), `infloop-webhook-wf-${process.pid}`);
-const tmpTrDir = path.join(os.tmpdir(), `infloop-webhook-tr-${process.pid}`);
+const tmpWfDir = path.join(os.tmpdir(), `infinite-loop-webhook-wf-${process.pid}`);
+const tmpTrDir = path.join(os.tmpdir(), `infinite-loop-webhook-tr-${process.pid}`);
 
 async function writeWorkflow(id: string, inputs: unknown[] = []) {
   const file = path.join(tmpWfDir, `${id}.json`);

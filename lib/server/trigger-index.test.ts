@@ -6,8 +6,8 @@ import { triggerIndex } from './trigger-index';
 import { saveTrigger } from './trigger-store';
 import type { WebhookTrigger } from '../shared/trigger';
 
-const tmpWfDir = path.join(os.tmpdir(), `infloop-tidx-wf-${process.pid}`);
-const tmpTrDir = path.join(os.tmpdir(), `infloop-tidx-tr-${process.pid}`);
+const tmpWfDir = path.join(os.tmpdir(), `infinite-loop-tidx-wf-${process.pid}`);
+const tmpTrDir = path.join(os.tmpdir(), `infinite-loop-tidx-tr-${process.pid}`);
 
 async function writeWorkflow(id: string, inputs: unknown[] = []) {
   await fs.writeFile(

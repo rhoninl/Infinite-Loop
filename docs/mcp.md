@@ -4,7 +4,7 @@ Infinite Loop exposes every saved workflow as an MCP tool via a Streamable HTTP 
 
 Workflow discovery is **per-call**, so a workflow you save right now is visible on the very next `tools/list`. No restart, no client redeploy.
 
-> **Naming & compatibility.** Canonical names are `infinite_loop` (server id) and `infinite_loop_*` (tool prefix). Current builds still expose tools under the legacy `inflooop_*` prefix and the legacy server id `inflooop`; these continue to work. New integrations should prefer the canonical names where supported. Examples below use `infinite_loop_*` as the canonical form — substitute `inflooop_*` if the names returned by `tools/list` on your build still use the legacy prefix.
+> **Backward compatibility.** Tools are named `infinite_loop_*` and the server identifies itself as `infinite_loop`. Older builds used the `inflooop_*` prefix (triple `o`) and the server id `inflooop`. `tools/call` still accepts the legacy names as silent aliases, so any client config that hardcoded them keeps working — only the canonical names appear in `tools/list`.
 
 ## Contract
 
@@ -71,8 +71,6 @@ If `INFLOOP_API_TOKEN` is set on the server, every request must carry the token.
 - **`infinite_loop_list_queue()`** — list pending workflow runs in queue order.
 - **`infinite_loop_remove_from_queue({ queueId })`** — drop a queued run before it starts.
 
-> Current builds emit these with the legacy `inflooop_` prefix instead of `infinite_loop_`. Same arguments, same behavior — just the prefix differs.
-
 ## Verify without an MCP client
 
 ```bash
@@ -81,7 +79,7 @@ curl -s -X POST http://localhost:3000/api/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | jq
 ```
 
-You'll see one tool per saved workflow plus the five utility tools (legacy `inflooop_*` or canonical `infinite_loop_*` depending on your build).
+You'll see one tool per saved workflow plus the five `infinite_loop_*` utility tools.
 
 ## Concurrency
 

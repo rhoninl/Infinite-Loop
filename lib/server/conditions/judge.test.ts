@@ -29,7 +29,7 @@ let prevProvidersDir: string | undefined;
 describe('judgeStrategy', () => {
   beforeEach(() => {
     // Seed an isolated providers/ dir so the test doesn't depend on cwd.
-    providersDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infloop-judge-test-'));
+    providersDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infinite-loop-judge-test-'));
     prevProvidersDir = process.env.INFLOOP_PROVIDERS_DIR;
     process.env.INFLOOP_PROVIDERS_DIR = providersDir;
     fs.writeFileSync(

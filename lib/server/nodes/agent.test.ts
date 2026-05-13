@@ -16,7 +16,7 @@ let providersDir: string;
 let prevProvidersDir: string | undefined;
 
 beforeEach(() => {
-  providersDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infloop-agent-test-'));
+  providersDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infinite-loop-agent-test-'));
   prevProvidersDir = process.env.INFLOOP_PROVIDERS_DIR;
   process.env.INFLOOP_PROVIDERS_DIR = providersDir;
   fs.writeFileSync(

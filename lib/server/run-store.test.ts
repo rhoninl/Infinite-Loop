@@ -30,7 +30,7 @@ function makeRun(overrides: Partial<RunRecord> = {}): RunRecord {
 }
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infloop-runs-'));
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infinite-loop-runs-'));
   prevDir = process.env.INFLOOP_RUNS_DIR;
   prevLimit = process.env.INFLOOP_RUN_HISTORY_LIMIT;
   process.env.INFLOOP_RUNS_DIR = tmpDir;

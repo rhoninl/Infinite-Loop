@@ -61,7 +61,7 @@ export interface DropPayload {
   providerId?: string;
 }
 
-const DROP_MIME = 'application/x-infloop-node';
+const DROP_MIME = 'application/x-infinite-loop-node';
 
 /** Random hex id chunk (no nanoid dep). */
 function rid(): string {
