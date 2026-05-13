@@ -507,12 +507,17 @@ body {
   gap: 12px;
   padding-bottom: 10px;
   border-bottom: 1px dashed var(--border);
+  min-width: 0;
+}
+
+.run-view-head > * {
+  white-space: nowrap;
 }
 
 .run-view-ws {
   font-family: var(--mono);
   font-size: 12px;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--fg-dim);
 }

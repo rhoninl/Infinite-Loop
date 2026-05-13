@@ -359,9 +359,14 @@ export default function RunView() {
           className="btn btn-toggle"
           aria-label="toggle subworkflow expansion"
           aria-pressed={expandSubworkflows}
+          title={
+            expandSubworkflows
+              ? 'Subworkflow events: showing all'
+              : 'Subworkflow events: collapsed into parent'
+          }
           onClick={() => setExpandSubworkflows((v) => !v)}
         >
-          Subworkflow: {expandSubworkflows ? 'show all' : 'collapsed'}
+          Subflow: {expandSubworkflows ? 'all' : 'off'}
         </button>
         <span className="run-view-ws" aria-label="event stream status">
           SSE: {connectionStatus}
