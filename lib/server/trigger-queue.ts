@@ -50,6 +50,20 @@ export class TriggerQueue {
     return [...this.q];
   }
 
+  removeByQueueId(queueId: string): { removed: boolean } {
+    const idx = this.q.findIndex((item) => item.queueId === queueId);
+    if (idx === -1) return { removed: false };
+    const [item] = this.q.splice(idx, 1);
+    eventBus.emit({
+      type: 'trigger_removed',
+      queueId: item.queueId,
+      triggerId: item.triggerId,
+      workflowId: item.workflow.id,
+      reason: 'user-cancelled',
+    });
+    return { removed: true };
+  }
+
   enqueue(item: Omit<QueuedRun, 'queueId'>): { queueId: string; position: number } {
     if (this.q.length >= this.maxQueue) {
       const err = new Error('trigger queue is full');
