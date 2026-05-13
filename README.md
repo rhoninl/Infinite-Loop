@@ -371,75 +371,117 @@ three `inflooop_*` utility tools.
 
 ## Triggering workflows from webhooks
 
-Each saved workflow can declare one or more **webhook triggers** in its JSON
-file. A trigger exposes a unique URL; when an HTTP POST hits that URL,
-InfLoop evaluates the trigger's match predicates against the request and, on
-a match, queues a workflow run with templated inputs.
+Open the **Dispatch** view from the top-bar button (next to the workflow
+menu) to create, edit, and test webhook triggers visually. Each trigger
+exposes a unique URL; when an HTTP POST hits it, InfLoop matches the
+trigger's predicates against the request and queues a workflow run with
+templated inputs.
 
-### Configuring a trigger
+### Creating a trigger
 
-Add a `triggers[]` array to your workflow JSON:
+1. Click **Dispatch** in the top bar → **+ New trigger**.
+2. Set a name and pick the target workflow.
+3. Pick a **plugin** that describes the webhook source:
+   - **Generic** — any JSON POST. Predicates and input mappings are
+     free-form `{{body.x.y.z}}` template strings.
+   - **GitHub** — declares `push`, `issues`, `issue_comment`, and
+     `pull_request` events; the form's field-picker autocompletes from
+     the event's known schema.
+   Drop a new plugin JSON file in `webhook-plugins/` to add more (see
+   [Adding a plugin](#adding-a-plugin)).
+4. Configure **Match** predicates (AND-joined). For the GitHub plugin,
+   the `x-github-event` header check is implicit — pick the event in
+   the form and you only write predicates for body fields.
+5. Map **Inputs** — each declared workflow input becomes a row; fill
+   in a template string (use the field picker dropdown).
+6. **Save**. Copy the URL from the detail pane.
 
-```jsonc
+### Wiring up GitHub
+
+InfLoop listens on `http://localhost:3000` by default. To reach it
+from `github.com`, expose your machine with a tunnel:
+
+```bash
+cloudflared tunnel --url http://localhost:3000
+```
+
+Then in your repo: **Settings → Webhooks → Add webhook**:
+
+| Field | Value |
+|---|---|
+| Payload URL | `https://<your-tunnel>.trycloudflare.com/api/webhook/<id>` |
+| Content type | `application/json` |
+| Secret | (leave blank — URL is the secret in v2) |
+| Events | Choose specific events or "Send everything" + filter via Dispatch |
+
+### Test fire
+
+From any trigger row in Dispatch, click **Test** to open the test-fire
+modal. Edit a JSON payload (or pre-fill from the plugin event's
+example), set headers, and Send. The modal shows the real webhook
+response (202, 204, 422, etc.) so you can debug predicates and input
+mapping without leaving the UI.
+
+### Adding a plugin
+
+Plugins are pure JSON. Create `webhook-plugins/<id>.json`:
+
+```json
 {
-  "id": "code-review",
-  "inputs": [
-    { "name": "branch", "type": "string" },
-    { "name": "sha", "type": "string" }
-  ],
-  "triggers": [
+  "id": "stripe",
+  "displayName": "Stripe",
+  "eventHeader": "stripe-event-type",
+  "events": [
     {
-      "id": "abcdef1234567890ABCDEF",
-      "name": "github-push-main",
-      "enabled": true,
-      "match": [
-        { "lhs": "{{headers.x-github-event}}", "op": "==",       "rhs": "push" },
-        { "lhs": "{{body.ref}}",                "op": "matches", "rhs": "^refs/heads/main$" }
+      "type": "checkout.session.completed",
+      "displayName": "Checkout session completed",
+      "fields": [
+        { "path": "body.data.object.id",       "type": "string" },
+        { "path": "body.data.object.amount",   "type": "number" },
+        { "path": "body.data.object.customer", "type": "string" }
       ],
-      "inputs": {
-        "branch": "{{body.ref}}",
-        "sha":    "{{body.after}}"
-      }
+      "examplePayload": { "data": { "object": { "id": "cs_…", "amount": 5000 } } }
     }
   ]
 }
 ```
 
-- **`id`** — appears verbatim in the URL: `POST http://localhost:3000/api/webhook/<id>`.
-  Must match `^[A-Za-z0-9_-]{16,32}$` and be unique across all workflows. Generate one with:
-  ```bash
-  bun -e "console.log(require('crypto').randomBytes(16).toString('base64url'))"
-  ```
-- **`enabled`** — set to `false` to park a trigger without removing it.
-- **`match[]`** — AND-joined predicates. The webhook scope exposes `headers.<name>`
-  (lowercased), `query.<name>`, and `body.<dotted.json.path>`. Empty match array = always fire.
-- **`inputs`** — maps workflow input names to templated strings. Inputs not listed here
-  fall back to their declared `default`.
+Restart InfLoop. The plugin appears in the trigger form's Plugin
+dropdown.
 
-### Behavior
+### Behavior reference
 
-- Match succeeds → `202` with `{ queued: true, queueId, position }`. The run is queued
-  in memory and started when the engine is idle.
-- Match fails → `204 No Content`. (The request was well-formed; the trigger chose to ignore it.)
+- Match succeeds → `202 { queued, queueId, position }`. Run is queued
+  in memory and starts when the engine is idle.
+- Match fails or plugin event-header mismatches → `204 No Content`.
 - Unknown / disabled trigger id → `404 not-found`.
 - Body > 1 MiB → `413 payload-too-large`.
 - Queue at cap (100) → `503 queue-full` with `Retry-After: 30`.
 
 ### Security
 
-The unguessable `triggerId` in the URL is the authentication. There is no separate token
-or HMAC verification in v1 — anyone with the URL can fire the trigger. Treat trigger URLs
-like passwords; rotate by editing the workflow JSON to swap the id.
+The unguessable `triggerId` in the URL is the credential. There's no
+HMAC verification in v2 — treat trigger URLs like passwords; rotate
+via the regenerate-id button in the Dispatch form. `INFLOOP_API_TOKEN`
+does NOT apply to webhook ingress (external services can't carry
+custom auth headers); it does gate the management API.
 
-`INFLOOP_API_TOKEN` does NOT apply to the webhook route (external services can't send
-custom auth headers). It does still gate every other route.
+### Storage
+
+- `triggers/<id>.json` — one file per trigger.
+- `webhook-plugins/<id>.json` — one file per plugin (Generic is
+  built-in; you don't need to ship a file for it).
+- Existing workflows with legacy `triggers[]` inline are auto-migrated
+  into the registry on first load. The migration is idempotent.
 
 ### Limitations
 
-- Queued items are lost on process restart. The webhook caller already received `202`, so
-  from its perspective the event was accepted; the upstream service is responsible for
-  retry semantics if it cares.
-- The engine runs one workflow at a time; concurrent webhook hits queue in FIFO order.
+- Queued runs are lost on process restart. The webhook caller already
+  received `202`; the upstream service owns retry semantics.
+- The engine runs one workflow at a time; concurrent webhook hits
+  queue in FIFO order.
+- No service-specific signature verification (GitHub HMAC, Stripe
+  signing) in v2. Planned as a follow-up.
 
 ## Tech stack
 
