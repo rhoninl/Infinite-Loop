@@ -38,17 +38,31 @@ export function FieldPicker({
     ? fields
     : fields.filter((f) => f.path.toLowerCase().includes(filter) || (f.description ?? '').toLowerCase().includes(filter));
 
+  const looksLikeTemplate = /^\{\{.+\}\}$/.test(value.trim());
+  const inSchema = fields.some((f) => `{{${f.path}}}` === value.trim());
+  const notInSchema = looksLikeTemplate && fields.length > 0 && !inSchema;
+
   return (
     <div className="fp-root" ref={containerRef}>
-      <input
-        className="fp-input"
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onFocus={() => setOpen(true)}
-        aria-label={ariaLabel}
-        placeholder={placeholder}
-      />
+      <div className="fp-input-row">
+        <input
+          className="fp-input"
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setOpen(true)}
+          aria-label={ariaLabel}
+          placeholder={placeholder}
+        />
+        {notInSchema && (
+          <span
+            className="fp-warning"
+            title="This path is not in the plugin's declared schema. The trigger will still evaluate it at runtime."
+          >
+            ⚠
+          </span>
+        )}
+      </div>
       {open && fields.length > 0 && (
         <ul className="fp-menu" role="listbox">
           {visible.map((f) => (

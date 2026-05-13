@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { WebhookPlugin, WebhookTrigger } from '@/lib/shared/trigger';
 import { TriggerForm } from './TriggerForm';
 import { TestFireModal } from './TestFireModal';
+import { useWorkflowStore } from '@/lib/client/workflow-store-client';
 
 export interface DispatchViewProps {
   origin: string;
@@ -24,6 +25,7 @@ export function DispatchView({ origin }: DispatchViewProps) {
   const [editing, setEditing] = useState(false);
   const [testingTrigger, setTestingTrigger] = useState<WebhookTrigger | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [workflowFilter, setWorkflowFilter] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -54,6 +56,28 @@ export function DispatchView({ origin }: DispatchViewProps) {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  // Re-fetch when a trigger fires so lastFiredAt stays live.
+  const runEvents = useWorkflowStore((s) => s.runEvents);
+  useEffect(() => {
+    if (runEvents.some((e) => e.type === 'trigger_started')) {
+      void refresh();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runEvents.length]);
+
+  // Parse #dispatch?workflow=<id> from the URL hash.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const parseHash = () => {
+      const h = window.location.hash;
+      const m = /workflow=([^&]+)/.exec(h);
+      setWorkflowFilter(m ? decodeURIComponent(m[1]) : null);
+    };
+    parseHash();
+    window.addEventListener('hashchange', parseHash);
+    return () => window.removeEventListener('hashchange', parseHash);
+  }, []);
 
   async function handleCreate(payload: Omit<WebhookTrigger, 'id' | 'createdAt' | 'updatedAt'>) {
     const res = await fetch('/api/triggers', {
@@ -93,6 +117,9 @@ export function DispatchView({ origin }: DispatchViewProps) {
   }
 
   const selected = triggers.find((t) => t.id === selectedId) ?? null;
+  const visibleTriggers = workflowFilter
+    ? triggers.filter((t) => t.workflowId === workflowFilter)
+    : triggers;
 
   return (
     <div className="dsp-root">
@@ -105,11 +132,28 @@ export function DispatchView({ origin }: DispatchViewProps) {
 
       {error && <div className="dsp-error">{error}</div>}
 
+      {workflowFilter && (
+        <div className="dsp-filter-chip">
+          Filtered to <code>{workflowFilter}</code>{' '}
+          <button
+            type="button"
+            onClick={() => { window.location.hash = '#dispatch'; }}
+            className="dsp-filter-clear"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       <div className="dsp-split">
         <aside className="dsp-list">
-          {triggers.length === 0 ? (
-            <p className="dsp-empty">No triggers yet. Click "New trigger" to add one.</p>
-          ) : triggers.map((t) => (
+          {visibleTriggers.length === 0 ? (
+            <p className="dsp-empty">
+              {workflowFilter
+                ? `No triggers route to workflow "${workflowFilter}".`
+                : 'No triggers yet. Click "New trigger" to add one.'}
+            </p>
+          ) : visibleTriggers.map((t) => (
             <button
               key={t.id}
               type="button"

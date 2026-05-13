@@ -7,6 +7,7 @@ import {
   getTrigger,
   saveTrigger,
   deleteTrigger,
+  touchLastFired,
 } from './trigger-store';
 import type { WebhookTrigger } from '../shared/trigger';
 
@@ -129,5 +130,19 @@ describe('trigger-store', () => {
     const second = await saveTrigger({ ...first, name: 'renamed' });
     expect(second.createdAt).toBe(first.createdAt);
     expect(second.updatedAt).toBeGreaterThan(first.updatedAt);
+  });
+});
+
+describe('touchLastFired', () => {
+  test('updates lastFiredAt without re-validation', async () => {
+    await saveTrigger(baseTrigger());
+    await touchLastFired('idAAAAAAAAAAAAAAAAAAAA', 1_700_000_000_000);
+    const after = await getTrigger('idAAAAAAAAAAAAAAAAAAAA');
+    expect(after.lastFiredAt).toBe(1_700_000_000_000);
+  });
+
+  test('is a no-op when the trigger does not exist', async () => {
+    await touchLastFired('absent_id_000000000000');
+    // Should not throw.
   });
 });

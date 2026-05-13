@@ -3661,6 +3661,48 @@ input[type='number'].no-spin {
 .fp-option-empty { color: var(--fg-dim); cursor: default; }
 .fp-option-empty:hover { background: transparent; }
 
+.fp-input-row {
+  display: flex;
+  align-items: center;
+}
+
+.fp-warning {
+  display: inline-block;
+  margin-left: 4px;
+  color: var(--fg-soft);
+  font-family: var(--mono);
+  font-size: 12px;
+  cursor: help;
+}
+
+/* ─── DispatchView filter chip ───────────────────────────────────── */
+
+.dsp-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 4px 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--fg-soft);
+  align-self: flex-start;
+}
+
+.dsp-filter-chip code {
+  color: var(--fg);
+  font-family: inherit;
+}
+
+.dsp-filter-clear {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--fg-soft);
+  padding: 0 2px;
+}
+
 /* ─── TriggersPanel summary card (replaces v1 list) ──────────────── */
 
 .trg-summary {

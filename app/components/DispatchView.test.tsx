@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { render, screen, waitFor } from '@testing-library/react';
 import { DispatchView } from './DispatchView';
 import type { WebhookTrigger, WebhookPlugin } from '@/lib/shared/trigger';
@@ -29,8 +29,13 @@ const workflows = [
 ];
 
 const originalFetch = globalThis.fetch;
+const originalHash = window.location.hash;
 
-afterEach(() => { globalThis.fetch = originalFetch; });
+beforeEach(() => { window.location.hash = ''; });
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  window.location.hash = originalHash;
+});
 
 function mockFetch(routes: Record<string, unknown>) {
   // @ts-expect-error fetch override
@@ -66,5 +71,20 @@ describe('DispatchView', () => {
     await waitFor(() => {
       expect(screen.getByText(/No triggers yet/i)).toBeTruthy();
     });
+  });
+
+  test('filters list when hash has workflow=<id>', async () => {
+    window.location.hash = '#dispatch?workflow=test-flow';
+    mockFetch({
+      '/api/triggers': { triggers },
+      '/api/webhook-plugins': { plugins },
+      '/api/workflows': { workflows },
+    });
+    render(<DispatchView origin="http://localhost:3000" />);
+    await waitFor(() => {
+      expect(screen.queryByText('github-issue-opened')).toBeNull();
+      expect(screen.getByText('generic-debug')).toBeTruthy();
+    });
+    window.location.hash = '';
   });
 });

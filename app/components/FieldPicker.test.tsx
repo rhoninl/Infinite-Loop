@@ -41,4 +41,24 @@ describe('FieldPicker', () => {
     fireEvent.change(input, { target: { value: '{{body.custom.path}}' } });
     expect(captured).toBe('{{body.custom.path}}');
   });
+
+  test('shows a not-in-schema warning when value is a template not in declared fields', () => {
+    render(<FieldPicker fields={fields} value="{{body.custom.path}}" onChange={() => {}} />);
+    expect(screen.getByTitle(/not in the plugin's declared schema/i)).toBeTruthy();
+  });
+
+  test('no warning when value matches a declared field', () => {
+    render(<FieldPicker fields={fields} value="{{body.action}}" onChange={() => {}} />);
+    expect(screen.queryByTitle(/not in the plugin's declared schema/i)).toBeNull();
+  });
+
+  test('no warning when value is empty', () => {
+    render(<FieldPicker fields={fields} value="" onChange={() => {}} />);
+    expect(screen.queryByTitle(/not in the plugin's declared schema/i)).toBeNull();
+  });
+
+  test('no warning when fields array is empty (Generic plugin)', () => {
+    render(<FieldPicker fields={[]} value="{{body.x}}" onChange={() => {}} />);
+    expect(screen.queryByTitle(/not in the plugin's declared schema/i)).toBeNull();
+  });
 });

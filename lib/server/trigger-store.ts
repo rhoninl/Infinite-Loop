@@ -169,4 +169,24 @@ export async function deleteTrigger(id: string): Promise<void> {
   triggerIndex.invalidate();
 }
 
+/** Update the `lastFiredAt` timestamp on an existing trigger. Bypasses
+ *  `validateTrigger` — this is a hot-path called by the queue on every fire
+ *  and the data validity doesn't change. If the file is missing or
+ *  unreadable, log and continue (the trigger may have been deleted
+ *  mid-flight). */
+export async function touchLastFired(id: string, ts: number = Date.now()): Promise<void> {
+  let current: WebhookTrigger;
+  try {
+    current = await getTrigger(id);
+  } catch {
+    return; // trigger deleted while in queue — best effort
+  }
+  const updated: WebhookTrigger = { ...current, lastFiredAt: ts };
+  const target = fileFor(id);
+  const tmp = `${target}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(updated, null, 2), 'utf8');
+  await fs.rename(tmp, target);
+  triggerIndex.invalidate();
+}
+
 export { TriggerNotFoundError };
