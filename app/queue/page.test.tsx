@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import QueuePage from './page';
 
 const originalFetch = globalThis.fetch;
@@ -148,5 +148,67 @@ describe('QueuePage', () => {
     // first row is back to "Delete"
     const finalDeletes = screen.getAllByRole('button', { name: /delete/i });
     expect(finalDeletes.length).toBe(1); // row 1's button reverted; row 2 is now in confirm
+  });
+
+  test('appends a row when trigger_enqueued event arrives', async () => {
+    installFakes({
+      size: 0,
+      items: [],
+    });
+    render(<QueuePage />);
+    await waitFor(() => screen.getByText(/no queued runs/i));
+
+    const es = FakeEventSource.instances[0];
+    expect(es).toBeTruthy();
+    act(() => {
+      es.emit({
+        type: 'trigger_enqueued',
+        queueId: 'q-new',
+        triggerId: 't-new',
+        workflowId: 'w-new',
+        position: 1,
+        receivedAt: 500,
+      });
+    });
+
+    await waitFor(() => {
+      expect(document.querySelectorAll('.queue-row').length).toBe(1);
+    });
+  });
+
+  test('removes a row when trigger_started / trigger_dropped / trigger_removed arrives', async () => {
+    installFakes({
+      size: 1,
+      items: [
+        { queueId: 'q-1', triggerId: 't1', workflowId: 'w1', workflowName: 'First', receivedAt: 100, position: 1 },
+      ],
+    });
+    render(<QueuePage />);
+    await waitFor(() => screen.getByText('First'));
+
+    const es = FakeEventSource.instances[0];
+    act(() => {
+      es.emit({
+        type: 'trigger_started',
+        queueId: 'q-1',
+        triggerId: 't1',
+        workflowId: 'w1',
+        runId: 'run-1',
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('First')).toBeNull();
+    });
+  });
+
+  test('closes the EventSource on unmount', async () => {
+    installFakes({ size: 0, items: [] });
+    const { unmount } = render(<QueuePage />);
+    await waitFor(() => screen.getByText(/no queued runs/i));
+
+    const es = FakeEventSource.instances[0];
+    unmount();
+    expect(es.closed).toBe(true);
   });
 });

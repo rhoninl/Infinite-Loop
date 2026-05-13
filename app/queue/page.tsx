@@ -44,6 +44,46 @@ export default function QueuePage() {
     return () => { alive = false; };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const es = new EventSource('/api/events');
+
+    es.onmessage = (e) => {
+      if (typeof e.data !== 'string' || e.data.length === 0) return;
+      try {
+        const data = JSON.parse(e.data);
+        if (!data || typeof data !== 'object' || typeof data.type !== 'string') return;
+        const t = data.type as string;
+
+        if (t === 'trigger_enqueued') {
+          setItems((prev) => {
+            if (prev.some((it) => it.queueId === data.queueId)) return prev;
+            return [
+              ...prev,
+              {
+                queueId: data.queueId,
+                triggerId: data.triggerId,
+                workflowId: data.workflowId,
+                workflowName: data.workflowId, // refined by next refetch / page reload
+                receivedAt: data.receivedAt,
+                position: prev.length + 1,
+              },
+            ];
+          });
+          return;
+        }
+
+        if (t === 'trigger_started' || t === 'trigger_dropped' || t === 'trigger_removed') {
+          setItems((prev) => prev.filter((it) => it.queueId !== data.queueId));
+        }
+      } catch {
+        // ignore malformed frames
+      }
+    };
+
+    return () => { es.close(); };
+  }, []);
+
   const startConfirm = useCallback((queueId: string) => {
     setConfirming(queueId);
   }, []);
