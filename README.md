@@ -8,8 +8,7 @@
   <a href="#quickstart">Quickstart</a> •
   <a href="#core-concepts">Core concepts</a> •
   <a href="#how-infinite-loop-is-different">Comparison</a> •
-  <a href="#security-model">Security</a> •
-  <a href="#status">Status</a>
+  <a href="#security-model">Security</a>
 </p>
 
 <p align="center">
@@ -137,34 +136,6 @@ Infinite Loop can run **local agent CLIs, inline TypeScript and Python, and shel
 - **Do not expose Infinite Loop directly to the public internet.** No rate limiting, no per-user auth, no audit log yet. Put it behind a Cloudflare Tunnel with Access policies, a Tailscale ACL, or a reverse proxy with HTTP auth.
 
 Full posture, recipes, and reporting guidance: [docs/security.md](docs/security.md).
-
-## Status
-
-**Shipped**
-
-- Visual canvas with drag-and-drop, resize, undo/redo (`Cmd/Ctrl+Z`, `Cmd/Ctrl+Shift+Z`)
-- Node types: Start, End, Agent, Condition (sentinel / command / judge), Loop, Branch
-- Multi-agent primitives: Parallel, Subworkflow, Judge
-- Script nodes — TypeScript via Bun, Python via `python3`
-- Pluggable provider manifests (CLI or HTTP)
-- Live token streaming via SSE
-- MCP endpoint (`POST /api/mcp`) — every workflow becomes a tool
-- Webhook triggers with a visual Dispatch view (Generic + GitHub plugins)
-- Run history persisted to `runs/<workflowId>/<runId>.json`, replayable with per-node cards
-- Refresh-safe live state
-- In-memory FIFO queue (cap 100) and `/queue` page with per-item cancel
-
-**Planned**
-
-- `Shell` node (run arbitrary commands as a first-class node)
-- `SetVar` node (write a named variable into scope)
-- `Catch` / error-handling subgraphs
-- `HTTP` node (call REST endpoints without a Script wrapper)
-- `Switch` node (multi-way branch)
-- Predicate DSL with `&&` / `||` / `!`
-- Webhook signature verification (GitHub HMAC, Stripe signing, …)
-- Durable queue persistence across restarts
-- MCP tool-name migration from legacy `inflooop_*` to canonical `infinite_loop_*`
 
 ## Contributing
 
