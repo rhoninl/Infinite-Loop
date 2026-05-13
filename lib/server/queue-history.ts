@@ -1,0 +1,116 @@
+import { eventBus, type EventBus } from './event-bus';
+
+export type QueueEntryState = 'queued' | 'started' | 'dropped' | 'removed';
+
+export interface QueueHistoryEntry {
+  queueId: string;
+  triggerId: string;
+  workflowId: string;
+  state: QueueEntryState;
+  runId?: string;
+  reason?: string;
+  enqueuedAt: number;
+  updatedAt: number;
+}
+
+const MAX_ENTRIES = 200;
+
+class QueueHistory {
+  private map = new Map<string, QueueHistoryEntry>();
+
+  get(queueId: string): QueueHistoryEntry | undefined {
+    return this.map.get(queueId);
+  }
+
+  set(entry: QueueHistoryEntry): void {
+    this.map.delete(entry.queueId);
+    this.map.set(entry.queueId, entry);
+    while (this.map.size > MAX_ENTRIES) {
+      const oldest = this.map.keys().next().value;
+      if (oldest === undefined) break;
+      this.map.delete(oldest);
+    }
+  }
+
+  size(): number {
+    return this.map.size;
+  }
+
+  clear(): void {
+    this.map.clear();
+  }
+}
+
+/** Wire `history` to the given event bus. Returns the unsubscribe handle.
+ *  Exported for tests that clear the bus between cases and need to
+ *  re-register the subscription. */
+export function subscribeQueueHistory(
+  history: QueueHistory,
+  bus: EventBus = eventBus,
+): () => void {
+  return bus.subscribe((ev) => {
+    if (ev.type === 'trigger_enqueued') {
+      history.set({
+        queueId: ev.queueId,
+        triggerId: ev.triggerId,
+        workflowId: ev.workflowId,
+        state: 'queued',
+        enqueuedAt: ev.receivedAt,
+        updatedAt: Date.now(),
+      });
+    } else if (ev.type === 'trigger_started') {
+      const prev = history.get(ev.queueId);
+      history.set({
+        queueId: ev.queueId,
+        triggerId: ev.triggerId,
+        workflowId: ev.workflowId,
+        state: 'started',
+        runId: ev.runId,
+        enqueuedAt: prev?.enqueuedAt ?? Date.now(),
+        updatedAt: Date.now(),
+      });
+    } else if (ev.type === 'trigger_removed') {
+      const prev = history.get(ev.queueId);
+      history.set({
+        queueId: ev.queueId,
+        triggerId: ev.triggerId,
+        workflowId: ev.workflowId,
+        state: 'removed',
+        reason: ev.reason,
+        enqueuedAt: prev?.enqueuedAt ?? Date.now(),
+        updatedAt: Date.now(),
+      });
+    } else if (ev.type === 'trigger_dropped') {
+      const prev = history.get(ev.queueId);
+      // trigger_dropped is always preceded by trigger_enqueued (the queue
+      // emits dropped only from drain()). If `prev` is missing the history
+      // wasn't wired in time — skip instead of fabricating a workflowId.
+      if (!prev) return;
+      history.set({
+        ...prev,
+        state: 'dropped',
+        reason: ev.reason,
+        updatedAt: Date.now(),
+      });
+    }
+  });
+}
+
+function createSingleton(): QueueHistory {
+  const h = new QueueHistory();
+  subscribeQueueHistory(h);
+  return h;
+}
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __infloopQueueHistory: QueueHistory | undefined;
+}
+
+export const queueHistory: QueueHistory =
+  globalThis.__infloopQueueHistory ?? createSingleton();
+if (!globalThis.__infloopQueueHistory) {
+  globalThis.__infloopQueueHistory = queueHistory;
+}
+
+export { QueueHistory };

@@ -3,6 +3,11 @@ import { workflowEngine } from './workflow-engine';
 import { getWorkflow } from './workflow-store';
 import { touchLastFired } from './trigger-store';
 import { eventBus } from './event-bus';
+// Side-effect: register the queueHistory event-bus subscription at the same
+// point the queue itself is wired, so history mirrors every queue event
+// regardless of which entry point (MCP route, webhook, /api/triggers, …)
+// happens to load the queue first.
+import './queue-history';
 import type { Workflow } from '../shared/workflow';
 import type { ResolvedInputs } from '../shared/resolve-run-inputs';
 

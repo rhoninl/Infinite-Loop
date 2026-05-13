@@ -9,13 +9,22 @@
  *
  * Each request is authenticated via requireAuth (same as all other /api/* routes).
  * Workflow discovery is per-request so the list is always live.
+ *
+ * Workflow tools always enqueue (non-blocking). Callers poll with
+ * inflooop_get_run_status using the returned queueId.
  */
 
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/server/auth';
 import { listWorkflows, getWorkflow } from '@/lib/server/workflow-store';
-import { runWorkflowTool } from '@/lib/server/mcp/run-tool';
-import { getRunStatus, listRuns, cancelRun } from '@/lib/server/mcp/utility-tools';
+import { enqueueWorkflowTool } from '@/lib/server/mcp/enqueue-tool';
+import {
+  getRunStatus,
+  listRuns,
+  cancelRun,
+  listQueue,
+  removeFromQueue,
+} from '@/lib/server/mcp/utility-tools';
 import {
   sanitizeToolName,
   deconflictNames,
@@ -24,7 +33,6 @@ import {
 } from '@/lib/server/mcp/workflow-to-tool';
 import type { Workflow } from '@/lib/shared/workflow';
 
-const TOOL_TIMEOUT_MS = Number(process.env.INFLOOP_TOOL_TIMEOUT_MS ?? 600_000);
 const MCP_PROTOCOL_VERSION = '2024-11-05';
 
 // ─── Utility-tool specs (fixed) ──────────────────────────────────────────────
@@ -32,14 +40,21 @@ const MCP_PROTOCOL_VERSION = '2024-11-05';
 const UTILITY_TOOLS: McpToolSpec[] = [
   {
     name: 'inflooop_get_run_status',
-    description: 'Fetch the status and outputs of an InfLoop run by id.',
+    description:
+      'Fetch the status and outputs of an InfLoop run, identified by either ' +
+      '{workflowId, runId} or {queueId}. Use queueId to track a call returned ' +
+      'by a workflow tool (state goes queued → started; once started the ' +
+      'response includes runId and run outputs).',
     inputSchema: {
       type: 'object',
       properties: {
-        workflowId: { type: 'string', description: 'The workflow id.' },
-        runId: { type: 'string', description: 'The run id returned by a tool call.' },
+        workflowId: { type: 'string', description: 'The workflow id (required with runId).' },
+        runId: { type: 'string', description: 'The run id (preferred when known).' },
+        queueId: {
+          type: 'string',
+          description: 'The queue id returned by a workflow tool call.',
+        },
       },
-      required: ['workflowId', 'runId'],
       additionalProperties: false,
     },
   },
@@ -64,6 +79,32 @@ const UTILITY_TOOLS: McpToolSpec[] = [
         runId: { type: 'string' },
       },
       required: ['workflowId', 'runId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'inflooop_list_queue',
+    description:
+      'List the current trigger queue (pending workflow runs, in order). ' +
+      'Items already started or finished do not appear here — use ' +
+      'inflooop_get_run_status with a queueId to track those.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'inflooop_remove_from_queue',
+    description:
+      'Remove a queued workflow run by queueId before it starts. Returns ' +
+      '{removed:false} if the item has already started or never existed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        queueId: { type: 'string', description: 'The queue id to remove.' },
+      },
+      required: ['queueId'],
       additionalProperties: false,
     },
   },
@@ -181,9 +222,12 @@ export async function POST(req: Request) {
 
     // Utility tools.
     if (name === 'inflooop_get_run_status') {
-      const out = await getRunStatus(args as { workflowId: string; runId: string });
+      const out = await getRunStatus(
+        args as { workflowId?: string; runId?: string; queueId?: string },
+      );
       return jsonRpcSuccess(id, {
         content: [{ type: 'text', text: JSON.stringify(out, null, 2) }],
+        isError: out.status === 'error',
       });
     }
     if (name === 'inflooop_list_runs') {
@@ -198,6 +242,19 @@ export async function POST(req: Request) {
         content: [{ type: 'text', text: JSON.stringify(out, null, 2) }],
       });
     }
+    if (name === 'inflooop_list_queue') {
+      const out = listQueue();
+      return jsonRpcSuccess(id, {
+        content: [{ type: 'text', text: JSON.stringify(out, null, 2) }],
+      });
+    }
+    if (name === 'inflooop_remove_from_queue') {
+      const out = removeFromQueue(args as { queueId: string });
+      return jsonRpcSuccess(id, {
+        content: [{ type: 'text', text: JSON.stringify(out, null, 2) }],
+        isError: !out.removed,
+      });
+    }
 
     // Per-workflow tools: discover on every call so the tool list is always live.
     const workflowTools = await discoverWorkflowTools();
@@ -210,15 +267,14 @@ export async function POST(req: Request) {
       });
     }
 
-    const out = await runWorkflowTool({
+    const out = await enqueueWorkflowTool({
       workflowId: wt.workflowId,
       inputs: args,
-      timeoutMs: TOOL_TIMEOUT_MS,
     });
 
     return jsonRpcSuccess(id, {
       content: [{ type: 'text', text: JSON.stringify(out, null, 2) }],
-      isError: out.status === 'error' || out.status === 'timeout',
+      isError: out.status === 'error',
     });
   }
 

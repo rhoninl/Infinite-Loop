@@ -55,8 +55,10 @@ export function workflowToTool(
   }
 
   const description =
-    `${workflow.name}\n\nRuns InfLoop workflow "${workflow.id}". ` +
-    `Returns once the run settles (or after timeout).`;
+    `${workflow.name}\n\nEnqueues InfLoop workflow "${workflow.id}" and returns ` +
+    `immediately with {queueId, position}. The run is started serially when the ` +
+    `engine becomes idle. Use inflooop_get_run_status with the queueId to poll ` +
+    `for completion and outputs, or inflooop_remove_from_queue to cancel before start.`;
 
   const inputSchema: McpToolSpec['inputSchema'] = {
     type: 'object',

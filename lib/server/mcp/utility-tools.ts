@@ -1,21 +1,27 @@
 import { getRun, listRuns as storeListRuns } from '@/lib/server/run-store';
 import { workflowEngine } from '@/lib/server/workflow-engine';
+import { triggerQueue } from '@/lib/server/trigger-queue-singleton';
+import { queueHistory } from '@/lib/server/queue-history';
 import { filterOutputs } from './filter-outputs';
 
-export async function getRunStatus(args: {
-  workflowId: string;
-  runId: string;
-}): Promise<{
+export interface RunStatusResult {
   status: string;
   runId?: string;
+  queueId?: string;
+  position?: number;
   durationMs?: number;
   outputs?: Record<string, unknown>;
   errorMessage?: string;
   error?: string;
-}> {
-  // Try the persisted run store first; fall through to engine snapshot.
+  reason?: string;
+}
+
+async function lookupByRunId(
+  workflowId: string,
+  runId: string,
+): Promise<RunStatusResult> {
   try {
-    const run = await getRun(args.workflowId, args.runId);
+    const run = await getRun(workflowId, runId);
     return {
       status: run.status,
       runId: run.runId,
@@ -24,11 +30,11 @@ export async function getRunStatus(args: {
       errorMessage: run.errorMessage,
     };
   } catch {
-    // Not in the store — check engine snapshot.
+    // Fall through to engine snapshot.
   }
 
   const snap = workflowEngine.getState();
-  if (snap.runId === args.runId && snap.workflowId === args.workflowId) {
+  if (snap.runId === runId && snap.workflowId === workflowId) {
     return {
       status: snap.status,
       runId: snap.runId,
@@ -41,7 +47,58 @@ export async function getRunStatus(args: {
     };
   }
 
-  return { status: 'error', error: `Run ${args.runId} not found.` };
+  return { status: 'error', error: `Run ${runId} not found.` };
+}
+
+export async function getRunStatus(args: {
+  workflowId?: string;
+  runId?: string;
+  queueId?: string;
+}): Promise<RunStatusResult> {
+  // queueId path: resolve to a runId via the queue history.
+  if (args.queueId) {
+    const hist = queueHistory.get(args.queueId);
+    if (!hist) {
+      return {
+        status: 'error',
+        error: `Queue id ${args.queueId} not found. It may have expired or never existed.`,
+      };
+    }
+    if (hist.state === 'queued') {
+      const all = triggerQueue.list();
+      const idx = all.findIndex((i) => i.queueId === args.queueId);
+      return {
+        status: 'queued',
+        queueId: args.queueId,
+        position: idx >= 0 ? idx + 1 : undefined,
+      };
+    }
+    if (hist.state === 'removed' || hist.state === 'dropped') {
+      return {
+        status: hist.state,
+        queueId: args.queueId,
+        reason: hist.reason,
+      };
+    }
+    // state === 'started'
+    if (!hist.runId) {
+      return {
+        status: 'error',
+        error: `Queue item ${args.queueId} started but has no runId yet.`,
+      };
+    }
+    const out = await lookupByRunId(hist.workflowId, hist.runId);
+    return { ...out, queueId: args.queueId };
+  }
+
+  if (!args.runId || !args.workflowId) {
+    return {
+      status: 'error',
+      error: 'Must provide either {workflowId, runId} or {queueId}.',
+    };
+  }
+
+  return lookupByRunId(args.workflowId, args.runId);
 }
 
 export async function listRuns(args: {
@@ -69,4 +126,36 @@ export async function cancelRun(args: {
 
   workflowEngine.stop();
   return { cancelled: true };
+}
+
+export interface QueueListItem {
+  queueId: string;
+  triggerId: string;
+  workflowId: string;
+  workflowName: string;
+  receivedAt: number;
+  position: number;
+}
+
+export function listQueue(): { size: number; items: QueueListItem[] } {
+  const all = triggerQueue.list();
+  const items = all.map((item, idx) => ({
+    queueId: item.queueId,
+    triggerId: item.triggerId,
+    workflowId: item.workflow.id,
+    workflowName: item.workflow.name,
+    receivedAt: item.receivedAt,
+    position: idx + 1,
+  }));
+  return { size: all.length, items };
+}
+
+export function removeFromQueue(args: {
+  queueId: string;
+}): { removed: boolean; reason?: string } {
+  const { removed } = triggerQueue.removeByQueueId(args.queueId);
+  if (!removed) {
+    return { removed: false, reason: 'not-in-queue' };
+  }
+  return { removed: true };
 }
