@@ -369,6 +369,78 @@ three `inflooop_*` utility tools.
   gets a busy error naming the in-flight `runId`; use
   `inflooop_get_run_status` to wait for it.
 
+## Triggering workflows from webhooks
+
+Each saved workflow can declare one or more **webhook triggers** in its JSON
+file. A trigger exposes a unique URL; when an HTTP POST hits that URL,
+InfLoop evaluates the trigger's match predicates against the request and, on
+a match, queues a workflow run with templated inputs.
+
+### Configuring a trigger
+
+Add a `triggers[]` array to your workflow JSON:
+
+```jsonc
+{
+  "id": "code-review",
+  "inputs": [
+    { "name": "branch", "type": "string" },
+    { "name": "sha", "type": "string" }
+  ],
+  "triggers": [
+    {
+      "id": "abcdef1234567890ABCDEF",
+      "name": "github-push-main",
+      "enabled": true,
+      "match": [
+        { "lhs": "{{headers.x-github-event}}", "op": "==",       "rhs": "push" },
+        { "lhs": "{{body.ref}}",                "op": "matches", "rhs": "^refs/heads/main$" }
+      ],
+      "inputs": {
+        "branch": "{{body.ref}}",
+        "sha":    "{{body.after}}"
+      }
+    }
+  ]
+}
+```
+
+- **`id`** — appears verbatim in the URL: `POST http://localhost:3000/api/webhook/<id>`.
+  Must match `^[A-Za-z0-9_-]{16,32}$` and be unique across all workflows. Generate one with:
+  ```bash
+  bun -e "console.log(require('crypto').randomBytes(16).toString('base64url'))"
+  ```
+- **`enabled`** — set to `false` to park a trigger without removing it.
+- **`match[]`** — AND-joined predicates. The webhook scope exposes `headers.<name>`
+  (lowercased), `query.<name>`, and `body.<dotted.json.path>`. Empty match array = always fire.
+- **`inputs`** — maps workflow input names to templated strings. Inputs not listed here
+  fall back to their declared `default`.
+
+### Behavior
+
+- Match succeeds → `202` with `{ queued: true, queueId, position }`. The run is queued
+  in memory and started when the engine is idle.
+- Match fails → `204 No Content`. (The request was well-formed; the trigger chose to ignore it.)
+- Unknown / disabled trigger id → `404 not-found`.
+- Body > 1 MiB → `413 payload-too-large`.
+- Queue at cap (100) → `503 queue-full` with `Retry-After: 30`.
+
+### Security
+
+The unguessable `triggerId` in the URL is the authentication. There is no separate token
+or HMAC verification in v1 — anyone with the URL can fire the trigger. Treat trigger URLs
+like passwords; rotate by editing the workflow JSON to swap the id.
+
+`INFLOOP_API_TOKEN` does NOT apply to the webhook route (external services can't send
+custom auth headers). It does still gate every other route.
+
+### Limitations
+
+- Queued items are lost on process restart. The webhook caller already received `202`, so
+  from its perspective the event was accepted; the upstream service is responsible for
+  retry semantics if it cares.
+- The engine runs one workflow at a time; concurrent webhook hits queue in FIFO order.
+
 ## Tech stack
 
 - **Runtime:** Bun
