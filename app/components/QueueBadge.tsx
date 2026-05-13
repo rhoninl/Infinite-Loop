@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 
 export interface QueueBadgeProps {
   /** Poll interval; default 3000 ms. */
@@ -34,5 +35,9 @@ export function QueueBadge({ pollMs = 3000 }: QueueBadgeProps) {
 
   if (size === 0) return null;
 
-  return <span className="queue-badge">{size} queued</span>;
+  return (
+    <Link href="/queue" className="queue-badge">
+      {size} queued
+    </Link>
+  );
 }
