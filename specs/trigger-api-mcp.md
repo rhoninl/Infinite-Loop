@@ -1,7 +1,6 @@
 # External Trigger: HTTP API + MCP Server
 
 **Status:** Design
-**Date:** 2026-05-12
 **Author:** rhoninlee (with Claude)
 
 ## Problem

@@ -1,6 +1,5 @@
 # /queue page + per-item cancel — design
 
-**Date:** 2026-05-13
 **Status:** approved (design phase)
 **Owner:** main session
 

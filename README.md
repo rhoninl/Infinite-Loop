@@ -193,7 +193,7 @@ You may also see `INFLOOP_*` environment variable names (`INFLOOP_API_TOKEN`, `I
 
 ## Contributing
 
-Issues and PRs welcome. The codebase is small — a good way in is to read the original design at [`specs/2026-04-28-workflow-dag-design.md`](specs/2026-04-28-workflow-dag-design.md) and the engine at [`lib/server/workflow-engine.ts`](lib/server/workflow-engine.ts).
+Issues and PRs welcome. The codebase is small — a good way in is to read the original design at [`specs/workflow-dag-design.md`](specs/workflow-dag-design.md) and the engine at [`lib/server/workflow-engine.ts`](lib/server/workflow-engine.ts).
 
 ## License
 

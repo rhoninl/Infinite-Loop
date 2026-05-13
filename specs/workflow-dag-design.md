@@ -1,8 +1,7 @@
 # InfLoop · Workflow DAG Design
 
-**Date:** 2026-04-28
 **Status:** Draft for review
-**Supersedes:** the single-loop runtime described in `2026-04-28-infloop-design.md`. The existing app's behavior is preserved as one specific workflow (Start → Loop[Claude → Condition] → End).
+**Supersedes:** the single-loop runtime described in `infloop-original-design.md`. The existing app's behavior is preserved as one specific workflow (Start → Loop[Claude → Condition] → End).
 
 ## Context
 
@@ -295,7 +294,7 @@ A small dropdown in the top bar shows the current workflow name; clicking opens 
 - `app/api/run/route.ts` is rewritten to accept `{ workflowId }` instead of a `RunConfig`. The validation logic is replaced with `workflow.validate()`.
 - The existing TaskForm and RunPanel components are deleted; replaced by the canvas + palette + config panel + live run view.
 - Existing tests: condition-strategy and claude-runner tests stay (they test reused modules); LoopManager tests are deleted (LoopManager is gone); API route tests are rewritten; new tests added for the engine, templating, each new node executor, and the canvas.
-- Spec `2026-04-28-infloop-design.md` stays as historical context but is marked superseded.
+- Spec `infloop-original-design.md` stays as historical context but is marked superseded.
 
 ## Testing strategy
 

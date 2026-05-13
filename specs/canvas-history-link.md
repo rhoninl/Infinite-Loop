@@ -1,7 +1,6 @@
 # Canvas ↔ Run-History Link
 
 **Status:** Approved — ready for implementation plan
-**Date:** 2026-05-12
 
 ## Problem
 

@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, Next.js (App Router), Bun (`bun test` for unit tests via `bun:test`), Zustand (client store), React (UI). Templating is the existing `{{ref}}` system in `lib/shared/templating.ts` and `lib/shared/template-refs.ts`.
 
-**Spec:** `docs/superpowers/specs/2026-05-12-begin-node-inputs-design.md`
+**Spec:** `specs/begin-node-inputs.md`
 
 ---
 
