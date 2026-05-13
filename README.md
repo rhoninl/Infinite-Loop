@@ -6,11 +6,11 @@
 
 <p align="center">
   <a href="#quickstart">Quickstart</a> •
-  <a href="#what-you-can-build">What you can build</a> •
-  <a href="#nodes">Nodes</a> •
-  <a href="#trigger-from-anywhere">Triggers</a> •
-  <a href="#configuration">Configuration</a> •
-  <a href="#roadmap">Roadmap</a>
+  <a href="#core-concepts">Core concepts</a> •
+  <a href="#how-infloop-is-different">Comparison</a> •
+  <a href="#security-model">Security</a> •
+  <a href="#status">Status</a> •
+  <a href="#docs">Docs</a>
 </p>
 
 <p align="center">
@@ -19,6 +19,7 @@
   <img src="https://img.shields.io/badge/React-19-149eca" alt="React 19">
   <img src="https://img.shields.io/badge/canvas-%40xyflow%2Freact-ff0072" alt="xyflow">
   <img src="https://img.shields.io/badge/transport-SSE-2d2d2d" alt="SSE">
+  <img src="https://img.shields.io/badge/license-TBD-lightgrey" alt="License TBD">
 </p>
 
 <p align="center">
@@ -27,72 +28,28 @@
 
 ---
 
+## What is InfLoop?
+
+**InfLoop turns one-off AI agent calls into visible, repeatable, inspectable workflows.**
+
+Claude Code, Codex, Hermes, and other agents are excellent at single tasks. Real work needs more: looping until something is done, branching on the output, checking the filesystem, fanning out to several agents, replaying yesterday's run to see what went wrong. Wiring that into shell scripts is painful and disappears the moment it runs.
+
+InfLoop is a **local-first visual canvas** for that work. You compose agent workflows out of nodes — Agent, Loop, Branch, Parallel, Subworkflow, Judge, Script — and watch every token stream as the model generates it. Workflows are plain JSON files you can version in git, share with a teammate, and trigger from the UI, an MCP client, or a webhook.
+
 ## Why InfLoop
 
-A single `claude --print` call gives you one answer. Real work needs agents that *compose*:
+Agents in isolation are powerful but illegible. The moment you need *more than one call*, the gap shows up:
 
-- **Loop** an agent until the work is actually done.
-- **Branch** the flow on what the output looks like.
-- **Check** the filesystem, run tests, or let *another* agent grade the answer.
-- **Fan out** to several agents in parallel and pick the best result.
-- **Compose** workflows out of other workflows.
+- A loop that stops "when the tests pass" turns into a brittle bash wrapper.
+- A "run three prompts and pick the best" experiment becomes a tab full of copy-paste.
+- An automation that should fire on a GitHub event ends up running by hand.
+- Yesterday's successful run is gone — no transcript, no replay.
 
-Wiring that into shell scripts is painful and disappears the moment it runs — you can't see what's happening, can't rerun a single step, and can't share the flow with anyone else.
-
-**InfLoop is a local app for orchestrating AI agents visually.** Drag nodes onto a canvas, connect them, hit Run, and watch every token stream into the console as it's generated. Workflows are plain JSON files you can version, share, and trigger from MCP clients or webhooks.
-
-It's the difference between *one agent call* and *an agent system you can edit, rerun, and watch in real time*.
-
-## What you can build
-
-- **Iterate until the test passes.** Loop an agent over a codebase until `pytest -q` exits 0 — InfLoop checks the exit code each round and stops as soon as ground truth says done.
-- **Multi-agent debate.** Fan three different prompts (idiomatic, contrarian, conservative) out to Claude in parallel, then let a Judge node read all three and pick the winner with structured reasoning. The shipped `Team` preset does exactly this.
-- **Self-grading content.** Let one agent draft, a second agent grade it against a rubric, and loop until the grade is high enough.
-- **GitHub-driven automations.** Open a PR, have InfLoop run a review workflow, post a comment back. Triggers fire from any webhook.
-- **Agent-on-agent.** Expose your workflow as an MCP tool so Claude Code, Cursor, Cline, or Zed can call it by name — they get tool discovery for free.
-
-## Highlights
-
-- 🎨 **A canvas for your prompts** — drag, drop, resize, and wire nodes together. Edit any node's config inline. `Cmd/Ctrl+Z` to undo, `Cmd/Ctrl+Shift+Z` to redo.
-- ↻ **Loop until done** — repeat a body until a condition is met, capped by max iterations (or genuinely unbounded if you opt in). Conditions can match a sentinel string, a shell exit code, or a second model's judgment.
-- ⋔ **Branch on real signals** — structured `lhs op rhs` predicates with `==`, `!=`, `contains`, `matches`, templated on both sides.
-- 🧩 **Multi-agent, out of the box** — `Parallel` fans work out (`wait-all` / `race` / `quorum:N`) with a configurable error policy. `Subworkflow` calls another workflow as a single step with isolated inputs and outputs. `Judge` picks a winner from N candidates with structured scoring.
-- 🐚 **TypeScript or Python in-line** — `Script` nodes execute against upstream outputs and feed their return value back into the graph. Bun runs TS, `python3` runs Py.
-- 🔌 **Bring your own agent runner** — Claude, Codex, or any HTTP service (Hermes, your own backend). Add a JSON manifest to `providers/` and it shows up in the palette.
-- 📡 **See it as it happens** — every token from the active agent streams to the console live. A live-node highlight, status pill, and elapsed timer update at animation-frame cadence.
-- 🕘 **Replay any run** — every completed run is saved with per-node inputs and outputs you can scrub through, each card linked back to its node on the canvas.
-- 🔁 **Refresh-safe** — close the tab mid-run and reopen; InfLoop rehydrates the live state and resumes the stream.
-- 📝 **Templates everywhere** — `{{node-id.field}}` works in any text field, with autocomplete from the upstream graph. Reserved scopes: `{{__inputs.*}}` for run inputs, `{{globals.*}}` for workflow-level constants.
-- 🛰 **MCP-native** — every saved workflow is also an MCP tool. One URL, no client install.
-- 🪝 **Webhook triggers** — visual Dispatch view to wire up GitHub, Stripe, or any JSON POST, with a test-fire panel for debugging.
-- 🛂 **Cancel cleanly** — Stop signals the active child with `SIGTERM`, escalates to `SIGKILL` after a 2 s grace, and settles the run as `cancelled`.
-
-## See it run
-
-The screenshot at the top is a real run mid-flight: palette on the left, the workflow on the canvas, and the right-side run view streaming the agent's output line-by-line as the model generates. The same trace as plain text:
-
-```
-run_started     Loop Claude until condition
-node_started    start-1
-node_finished   start-1 → next
-node_started    loop-1
-node_started    claude-1
-claude-1 │ Already logged in. Let me test the
-claude-1 │ other pages for frontend issues first.
-claude-1 │ All frontend pages render cleanly. Now
-claude-1 │ let me SSH to the edge node and check USB devices…
-node_finished   claude-1 → next
-node_started    cond-1
-condition_checked  cond-1 met:Y matched at index 6
-node_finished   cond-1 → met
-node_started    end-1
-node_finished   end-1 → next
-run_finished    succeeded
-```
+InfLoop fills that gap with one local app: a canvas to compose, a live console to watch, persisted history to replay, and three triggering surfaces (UI / MCP / webhook) so workflows can fire from wherever the work originates.
 
 ## Quickstart
 
-**Requirements:** [Bun](https://bun.sh) ≥ 1.3 and the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) on your `PATH` (or set `INFLOOP_CLAUDE_BIN`).
+**Requirements:** [Bun](https://bun.sh) ≥ 1.3. The default Claude provider needs the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) on your `PATH` (override with `INFLOOP_CLAUDE_BIN`). Other providers — Codex, Hermes, your own HTTP service — work too; see [docs/providers.md](docs/providers.md).
 
 ```bash
 git clone https://github.com/rhoninl/Infinite-Loop.git
@@ -101,379 +58,143 @@ bun install
 bun run dev
 ```
 
-Open `http://localhost:3000`. A starter workflow loads automatically — edit any agent node's prompt and `cwd`, then click **Run** in the top bar. The right panel fills with streaming tokens as the model generates.
+**First run:**
 
-### Other commands
+1. Open <http://localhost:3000>.
+2. The starter workflow loads automatically.
+3. Click an **Agent** node and edit its `prompt` and `cwd` in the right panel.
+4. Hit **Run** in the top bar.
+5. Watch streaming tokens appear live in the right panel as the agent generates them.
 
-```bash
-bun run test        # bun:test
-bun run typecheck   # tsc --noEmit
-bun run build       # next build (production)
-bun run start       # NODE_ENV=production bun server.ts
-```
+Other scripts: `bun run test`, `bun run typecheck`, `bun run build`, `bun run start`.
 
-The dev server binds to all interfaces by default (LAN-accessible). If `PORT` is taken, InfLoop walks forward to the next free port automatically. Set `HOST=127.0.0.1` to keep it loopback-only.
+## Core concepts
 
-## Nodes
+A workflow is a directed graph of typed nodes. Each node writes outputs into a flat scope keyed by node id; downstream nodes reference them with `{{node-id.field}}` templating.
 
-| Node | What it does | Outputs in scope | Branches |
-|---|---|---|---|
-| **Start** | Entry point. Holds the workflow's input declarations. | — | `next` |
-| **End** | Settles the run as `succeeded` or `failed`. | — | (terminal) |
-| **Agent** | Runs an agent through any provider — Claude, Codex, Hermes, your own. | `stdout`, `stderr`, `exitCode`, `durationMs`, `timedOut` | `next` (exit 0) / `error` |
-| **Script** | Inline TypeScript (Bun) or Python (`python3`). Reads typed named inputs; the function's return value is stored as `result`. | `result`, `stdout`, `stderr`, `durationMs` | `next` / `error` |
-| **Condition** | Decides whether to continue. Three kinds: `sentinel`, `command`, `judge`. | `met`, `detail` | `met` / `not_met` / `error` |
-| **Loop** | Repeats its body until a `Condition` says stop. Capped by `maxIterations` (or genuinely unbounded with `infinite: true`). | `iterations`, `broke` | `next` |
-| **Branch** | Structured `lhs op rhs` predicate (`==`, `!=`, `contains`, `matches`) on templated values. | `result`, `lhs`, `rhs`, `op` | `true` / `false` / `error` |
-| **Parallel** | Runs N children concurrently. Join modes: `wait-all`, `race`, `quorum`. Error policy: `fail-fast` or `best-effort`. | `mode`, `completed`, `failed`, `children`, `winner?`, `winners?` | `all_done` / `first_done` / `quorum_met` / `error` |
-| **Subworkflow** | Calls another workflow as a single step with isolated I/O. Inputs are templated in; named outputs are copied back. | declared output names, plus `status`, `errorMessage?` | `next` / `error` |
-| **Judge** | Reads N candidate texts and lets a model pick a winner with structured scoring. | `winner_index`, `winner`, `scores`, `reasoning` | `next` / `error` |
-| **Sidenote** | A free-form sticky note on the canvas. No effect at runtime. | — | — |
-
-Every text field — an Agent's `prompt` and `cwd`, a Condition's `against`, a Branch's `lhs`/`rhs`, a Script's `inputs.*`, a Subworkflow's `inputs.*` — supports `{{node-id.field}}` templating, resolved against the run's flat scope before the node executes. The config panel autocompletes references from the upstream graph.
-
-### Conditions: sentinel vs command vs judge
-
-| Kind | Best for | Cost |
-|---|---|---|
-| **sentinel** | The agent reliably emits a marker (`DONE`, `PASS`) when it's finished | Free, instant |
-| **command** | Ground-truth checks on disk — `test -f hello.txt`, `pytest -q`, `tsc --noEmit` | One subprocess per iteration |
-| **judge** | Qualitative goals — "is the README clear?", "did the answer match the user's level?" | One extra agent call per iteration |
-
-## Trigger from anywhere
-
-InfLoop workflows can be started three ways: from the canvas Run button, from an MCP client, or from a webhook.
-
-### From the canvas
-
-Click **Run** in the top bar. If the workflow declares inputs (on the Start node), a modal opens to collect them.
-
-### From an MCP client
-
-Every saved workflow is exposed as an MCP tool via Streamable HTTP at `POST /api/mcp`. Input schema is derived from the workflow's declared inputs. Any MCP-speaking client — Claude Code, Cursor, Cline, Zed, Continue.dev, OpenAI Codex CLI — can discover and invoke InfLoop workflows by name.
-
-**Workflow discovery is per-call**, so a workflow you save right now is visible on the very next `tools/list`. No restart, no client redeploy.
-
-The contract is just two things — a **URL** and (optionally) a **bearer token**:
-
-| Field | Value |
+| Node | What it does |
 |---|---|
-| **url** | `http://localhost:3000/api/mcp` (or wherever InfLoop runs) |
-| **auth** | `Authorization: Bearer <INFLOOP_API_TOKEN>` — required only when `INFLOOP_API_TOKEN` is set on the server |
+| **Agent** | Runs an agent through a provider (Claude, Codex, Hermes, your own). |
+| **Loop** | Repeats its body until a `Condition` says stop, capped by `maxIterations`. |
+| **Condition** | `sentinel` (text match), `command` (shell exit code), or `judge` (a second agent grades). |
+| **Branch** | `lhs op rhs` predicate routing to `true` / `false` / `error`. |
+| **Parallel** | Fans children out — `wait-all`, `race`, or `quorum:N`. |
+| **Subworkflow** | Calls another workflow as a single step with isolated inputs and outputs. |
+| **Judge** | Reads N candidates and picks a winner with structured scoring. |
+| **Script** | Inline TypeScript (Bun) or Python (`python3`) with typed named inputs. |
+| **Start / End** | Entry and exit. Start declares the workflow's caller-supplied `inputs`. |
 
-**Claude Code:**
+Full reference (handles, output keys, JSON schema): [docs/workflow-format.md](docs/workflow-format.md).
 
-```bash
-claude mcp add --transport http inflooop http://localhost:3000/api/mcp
+### See it run
+
+A real run logged as plain text:
+
+```
+run_started     Loop Claude until condition
+node_started    loop-1
+node_started    agent-1
+agent-1 │ All frontend pages render cleanly. Now
+agent-1 │ let me SSH to the edge node and check USB devices…
+node_finished   agent-1 → next
+node_started    cond-1
+condition_checked  cond-1 met:Y matched at index 6
+node_finished   cond-1 → met
+run_finished    succeeded
 ```
 
-(The exact transport flag may vary across Claude Code versions; try `--transport streamable-http` if the above doesn't work. Run `claude mcp add --help` to see what your version accepts.)
+## Examples — what you can build
 
-Then `/mcp` in any session, or just ask "what inflooop tools do you have?".
+- **Iterate until tests pass.** Loop an agent over a codebase with a `command` condition running `pytest -q`. Stops the moment ground truth says done.
+- **Multi-agent debate.** Fan three prompts (idiomatic, contrarian, conservative) out to Claude in parallel; let a Judge node read all three and pick a winner. The shipped **Team** preset does exactly this — see `workflows/library/team.json`.
+- **Self-grading drafts.** One agent drafts, a second grades against a rubric, loop until the grade clears a threshold.
+- **GitHub-driven review.** A webhook trigger on `pull_request: opened` queues a review workflow that posts a comment back.
+- **Agents calling InfLoop.** Expose your workflows as MCP tools so Claude Code, Cursor, Cline, or Zed can call them by name — they get discovery for free.
 
-**Cursor, Cline, Zed, Continue.dev, OpenAI Codex CLI** — open your client's MCP config and add:
+## How InfLoop is different
 
-```json
-{
-  "mcpServers": {
-    "inflooop": {
-      "url": "http://localhost:3000/api/mcp"
-    }
-  }
-}
-```
-
-That's the whole entry. No `command`, no `args`, no local runtime to install on the client.
-
-**Hermes or any runtime that accepts an MCP URL:**
-
-```yaml
-mcp_servers:
-  inflooop:
-    url: http://localhost:3000/api/mcp
-```
-
-#### Authenticating
-
-If `INFLOOP_API_TOKEN` is set on the server, clients must send the token on every request. Most clients accept a `headers` map:
-
-```json
-{
-  "mcpServers": {
-    "inflooop": {
-      "url": "http://localhost:3000/api/mcp",
-      "headers": { "Authorization": "Bearer <your-token>" }
-    }
-  }
-}
-```
-
-> **Note.** Setting `INFLOOP_API_TOKEN` protects the HTTP API against off-host callers but **disables the browser UI** for that server (the UI doesn't forward the token). Use this for InfLoop instances that exist purely to serve agent traffic.
-
-#### Tools exposed
-
-- **One tool per workflow** — named after the workflow id (sanitized to `[a-z0-9_]`), with inputs derived from the workflow's `inputs[]`. The call **enqueues** a run (non-blocking) and returns `{ queueId, position }`. Poll with `inflooop_get_run_status` using the `queueId`.
-- **`inflooop_get_run_status({ workflowId?, runId?, queueId? })`** — fetch status and outputs for a run. Use `queueId` to track a call returned by a workflow tool: it transitions `queued → started` and exposes `runId` once it starts.
-- **`inflooop_list_runs({ workflowId? })`** — list recent runs.
-- **`inflooop_cancel_run({ workflowId, runId })`** — cancel the active run if its id matches.
-- **`inflooop_list_queue()`** — list pending workflow runs in queue order.
-- **`inflooop_remove_from_queue({ queueId })`** — drop a queued run before it starts.
-
-#### Verify without an MCP client
-
-```bash
-curl -s -X POST http://localhost:3000/api/mcp \
-  -H 'content-type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | jq
-```
-
-You'll see one tool per saved workflow plus the five `inflooop_*` utility tools.
-
-#### Concurrency
-
-The engine runs **one workflow at a time**. Additional MCP calls and webhook hits queue in FIFO order (cap 100); the UI shows a queue badge and a `/queue` page where you can cancel individual queued items.
-
-### From a webhook
-
-Open the **Dispatch** view (top-bar button, next to the workflow menu) to create, edit, and test webhook triggers visually. Each trigger gets a unique URL. When an HTTP POST hits it, InfLoop matches the trigger's predicates against the request, queues a workflow run with templated inputs, and returns `202 { queued, queueId, position }`.
-
-**Creating a trigger:**
-
-1. **Dispatch → + New trigger**.
-2. Name it and pick the target workflow.
-3. Pick a **plugin** that describes the webhook source:
-   - **Generic** — any JSON POST. Predicates and input mappings are free-form `{{body.x.y.z}}` template strings.
-   - **GitHub** — declares `push`, `issues`, `issue_comment`, and `pull_request` events; the form's field-picker autocompletes from the event's schema.
-   - Drop a JSON file in `webhook-plugins/` to add more (see below).
-4. Configure **Match** predicates (AND-joined). For GitHub, the `x-github-event` header check is implicit — pick the event, and you only write predicates for body fields.
-5. Map **Inputs** — each declared workflow input becomes a row; fill in a template string using the field picker.
-6. **Save**, then copy the URL from the detail pane.
-
-**Wiring up GitHub.** InfLoop listens on `http://localhost:3000` by default. To reach it from `github.com`, expose your machine with a tunnel:
-
-```bash
-cloudflared tunnel --url http://localhost:3000
-```
-
-Then in your repo: **Settings → Webhooks → Add webhook**:
-
-| Field | Value |
-|---|---|
-| Payload URL | `https://<your-tunnel>.trycloudflare.com/api/webhook/<id>` |
-| Content type | `application/json` |
-| Secret | (leave blank — the URL is the credential in v2) |
-| Events | Pick specific events, or "Send everything" and filter in Dispatch |
-
-**Test fire.** Hit **Test** on any trigger row to open the test-fire modal. Edit a JSON payload (pre-filled from the plugin's example), set headers, and Send. You'll see the real webhook response (202, 204, 422, …) so you can debug predicates and input mapping without leaving the UI.
-
-**Add a plugin.** Create `webhook-plugins/<id>.json`:
-
-```json
-{
-  "id": "stripe",
-  "displayName": "Stripe",
-  "eventHeader": "stripe-event-type",
-  "events": [
-    {
-      "type": "checkout.session.completed",
-      "displayName": "Checkout session completed",
-      "fields": [
-        { "path": "body.data.object.id",       "type": "string" },
-        { "path": "body.data.object.amount",   "type": "number" },
-        { "path": "body.data.object.customer", "type": "string" }
-      ],
-      "examplePayload": { "data": { "object": { "id": "cs_…", "amount": 5000 } } }
-    }
-  ]
-}
-```
-
-Restart InfLoop. The plugin appears in the trigger form's plugin dropdown.
-
-**Behavior reference:**
-
-- Match succeeds → `202 { queued, queueId, position }`. Run is queued in memory.
-- Match fails or plugin event-header mismatches → `204 No Content`.
-- Unknown / disabled trigger id → `404 not-found`.
-- Body > 1 MiB → `413 payload-too-large`.
-- Queue at cap (100) → `503 queue-full` with `Retry-After: 30`.
-
-**Security.** The unguessable `triggerId` in the URL is the credential. There's no HMAC verification in v2 — treat trigger URLs like passwords; rotate via the regenerate-id button in the Dispatch form. `INFLOOP_API_TOKEN` does **not** apply to webhook ingress (external services can't carry custom auth headers); it gates the management API only.
-
-**Limitations.** Queued runs are lost on process restart (the webhook caller already received `202`; upstream services own retry). No service-specific signature verification yet — planned as a follow-up.
-
-## Workflow files
-
-Each workflow lives as one JSON file in `workflows/`:
-
-```jsonc
-{
-  "id": "loop-claude-until-condition",
-  "name": "Loop Claude until condition",
-  "version": 1,
-  "createdAt": 1777359000000,
-  "updatedAt": 1777359000000,
-  "nodes": [
-    { "id": "start-1", "type": "start", "position": { "x": 80, "y": 200 }, "config": {} },
-    {
-      "id": "loop-1",
-      "type": "loop",
-      "position": { "x": 280, "y": 120 },
-      "config": { "maxIterations": 5, "mode": "while-not-met" },
-      "children": [
-        { "id": "agent-1", "type": "agent", "position": { "x": 40, "y": 60 },
-          "config": { "providerId": "claude", "prompt": "…", "cwd": "/tmp", "timeoutMs": 60000 } },
-        { "id": "cond-1", "type": "condition", "position": { "x": 320, "y": 60 },
-          "config": { "kind": "sentinel", "against": "{{agent-1.stdout}}",
-                      "sentinel": { "pattern": "DONE", "isRegex": false } } }
-      ]
-    },
-    { "id": "end-1", "type": "end", "position": { "x": 760, "y": 200 },
-      "config": { "outcome": "succeeded" } }
-  ],
-  "edges": [
-    { "id": "e1", "source": "start-1", "sourceHandle": "next", "target": "loop-1" },
-    { "id": "e2", "source": "loop-1",  "sourceHandle": "next", "target": "end-1" },
-    { "id": "e3", "source": "agent-1", "sourceHandle": "next", "target": "cond-1" }
-  ]
-}
-```
-
-Saves are atomic and bump `version` on every write. Drop a hand-written JSON file in `workflows/` and refresh — the menu picks it up.
-
-### Workflow library
-
-`workflows/library/` holds repo-shipped, read-only presets. They appear in the workflow menu with a `[library]` tag — you can open, run, or duplicate them into your own `workflows/` for editing, but they can never be overwritten in place.
-
-The **Team** preset fans three Claudes out in parallel (idiomatic, contrarian, conservative) and lets a Judge pick the winner. Open it from the menu, fill in `__inputs.task` and `__inputs.criteria`, and run.
-
-### Run history
-
-Every finished run is persisted at `runs/<workflowId>/<runId>.json` — one JSON file per run, capturing the full event log, final scope, and per-node outputs. The History panel lists them, replays per-node input/output cards, and links each card back to the node on the canvas. The persisted log is capped at 50,000 events per run (oldest dropped first); per-workflow history retention is capped by `INFLOOP_RUN_HISTORY_LIMIT` (default 100).
-
-## Configuration
-
-### Environment variables
-
-| Var | Default | Purpose |
+| Tool | Sweet spot | Where InfLoop fits |
 |---|---|---|
-| `PORT` | `3000` (then next free, up to +20) | HTTP port |
-| `HOST` | `0.0.0.0` | Bind address; `127.0.0.1` to disable LAN access |
-| `INFLOOP_API_TOKEN` | _(unset)_ | When set, all `/api/*` calls require `Authorization: Bearer <token>`. Disables the browser UI — use for headless servers only. |
-| `INFLOOP_WORKFLOWS_DIR` | `<cwd>/workflows` | Where workflow JSON lives |
-| `INFLOOP_TRIGGERS_DIR` | `<cwd>/triggers` | Where webhook trigger JSON lives |
-| `INFLOOP_RUNS_DIR` | `<cwd>/runs` | Where completed-run records are persisted |
-| `INFLOOP_RUN_HISTORY_LIMIT` | `100` | Max persisted runs per workflow (oldest pruned first) |
-| `INFLOOP_PROVIDERS_DIR` | `<cwd>/providers` | Where provider manifests live |
-| `INFLOOP_PROVIDER_BIN_<ID>` | _(unset)_ | Override the binary for provider `<ID>` (upper-cased), e.g. `INFLOOP_PROVIDER_BIN_CLAUDE=/opt/claude` |
-| `INFLOOP_CLAUDE_BIN` | `claude` | Legacy override for the `claude` provider only — kept for back-compat |
-| `INFLOOP_PYTHON_BIN` | `python3` | Interpreter for Script nodes with `language: py` |
-| `INFLOOP_BUN_BIN` | `bun` | Interpreter for Script nodes with `language: ts` |
-| `INFLOOP_WEBHOOK_PLUGINS_DIR` | `<cwd>/webhook-plugins` | Where webhook plugin manifests live |
+| **Claude Code / Codex** | A great single-agent session | InfLoop coordinates repeatable, multi-step, multi-agent workflows on top of them |
+| **n8n / Zapier** | SaaS automation between hosted apps | InfLoop is **local-first** and focused on **agent runners**, scripts, and CLIs |
+| **LangGraph** | Code-defined agent graphs in Python | InfLoop is **visual**, **inspectable**, and **replayable** — no recompile to iterate |
+| **Dify / Flowise** | LLM apps and chatbot flows | InfLoop targets **developer workflows** — CLIs, MCP, webhooks, filesystem checks |
+| **OpenHands** | Autonomous coding tasks | InfLoop focuses on **orchestration**, **branching**, **replay**, and **external triggers** |
 
-### Providers
+## Trigger surfaces
 
-Each agent node picks a runner from `providers/*.json`. A manifest declares either a CLI to spawn (`bin`, `args`, `promptVia`) or an HTTP service to call (`host`, `token`, `ports`), and tells the engine how to parse the output (`claude-stream-json` for token-by-token streaming, `plain` for end-of-process stdout). Drop in a new manifest and the palette picks it up; the agent's config panel exposes it as a selectable provider.
+Three ways to start a workflow:
 
-Three manifests ship in the box: `claude.json` (the Claude CLI with `--print --output-format stream-json` for live token streaming), `codex.json` (the Codex CLI), and a sample Hermes HTTP runner.
+1. **Canvas** — click Run in the top bar. If the workflow declares inputs, a modal collects them.
+2. **MCP** — every saved workflow is exposed as a tool at `POST /api/mcp`. Workflow tools enqueue (non-blocking) and return `{ queueId, position }`; poll with `inflooop_get_run_status`. See [docs/mcp.md](docs/mcp.md).
+3. **Webhook** — wire up triggers visually in the Dispatch view. Generic JSON or GitHub events out of the box; drop a JSON file in `webhook-plugins/` to add more. See [docs/webhooks.md](docs/webhooks.md).
 
-## Architecture
+> The engine runs **one workflow at a time**. Additional MCP calls and webhook hits queue in FIFO order (cap 100); the `/queue` page shows pending items with per-item cancel.
 
-In one diagram:
+## Security model
 
-```
- Browser
-   ├─ canvas (xyflow)  ◀──── /api/workflows/<id>      (loads workflow JSON)
-   ├─ palette (drag)
-   ├─ config panel
-   └─ run view (SSE consumer)
-                            ▲
-                            │ HTTP (start/stop/save) + Server-Sent Events
-                            ▼
- Bun + Next.js (server.ts)
-   ├─ /api/workflows          CRUD against workflows/*.json
-   ├─ /api/run                POST → workflowEngine.start(wf)
-   ├─ /api/run/stop           POST → workflowEngine.stop()
-   ├─ /api/events             text/event-stream → live events
-   ├─ /api/mcp                Streamable HTTP MCP endpoint
-   ├─ /api/webhook/<id>       webhook ingress (queues a run)
-   └─ /api/triggers, /api/runs, /api/providers, /api/webhook-plugins
-                            │
-                            ▼
- WorkflowEngine (singleton)
-   ├─ Graph walker with built-in Loop / Parallel / Subworkflow semantics
-   ├─ Per-node executor → provider runner (spawn CLI or HTTP call)
-   ├─ Templating resolver: {{node-id.field}} over flat scope
-   └─ Event buffer (5k live for refresh hydration, 50k persisted per run)
-```
+InfLoop runs **local agent CLIs, inline scripts, and shell commands** on your machine. Treat it like a local code-execution surface.
 
-**Why SSE, not WebSockets?** Native HTML/JSON, one-way (engine → browser), Bun-friendly, no upgrade dance. Stop and save go through normal `fetch` calls in the other direction.
+- **Default bind is `0.0.0.0`** for LAN convenience. Use `HOST=127.0.0.1` if you don't need it.
+- **`INFLOOP_API_TOKEN`** gates the management/MCP API with a bearer token; setting it disables the browser UI (use for headless servers).
+- **Webhook URLs are credentials.** The unguessable `triggerId` is the only auth — treat URLs like passwords and rotate via the Dispatch UI.
+- **Workflow JSON files are executable code.** Review every workflow you import or download before running it. Same for files in `providers/`, `webhook-plugins/`, and `triggers/`.
+- **Do not expose InfLoop directly to the public internet.** No rate limiting, no per-user auth, no audit log yet. Put it behind a Cloudflare Tunnel with Access policies, a Tailscale ACL, or a reverse proxy with HTTP auth.
 
-**Why Bun?** Native TypeScript + ESM (no `tsx` shim), faster cold start than Node, single binary.
+Full details and recipes: [docs/security.md](docs/security.md).
 
-## Tech stack
+## Status
 
-- **Runtime:** Bun
-- **Server:** Next.js 15 (App Router) + a thin custom server (`server.ts`)
-- **Frontend:** React 19, Zustand for state, `@xyflow/react` v12 for the canvas, hand-written CSS with multi-hue Tokyo-Night-inspired tokens
-- **Transport:** Server-Sent Events (`/api/events`)
-- **Agent runners:** Pluggable providers — subprocess (`spawn`) or HTTP. See `providers/`.
-- **Tests:** `bun:test`, `@testing-library/react`, `@happy-dom/global-registrator`
+**Shipped**
 
-## Roadmap
+- Visual canvas with drag-and-drop, resize, undo/redo (`Cmd/Ctrl+Z`, `Cmd/Ctrl+Shift+Z`)
+- Node types: Start, End, Agent, Condition (sentinel / command / judge), Loop, Branch
+- Multi-agent primitives: Parallel, Subworkflow, Judge
+- Script nodes (TypeScript via Bun, Python via `python3`)
+- Pluggable provider manifests (CLI or HTTP)
+- Live token streaming via SSE
+- MCP endpoint (`POST /api/mcp`) — every workflow becomes a tool
+- Webhook triggers with a visual Dispatch view (Generic + GitHub plugins)
+- Run history persisted to `runs/<workflowId>/<runId>.json`, replayable with per-node cards
+- Refresh-safe live state
+- In-memory FIFO queue (cap 100) and `/queue` page with per-item cancel
 
-The current build ships **Phase 1** (the 6 base node types: Start, End, Agent, Condition, Loop, Branch — plus the live event pipeline) and **Phase 1.5** (the multi-agent primitives: Parallel, Subworkflow, Judge — including the Team preset).
+**Planned**
 
-- **Phase 2 (in progress):** `Script` (TS/Python) and pluggable HTTP providers have landed. Still on deck: `Shell` (arbitrary command), `SetVar` (write a named variable), `Catch` (run a subgraph on error before settling), and a predicate DSL with `&&` / `||` / `!`.
-- **Phase 3:** `Wait`, `HTTP` node, `Switch` (multi-way branch).
+- `Shell` node (run arbitrary commands as a first-class node)
+- `SetVar` node (write a named variable into scope)
+- `Catch` / error-handling subgraphs
+- `HTTP` node (call REST endpoints without a Script wrapper)
+- `Switch` node (multi-way branch)
+- Predicate DSL with `&&` / `||` / `!`
+- Webhook signature verification (GitHub HMAC, Stripe signing, …)
+- Durable queue persistence across restarts
 
-Recent UI work — run history persistence, per-node input/output cards, and a canvas ↔ history-log link — is documented in [`docs/superpowers/specs/2026-05-12-canvas-history-link-design.md`](docs/superpowers/specs/2026-05-12-canvas-history-link-design.md).
+## Docs
 
-See [`docs/superpowers/specs/2026-04-28-workflow-dag-design.md`](docs/superpowers/specs/2026-04-28-workflow-dag-design.md) for the full original design.
+- [MCP guide](docs/mcp.md)
+- [Webhook guide](docs/webhooks.md)
+- [Provider manifests](docs/providers.md)
+- [Workflow JSON format & node reference](docs/workflow-format.md)
+- [Configuration & environment variables](docs/configuration.md)
+- [Architecture](docs/architecture.md)
+- [Security model](docs/security.md)
 
-## Project layout
+## A note on naming
 
-```
-app/
-  api/                  Next.js route handlers (workflows, run, events, mcp, webhook, …)
-  components/
-    canvas/             xyflow wrapper + custom node UIs
-    Palette.tsx         draggable node-type list
-    ConfigPanel.tsx     per-node-type config form (templating-aware)
-    RunView.tsx         live event log + status pill + elapsed timer
-    DispatchView.tsx    webhook trigger management UI
-    WorkflowMenu.tsx    top-bar dropdown: list / new / duplicate / save / delete
-  queue/                /queue page — pending workflow runs, per-item cancel
-  page.tsx              top bar + tri-pane layout (palette · canvas · right panel)
-lib/
-  shared/workflow.ts    immutable types contract (Workflow, WorkflowNode, …)
-  client/               Zustand store + SSE hook + undo/redo
-  server/
-    workflow-engine.ts  graph walker + Loop / Parallel / Subworkflow semantics
-    workflow-store.ts   filesystem-backed CRUD
-    run-store.ts        persists completed runs under runs/
-    trigger-queue.ts    in-memory FIFO queue (cap 100)
-    trigger-store.ts    webhook trigger persistence
-    event-bus.ts        typed pub/sub
-    nodes/              one executor per node type
-    conditions/         sentinel / command / judge strategies
-    providers/          provider manifest loader + CLI/HTTP runners
-    mcp/                MCP tool schema generation + handlers
-    webhook-plugins/    plugin manifest loader
-providers/              runner manifests (Claude, Codex, Hermes, …) — drop a JSON file to add one
-webhook-plugins/        webhook source manifests (GitHub ships in the box)
-workflows/              the workflow JSON store
-  library/              read-only repo-shipped presets (Team, …)
-runs/                   persisted run records, one folder per workflow
-triggers/               webhook trigger configs, one file per trigger
-docs/
-  superpowers/specs/    design specs
-```
+| Surface | Spelling |
+|---|---|
+| Product, UI, prose | **InfLoop** |
+| GitHub repo path | `Infinite-Loop` |
+| `package.json` name | `infloop` |
+| MCP server identifier and tool prefix on the wire | `inflooop` (triple `o`, intentional — hardcoded in `app/api/mcp/route.ts`) |
+
+If you write a script that talks to the MCP endpoint, the tools you'll list are `inflooop_get_run_status`, `inflooop_list_runs`, and so on — the `oo` is real.
 
 ## Contributing
 
-Issues and PRs welcome. The codebase is small — a good way in is to read the original design spec at `docs/superpowers/specs/2026-04-28-workflow-dag-design.md` and the engine at `lib/server/workflow-engine.ts`.
+Issues and PRs welcome. The codebase is small — a good way in is to read the original design at `docs/superpowers/specs/2026-04-28-workflow-dag-design.md` and the engine at `lib/server/workflow-engine.ts`.
 
 ## License
 
-Specify a license here (e.g. MIT) once you've decided.
+**License: TBD.** Do not use this project in production until a license is published. If you need clarity on use, open an issue.
