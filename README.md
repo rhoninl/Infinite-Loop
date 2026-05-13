@@ -34,12 +34,12 @@ Infinite Loop is a **local visual canvas for orchestrating AI agents**. You comp
 
 Without orchestration, agent work lives as bash wrappers and one-off transcripts. The pain shows up fast:
 
-- "Loop until the tests pass" becomes a brittle shell script you can't debug.
-- "Run three prompts and pick the best" becomes a browser tab full of copy-paste.
-- An automation that should fire on a GitHub event ends up running by hand.
-- Yesterday's successful run is gone — no transcript, no replay, no diff with today's run.
+- "Loop until the tests pass" becomes a **brittle shell script** you can't debug.
+- "Run three prompts and pick the best" becomes a **browser tab full of copy-paste**.
+- An automation that should fire on a GitHub event ends up **running by hand**.
+- Yesterday's successful run is **gone** — no transcript, no replay, no diff with today's run.
 
-Infinite Loop fills that gap with one local app: a canvas to compose, a live console to watch, persisted history to replay, and three triggering surfaces (UI / MCP / webhook) so workflows can fire from wherever the work originates.
+Infinite Loop fills that gap with one local app: **a canvas to compose**, **a live console to watch**, **persisted history to replay**, and **three triggering surfaces** (UI / MCP / webhook) so workflows can fire from wherever the work originates.
 
 ## Quickstart
 
@@ -99,11 +99,11 @@ run_finished    succeeded
 
 ## Examples — what you can build
 
-- **Iterate until tests pass.** Loop an agent over a codebase with a `command` condition running `pytest -q`. Stops the moment ground truth says done.
-- **Multi-agent debate.** Fan three prompts (idiomatic, contrarian, conservative) out to Claude in parallel; let a Judge node read all three and pick a winner. The shipped **Team** preset does exactly this — see `workflows/library/team.json`.
-- **Self-grading drafts.** One agent drafts, a second grades against a rubric, loop until the grade clears a threshold.
-- **GitHub-driven review.** A webhook trigger on `pull_request: opened` queues a review workflow that posts a comment back.
-- **Agents calling Infinite Loop.** Expose your workflows as MCP tools so Claude Code, Cursor, Cline, or Zed can call them by name — they get discovery for free.
+- **Iterate until tests pass.** Loop an agent over a codebase with a `command` condition running `pytest -q`. Stops the moment **ground truth** says done.
+- **Multi-agent debate.** Fan three prompts (idiomatic, contrarian, conservative) out to Claude in parallel; let a Judge node read all three and **pick a winner**. The shipped **Team** preset does exactly this — see `workflows/library/team.json`.
+- **Self-grading drafts.** One agent drafts, a second grades against a rubric, **loop until the grade clears a threshold**.
+- **GitHub-driven review.** A webhook trigger on `pull_request: opened` queues a review workflow that **posts a comment back**.
+- **Agents calling Infinite Loop.** Expose your workflows as MCP tools so Claude Code, Cursor, Cline, or Zed can call them by name — **discovery for free**.
 
 ## How Infinite Loop is different
 
