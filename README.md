@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/React-19-149eca" alt="React 19">
   <img src="https://img.shields.io/badge/canvas-%40xyflow%2Freact-ff0072" alt="xyflow">
   <img src="https://img.shields.io/badge/transport-SSE-2d2d2d" alt="SSE">
-  <img src="https://img.shields.io/badge/license-TBD-lightgrey" alt="License TBD">
+  <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License">
 </p>
 
 <p align="center">
@@ -197,4 +197,4 @@ Issues and PRs welcome. The codebase is small — a good way in is to read the o
 
 ## License
 
-**License: TBD.** Do not use this project in production until a license is published. If you need clarity on use, open an issue.
+[MIT](LICENSE) © rhoninl
