@@ -9,6 +9,7 @@ import type {
   WorkflowNode,
   WorkflowSummary,
 } from '../shared/workflow';
+import { triggerIndex } from './trigger-index';
 
 /**
  * v5→v6 migration: rewrite `type: "claude"` nodes to `type: "agent"` with
@@ -110,6 +111,95 @@ function validateNodeConfig(n: WorkflowNode): void {
       throw new Error(
         `invalid workflow: judge node "${n.id}" requires at least 2 candidates`,
       );
+    }
+  }
+}
+
+const TRIGGER_ID_RE = /^[A-Za-z0-9_-]{16,32}$/;
+const ALLOWED_OPS = new Set(['==', '!=', 'contains', 'matches']);
+
+function validateTriggers(wf: Workflow): void {
+  const triggers = wf.triggers;
+  if (triggers === undefined) return;
+  if (!Array.isArray(triggers)) {
+    throw new Error('invalid workflow: triggers must be an array');
+  }
+
+  const declaredInputNames = new Set((wf.inputs ?? []).map((i) => i.name));
+  const seenIds = new Set<string>();
+
+  for (const t of triggers) {
+    if (!t || typeof t !== 'object') {
+      throw new Error('invalid workflow: trigger entries must be objects');
+    }
+    if (typeof t.id !== 'string' || !TRIGGER_ID_RE.test(t.id)) {
+      throw new Error(
+        `invalid workflow: trigger id "${t.id}" must match /^[A-Za-z0-9_-]{16,32}$/`,
+      );
+    }
+    if (seenIds.has(t.id)) {
+      throw new Error(
+        `invalid workflow: duplicate trigger id "${t.id}" within workflow`,
+      );
+    }
+    seenIds.add(t.id);
+    if (typeof t.name !== 'string' || t.name.length === 0) {
+      throw new Error(`invalid workflow: trigger "${t.id}" name must be non-empty`);
+    }
+    if (typeof t.enabled !== 'boolean') {
+      throw new Error(`invalid workflow: trigger "${t.id}" enabled must be boolean`);
+    }
+    if (!Array.isArray(t.match)) {
+      throw new Error(`invalid workflow: trigger "${t.id}" match must be an array`);
+    }
+    for (const p of t.match) {
+      if (
+        !p || typeof p !== 'object' ||
+        typeof p.lhs !== 'string' ||
+        typeof p.rhs !== 'string' ||
+        !ALLOWED_OPS.has(p.op)
+      ) {
+        throw new Error(
+          `invalid workflow: trigger "${t.id}" predicate has invalid lhs/op/rhs`,
+        );
+      }
+    }
+    if (!t.inputs || typeof t.inputs !== 'object' || Array.isArray(t.inputs)) {
+      throw new Error(`invalid workflow: trigger "${t.id}" inputs must be a record`);
+    }
+    for (const key of Object.keys(t.inputs)) {
+      if (!declaredInputNames.has(key)) {
+        throw new Error(
+          `invalid workflow: trigger "${t.id}" inputs.${key} is not a declared workflow input`,
+        );
+      }
+      if (typeof (t.inputs as Record<string, unknown>)[key] !== 'string') {
+        throw new Error(
+          `invalid workflow: trigger "${t.id}" inputs.${key} must be a templated string`,
+        );
+      }
+    }
+  }
+}
+
+async function validateNoCrossWorkflowTriggerCollisions(wf: Workflow): Promise<void> {
+  const ids = new Set((wf.triggers ?? []).map((t) => t.id));
+  if (ids.size === 0) return;
+  const summaries = await listWorkflows();
+  for (const summary of summaries) {
+    if (summary.id === wf.id) continue;
+    let other: Workflow;
+    try {
+      other = await getWorkflow(summary.id);
+    } catch {
+      continue;
+    }
+    for (const t of other.triggers ?? []) {
+      if (ids.has(t.id)) {
+        throw new Error(
+          `invalid workflow: trigger id collision: "${t.id}" already used by workflow "${other.id}"`,
+        );
+      }
     }
   }
 }
@@ -329,6 +419,8 @@ export async function getWorkflow(id: string): Promise<Workflow> {
 
 export async function saveWorkflow(workflow: Workflow): Promise<Workflow> {
   validateWorkflow(workflow);
+  validateTriggers(workflow);
+  await validateNoCrossWorkflowTriggerCollisions(workflow);
   await validateNoSubworkflowCycles(workflow);
 
   const dir = storageDir();
@@ -356,6 +448,7 @@ export async function saveWorkflow(workflow: Workflow): Promise<Workflow> {
   await fs.writeFile(tmp, JSON.stringify(saved, null, 2), 'utf8');
   await fs.rename(tmp, target);
 
+  triggerIndex.invalidate();
   return saved;
 }
 
@@ -369,4 +462,5 @@ export async function deleteWorkflow(id: string): Promise<void> {
     }
     throw err;
   }
+  triggerIndex.invalidate();
 }
