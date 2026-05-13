@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/logo.png" alt="Infinite Loop" width="180">
+</p>
+
 <h1 align="center">Infinite Loop</h1>
 
 <p align="center">
