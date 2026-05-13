@@ -288,9 +288,17 @@ describe('saveWorkflow trigger validation', () => {
   // Inherits the global beforeEach/afterEach that set INFLOOP_WORKFLOWS_DIR=tmpDir.
   // Also invalidate the trigger-index cache before each test so the singleton
   // never carries state from a previous test's warm cache.
+  let tmpTrDir: string;
   beforeEach(async () => {
+    tmpTrDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infloop-wfstore-tr-'));
+    process.env.INFLOOP_TRIGGERS_DIR = tmpTrDir;
     const { triggerIndex } = await import('./trigger-index');
     triggerIndex.invalidate();
+  });
+
+  afterEach(async () => {
+    delete process.env.INFLOOP_TRIGGERS_DIR;
+    await fsp.rm(tmpTrDir, { recursive: true, force: true });
   });
 
   const baseWorkflow = (id: string): Workflow => ({
@@ -362,14 +370,17 @@ describe('saveWorkflow trigger validation', () => {
 
   test('invalidates the trigger index on save', async () => {
     const { triggerIndex } = await import('./trigger-index');
-    const wf: AnyWorkflow = baseWorkflow('wf-a');
-    wf.triggers = [
-      { id: 'idCCCCCCCCCCCCCCCCCCCC', name: 't', enabled: true, match: [], inputs: {} },
-    ];
-    await saveWorkflow(wf);
+    const { saveTrigger, deleteTrigger } = await import('./trigger-store');
+    // Seed the workflow and trigger into their respective stores
+    await saveWorkflow(baseWorkflow('wf-a'));
+    await saveTrigger({
+      id: 'idCCCCCCCCCCCCCCCCCCCC', name: 't', enabled: true,
+      workflowId: 'wf-a', pluginId: 'generic', match: [], inputs: {},
+    });
     expect(await triggerIndex.lookup('idCCCCCCCCCCCCCCCCCCCC')).toBeDefined();
 
-    await saveWorkflow({ ...wf, triggers: [] });
+    // Deleting from trigger-store invalidates the index
+    await deleteTrigger('idCCCCCCCCCCCCCCCCCCCC');
     expect(await triggerIndex.lookup('idCCCCCCCCCCCCCCCCCCCC')).toBeUndefined();
   });
 });

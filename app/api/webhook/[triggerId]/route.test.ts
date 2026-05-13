@@ -5,17 +5,18 @@ import os from 'node:os';
 import { POST } from './route';
 import { triggerIndex } from '@/lib/server/trigger-index';
 import { triggerQueue } from '@/lib/server/trigger-queue-singleton';
+import { saveTrigger } from '@/lib/server/trigger-store';
 
-const tmpDir = path.join(os.tmpdir(), `infloop-webhook-${process.pid}`);
+const tmpWfDir = path.join(os.tmpdir(), `infloop-webhook-wf-${process.pid}`);
+const tmpTrDir = path.join(os.tmpdir(), `infloop-webhook-tr-${process.pid}`);
 
-async function writeWorkflow(id: string, triggers: unknown[], inputs: unknown[] = []) {
-  const file = path.join(tmpDir, `${id}.json`);
+async function writeWorkflow(id: string, inputs: unknown[] = []) {
+  const file = path.join(tmpWfDir, `${id}.json`);
   await fs.writeFile(file, JSON.stringify({
     id, name: id, version: 1, createdAt: 0, updatedAt: 0,
     nodes: [{ id: 's', type: 'start', position: { x: 0, y: 0 }, config: {} }],
     edges: [],
     inputs,
-    triggers,
   }));
 }
 
@@ -28,15 +29,19 @@ function mkReq(triggerId: string, body: unknown, headers: Record<string, string>
 }
 
 beforeEach(async () => {
-  await fs.rm(tmpDir, { recursive: true, force: true });
-  await fs.mkdir(tmpDir, { recursive: true });
-  process.env.INFLOOP_WORKFLOWS_DIR = tmpDir;
+  await fs.rm(tmpWfDir, { recursive: true, force: true });
+  await fs.rm(tmpTrDir, { recursive: true, force: true });
+  await fs.mkdir(tmpWfDir, { recursive: true });
+  await fs.mkdir(tmpTrDir, { recursive: true });
+  process.env.INFLOOP_WORKFLOWS_DIR = tmpWfDir;
+  process.env.INFLOOP_TRIGGERS_DIR = tmpTrDir;
   triggerIndex.invalidate();
   triggerQueue.clear();
 });
 
 afterEach(async () => {
-  await fs.rm(tmpDir, { recursive: true, force: true });
+  await fs.rm(tmpWfDir, { recursive: true, force: true });
+  await fs.rm(tmpTrDir, { recursive: true, force: true });
 });
 
 const goodId = 'idAAAAAAAAAAAAAAAAAAAA';
@@ -49,21 +54,20 @@ describe('POST /api/webhook/[triggerId]', () => {
   });
 
   test('404 for disabled trigger (same body as unknown)', async () => {
-    await writeWorkflow('wf-a', [
-      { id: goodId, name: 't', enabled: false, match: [], inputs: {} },
-    ]);
+    await writeWorkflow('wf-a');
+    await saveTrigger({ id: goodId, name: 't', enabled: false, workflowId: 'wf-a', pluginId: 'generic', match: [], inputs: {} });
     const res = await POST(mkReq(goodId, {}), { params: Promise.resolve({ triggerId: goodId }) });
     expect(res.status).toBe(404);
   });
 
   test('204 when predicates do not match', async () => {
-    await writeWorkflow('wf-a', [
-      {
-        id: goodId, name: 't', enabled: true,
-        match: [{ lhs: '{{body.event}}', op: '==', rhs: 'push' }],
-        inputs: {},
-      },
-    ]);
+    await writeWorkflow('wf-a');
+    await saveTrigger({
+      id: goodId, name: 't', enabled: true,
+      workflowId: 'wf-a', pluginId: 'generic',
+      match: [{ lhs: '{{body.event}}', op: '==', rhs: 'push' }],
+      inputs: {},
+    });
     const res = await POST(
       mkReq(goodId, { event: 'pull_request' }),
       { params: Promise.resolve({ triggerId: goodId }) },
@@ -73,13 +77,13 @@ describe('POST /api/webhook/[triggerId]', () => {
   });
 
   test('202 when predicates match — enqueues', async () => {
-    await writeWorkflow('wf-a', [
-      {
-        id: goodId, name: 't', enabled: true,
-        match: [{ lhs: '{{body.event}}', op: '==', rhs: 'push' }],
-        inputs: {},
-      },
-    ]);
+    await writeWorkflow('wf-a');
+    await saveTrigger({
+      id: goodId, name: 't', enabled: true,
+      workflowId: 'wf-a', pluginId: 'generic',
+      match: [{ lhs: '{{body.event}}', op: '==', rhs: 'push' }],
+      inputs: {},
+    });
     const res = await POST(
       mkReq(goodId, { event: 'push' }),
       { params: Promise.resolve({ triggerId: goodId }) },
@@ -92,16 +96,13 @@ describe('POST /api/webhook/[triggerId]', () => {
   });
 
   test('422 when a required input cannot be coerced after templating', async () => {
-    await fs.writeFile(path.join(tmpDir, 'wf-b.json'), JSON.stringify({
-      id: 'wf-b', name: 'wf-b', version: 1, createdAt: 0, updatedAt: 0,
-      nodes: [{ id: 's', type: 'start', position: { x: 0, y: 0 }, config: {} }],
-      edges: [],
-      inputs: [{ name: 'count', type: 'number' }],
-      triggers: [{
-        id: 'idBBBBBBBBBBBBBBBBBBBB', name: 't', enabled: true, match: [],
-        inputs: { count: '{{body.x}}' }, // resolves to string ""; cannot be coerced to number
-      }],
-    }));
+    await writeWorkflow('wf-b', [{ name: 'count', type: 'number' }]);
+    await saveTrigger({
+      id: 'idBBBBBBBBBBBBBBBBBBBB', name: 't', enabled: true,
+      workflowId: 'wf-b', pluginId: 'generic',
+      match: [],
+      inputs: { count: '{{body.x}}' }, // resolves to string ""; cannot be coerced to number
+    });
     triggerIndex.invalidate();
     const res = await POST(
       mkReq('idBBBBBBBBBBBBBBBBBBBB', {}),
@@ -111,9 +112,8 @@ describe('POST /api/webhook/[triggerId]', () => {
   });
 
   test('413 when content-length exceeds 1 MiB', async () => {
-    await writeWorkflow('wf-a', [
-      { id: goodId, name: 't', enabled: true, match: [], inputs: {} },
-    ]);
+    await writeWorkflow('wf-a');
+    await saveTrigger({ id: goodId, name: 't', enabled: true, workflowId: 'wf-a', pluginId: 'generic', match: [], inputs: {} });
     const big = 'x'.repeat(1024 * 1024 + 1);
     const res = await POST(
       mkReq(goodId, big, { 'content-length': String(big.length) }),
@@ -123,9 +123,8 @@ describe('POST /api/webhook/[triggerId]', () => {
   });
 
   test('503 when the queue is at cap', async () => {
-    await writeWorkflow('wf-a', [
-      { id: goodId, name: 't', enabled: true, match: [], inputs: {} },
-    ]);
+    await writeWorkflow('wf-a');
+    await saveTrigger({ id: goodId, name: 't', enabled: true, workflowId: 'wf-a', pluginId: 'generic', match: [], inputs: {} });
     for (let i = 0; i < 100; i++) {
       triggerQueue.enqueue({
         workflow: { id: 'wf-a', name: 'x', version: 1, nodes: [], edges: [], createdAt: 0, updatedAt: 0 } as any,
