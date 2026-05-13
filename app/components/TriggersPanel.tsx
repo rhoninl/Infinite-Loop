@@ -13,18 +13,19 @@ export function TriggersPanel({ workflow, origin }: TriggersPanelProps) {
 
   if (triggers.length === 0) {
     return (
-      <p className="field-hint" style={{ color: 'var(--fg-dim)' }}>
-        No triggers configured. Add a <code style={{ fontFamily: 'var(--mono)' }}>triggers[]</code> entry to the workflow JSON to expose a webhook URL.
+      <p className="field-hint">
+        No triggers configured. Add a <code className="bni-code">triggers[]</code>{' '}
+        entry to the workflow JSON to expose a webhook URL.
       </p>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div className="trg-list">
       {triggers.map((t) => (
         <TriggerRow key={t.id} trigger={t} origin={origin} />
       ))}
-      <p className="field-hint" style={{ color: 'var(--fg-dim)', marginTop: 4 }}>
+      <p className="field-hint trg-foot">
         To add or edit a trigger, edit the workflow JSON file.
       </p>
     </div>
@@ -37,50 +38,24 @@ function TriggerRow({ trigger, origin }: { trigger: WebhookTrigger; origin: stri
     trigger.lastFiredAt == null
       ? 'Never fired'
       : `Last fired: ${formatRelative(trigger.lastFiredAt)}`;
+  const chipClass = trigger.enabled
+    ? 'trg-chip trg-chip-enabled'
+    : 'trg-chip trg-chip-disabled';
 
   return (
-    <div
-      style={{
-        border: '1px solid var(--border)',
-        borderRadius: 4,
-        padding: '8px 10px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 4,
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <span style={{ fontWeight: 500 }}>{trigger.name}</span>
-        <span
-          style={{
-            fontSize: 11,
-            fontFamily: 'var(--mono)',
-            padding: '1px 6px',
-            borderRadius: 10,
-            background: trigger.enabled ? 'var(--status-ok-bg, #d1fae5)' : 'var(--fg-muted, #e5e7eb)',
-            color: trigger.enabled ? 'var(--status-ok-fg, #065f46)' : 'var(--fg-soft)',
-          }}
-        >
+    <div className="trg-row">
+      <div className="trg-row-head">
+        <span className="trg-row-name">{trigger.name}</span>
+        <span className={chipClass}>
           {trigger.enabled ? 'Enabled' : 'Disabled'}
         </span>
       </div>
-      <div
-        style={{
-          fontFamily: 'var(--mono)',
-          fontSize: 11,
-          padding: '3px 6px',
-          borderRadius: 3,
-          border: '1px solid var(--border)',
-          background: 'var(--bg-alt, rgba(0,0,0,0.04))',
-          wordBreak: 'break-all',
-        }}
-      >
-        {url}
-      </div>
-      <div style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{lastFired}</div>
-      <div style={{ fontSize: 11, color: 'var(--fg-dim)' }}>
-        Matches: {trigger.match.length} predicate{trigger.match.length === 1 ? '' : 's'} &middot;{' '}
-        Inputs: {Object.keys(trigger.inputs).length} mapped
+      <div className="trg-url">{url}</div>
+      <div className="trg-meta">{lastFired}</div>
+      <div className="trg-meta">
+        Matches: {trigger.match.length} predicate
+        {trigger.match.length === 1 ? '' : 's'} &middot; Inputs:{' '}
+        {Object.keys(trigger.inputs).length} mapped
       </div>
     </div>
   );

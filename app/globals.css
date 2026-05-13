@@ -3247,3 +3247,89 @@ input[type='number'].no-spin {
   background: rgba(255, 158, 100, 0.08);
   color: var(--accent-live);
 }
+
+/* ─── Triggers panel (trg-*) ────────────────────────────────────
+ * Read-only listing of a workflow's webhook triggers, rendered inside
+ * the workflow-root settings view (GlobalsPanel). Each row is a
+ * hard-cornered card whose visual language mirrors `.bni-row` — same
+ * `--bg-elevated` background and `--border-strong` outline. The
+ * enabled/disabled chip mirrors `.pill` (mono, uppercase, square
+ * phosphor LED feel), reusing `--accent-ok` for the live state. */
+.trg-section {
+  margin-top: 24px;
+}
+.trg-section-head {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-soft);
+  margin-bottom: 10px;
+}
+.trg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.trg-foot {
+  margin: 4px 0 0;
+}
+.trg-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  padding: 10px 12px;
+}
+.trg-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.trg-row-name {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--fg);
+}
+.trg-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding-inline: 8px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-soft);
+}
+.trg-chip-enabled {
+  color: var(--accent-ok);
+  border-color: var(--accent-ok);
+  text-shadow: var(--crt-glow-ok);
+}
+.trg-chip-disabled {
+  color: var(--fg-dim);
+  border-color: var(--border);
+}
+.trg-url {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--fg-soft);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  word-break: break-all;
+}
+.trg-meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--fg-dim);
+}
