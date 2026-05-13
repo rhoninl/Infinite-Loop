@@ -1,4 +1,6 @@
-import type { LineParser } from './index';
+import type { LineParser, LineParserFactory } from './index';
 
 /** Treat every line as raw text. The runner emits `lineWithNl` for plain. */
-export const plainParser: LineParser = () => ({ kind: 'plain' });
+const plainParser: LineParser = () => ({ kind: 'plain' });
+
+export const createPlainParser: LineParserFactory = () => plainParser;
