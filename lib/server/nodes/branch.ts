@@ -1,3 +1,4 @@
+import { evaluatePredicate } from '../predicate';
 import type {
   BranchConfig,
   NodeExecutor,
@@ -22,41 +23,13 @@ function isBranchConfig(v: unknown): v is BranchConfig {
   );
 }
 
-function evaluate(cfg: BranchConfig): {
-  ok: true;
-  result: boolean;
-} | {
-  ok: false;
-  error: string;
-} {
-  const { lhs, op, rhs } = cfg;
-  switch (op) {
-    case '==':
-      return { ok: true, result: lhs === rhs };
-    case '!=':
-      return { ok: true, result: lhs !== rhs };
-    case 'contains':
-      return { ok: true, result: lhs.includes(rhs) };
-    case 'matches':
-      try {
-        const re = new RegExp(rhs);
-        return { ok: true, result: re.test(lhs) };
-      } catch (err) {
-        return { ok: false, error: `invalid regex: ${(err as Error).message}` };
-      }
-  }
-}
-
 export const branchExecutor: NodeExecutor = {
   async execute(ctx: NodeExecutorContext): Promise<NodeExecutorResult> {
     const cfg = ctx.config;
     if (!isBranchConfig(cfg)) {
-      return {
-        outputs: { error: 'invalid branch config' },
-        branch: 'error',
-      };
+      return { outputs: { error: 'invalid branch config' }, branch: 'error' };
     }
-    const verdict = evaluate(cfg);
+    const verdict = evaluatePredicate(cfg);
     if (!verdict.ok) {
       return {
         outputs: { error: verdict.error, lhs: cfg.lhs, rhs: cfg.rhs, op: cfg.op },
@@ -64,12 +37,7 @@ export const branchExecutor: NodeExecutor = {
       };
     }
     return {
-      outputs: {
-        result: verdict.result,
-        lhs: cfg.lhs,
-        rhs: cfg.rhs,
-        op: cfg.op,
-      },
+      outputs: { result: verdict.result, lhs: cfg.lhs, rhs: cfg.rhs, op: cfg.op },
       branch: verdict.result ? 'true' : 'false',
     };
   },

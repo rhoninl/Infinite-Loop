@@ -1,0 +1,38 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+
+export interface QueueBadgeProps {
+  /** Poll interval; default 3000 ms. */
+  pollMs?: number;
+}
+
+export function QueueBadge({ pollMs = 3000 }: QueueBadgeProps) {
+  const [size, setSize] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function tick() {
+      try {
+        const res = await fetch('/api/triggers/queue');
+        if (!res.ok) return;
+        const json = (await res.json()) as { size: number };
+        if (alive) setSize(json.size);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    void tick();
+    const handle = setInterval(tick, pollMs);
+    return () => {
+      alive = false;
+      clearInterval(handle);
+    };
+  }, [pollMs]);
+
+  if (size === 0) return null;
+
+  return <span className="queue-badge">{size} queued</span>;
+}

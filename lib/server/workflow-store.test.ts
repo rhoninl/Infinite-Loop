@@ -2,7 +2,7 @@ import { promises as fsp } from 'node:fs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, test } from 'bun:test';
 import type { Workflow } from '../shared/workflow';
 import {
   deleteWorkflow,
@@ -281,5 +281,89 @@ describe('workflow-store', () => {
     const list = await listWorkflows();
     expect(list.map((s) => s.id)).toEqual(['b', 'a']);
     expect(b.updatedAt).toBeGreaterThanOrEqual(a.updatedAt);
+  });
+});
+
+describe('saveWorkflow trigger validation', () => {
+  // Inherits the global beforeEach/afterEach that set INFLOOP_WORKFLOWS_DIR=tmpDir.
+  // Also invalidate the trigger-index cache before each test so the singleton
+  // never carries state from a previous test's warm cache.
+  beforeEach(async () => {
+    const { triggerIndex } = await import('./trigger-index');
+    triggerIndex.invalidate();
+  });
+
+  const baseWorkflow = (id: string): Workflow => ({
+    id,
+    name: id,
+    version: 0,
+    createdAt: 0,
+    updatedAt: 0,
+    nodes: [{ id: 's', type: 'start', position: { x: 0, y: 0 }, config: {} }],
+    edges: [],
+  });
+
+  test('rejects an invalid trigger id format', async () => {
+    const wf = baseWorkflow('wf-a');
+    wf.triggers = [
+      { id: 'too-short', name: 't', enabled: true, match: [], inputs: {} },
+    ];
+    await expect(saveWorkflow(wf)).rejects.toThrow(/trigger.*id/i);
+  });
+
+  test('rejects a trigger id collision across workflows', async () => {
+    const wfA = baseWorkflow('wf-a');
+    wfA.triggers = [
+      { id: 'abcdefghijklmnopqrst12', name: 't', enabled: true, match: [], inputs: {} },
+    ];
+    await saveWorkflow(wfA);
+
+    const wfB = baseWorkflow('wf-b');
+    wfB.triggers = [
+      { id: 'abcdefghijklmnopqrst12', name: 't', enabled: true, match: [], inputs: {} },
+    ];
+    await expect(saveWorkflow(wfB)).rejects.toThrow(/trigger.*collision/i);
+  });
+
+  test('rejects trigger.inputs key that is not a declared workflow input', async () => {
+    const wf = baseWorkflow('wf-a');
+    wf.inputs = [{ name: 'branch', type: 'string' }];
+    wf.triggers = [
+      {
+        id: 'idAAAAAAAAAAAAAAAAAAAA',
+        name: 't',
+        enabled: true,
+        match: [],
+        inputs: { not_a_declared_input: '{{body.x}}' },
+      },
+    ];
+    await expect(saveWorkflow(wf)).rejects.toThrow(/inputs.*not_a_declared_input/i);
+  });
+
+  test('rejects invalid predicate op', async () => {
+    const wf = baseWorkflow('wf-a');
+    wf.triggers = [
+      {
+        id: 'idBBBBBBBBBBBBBBBBBBBB',
+        name: 't',
+        enabled: true,
+        match: [{ lhs: 'a', op: 'INVALID' as any, rhs: 'b' }],
+        inputs: {},
+      },
+    ];
+    await expect(saveWorkflow(wf)).rejects.toThrow(/op/);
+  });
+
+  test('invalidates the trigger index on save', async () => {
+    const { triggerIndex } = await import('./trigger-index');
+    const wf = baseWorkflow('wf-a');
+    wf.triggers = [
+      { id: 'idCCCCCCCCCCCCCCCCCCCC', name: 't', enabled: true, match: [], inputs: {} },
+    ];
+    await saveWorkflow(wf);
+    expect(await triggerIndex.lookup('idCCCCCCCCCCCCCCCCCCCC')).toBeDefined();
+
+    await saveWorkflow({ ...wf, triggers: [] });
+    expect(await triggerIndex.lookup('idCCCCCCCCCCCCCCCCCCCC')).toBeUndefined();
   });
 });
