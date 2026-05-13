@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 
 interface QueueItem {
   queueId: string;
@@ -24,6 +24,7 @@ function formatTime(epochMs: number): string {
 export default function QueuePage() {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [confirming, setConfirming] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -41,6 +42,24 @@ export default function QueuePage() {
       }
     })();
     return () => { alive = false; };
+  }, []);
+
+  const startConfirm = useCallback((queueId: string) => {
+    setConfirming(queueId);
+  }, []);
+
+  const cancelConfirm = useCallback(() => {
+    setConfirming(null);
+  }, []);
+
+  const doDelete = useCallback(async (queueId: string) => {
+    setItems((prev) => prev.filter((it) => it.queueId !== queueId));
+    setConfirming(null);
+    try {
+      await fetch(`/api/triggers/queue/${queueId}`, { method: 'DELETE' });
+    } catch {
+      // SSE will re-sync on reconnect; not retrying.
+    }
   }, []);
 
   return (
@@ -64,15 +83,49 @@ export default function QueuePage() {
             </tr>
           </thead>
           <tbody>
-            {items.map((it, idx) => (
-              <tr key={it.queueId} className="queue-row">
-                <td>{idx + 1}</td>
-                <td>{it.workflowName}</td>
-                <td>{it.triggerId}</td>
-                <td>{formatTime(it.receivedAt)}</td>
-                <td />
-              </tr>
-            ))}
+            {items.map((it, idx) => {
+              const isConfirming = confirming === it.queueId;
+              return (
+                <tr
+                  key={it.queueId}
+                  className="queue-row"
+                  data-confirming={isConfirming || undefined}
+                >
+                  <td>{idx + 1}</td>
+                  <td>{it.workflowName}</td>
+                  <td>{it.triggerId}</td>
+                  <td>{formatTime(it.receivedAt)}</td>
+                  <td className="queue-row-actions">
+                    {isConfirming ? (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-stop"
+                          onClick={() => doDelete(it.queueId)}
+                        >
+                          Confirm?
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={cancelConfirm}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => startConfirm(it.queueId)}
+                      >
+                        ✕ Delete
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
