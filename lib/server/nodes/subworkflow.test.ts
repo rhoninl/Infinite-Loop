@@ -69,7 +69,7 @@ let tmpDir: string;
 let prevEnv: string | undefined;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infloop-subwf-'));
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infinite-loop-subwf-'));
   prevEnv = process.env.INFLOOP_WORKFLOWS_DIR;
   process.env.INFLOOP_WORKFLOWS_DIR = tmpDir;
   eventBus.clear();

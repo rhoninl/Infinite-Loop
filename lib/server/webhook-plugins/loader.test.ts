@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { loadPlugins } from './loader';
 
-const tmpDir = path.join(os.tmpdir(), `infloop-plugins-${process.pid}`);
+const tmpDir = path.join(os.tmpdir(), `infinite-loop-plugins-${process.pid}`);
 
 async function writePlugin(name: string, body: unknown) {
   await fs.writeFile(

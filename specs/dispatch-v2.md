@@ -1,12 +1,11 @@
 # Dispatch v2 — UI-managed triggers with webhook-source plugins
 
 **Status:** Design
-**Date:** 2026-05-13
 **Author:** rhoninlee (with Claude)
 
 ## Problem
 
-v1 webhook triggers ([2026-05-13-webhook-trigger-design.md](2026-05-13-webhook-trigger-design.md))
+v1 webhook triggers ([webhook-trigger.md](webhook-trigger.md))
 shipped with two friction points:
 
 1. **JSON-only authoring.** Every trigger requires hand-editing a workflow's

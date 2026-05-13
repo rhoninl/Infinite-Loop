@@ -1,6 +1,5 @@
 # InfLoop Design
 
-**Date:** 2026-04-28
 **Status:** Draft for review
 
 ## Purpose

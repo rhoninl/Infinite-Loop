@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 type Theme = 'dark' | 'light';
 
-const STORAGE_KEY = 'infloop:theme';
+const STORAGE_KEY = 'infinite_loop:theme';
 
 function readCurrentTheme(): Theme {
   if (typeof document === 'undefined') return 'dark';

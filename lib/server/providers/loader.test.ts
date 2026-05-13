@@ -8,7 +8,7 @@ let tmpDir: string;
 let prevDir: string | undefined;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infloop-providers-'));
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infinite-loop-providers-'));
   prevDir = process.env.INFLOOP_PROVIDERS_DIR;
   process.env.INFLOOP_PROVIDERS_DIR = tmpDir;
 });

@@ -4,8 +4,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { GET, PUT, DELETE } from './route';
 
-const tmpWfDir = path.join(os.tmpdir(), `infloop-api-tr-id-wf-${process.pid}`);
-const tmpTrDir = path.join(os.tmpdir(), `infloop-api-tr-id-tr-${process.pid}`);
+const tmpWfDir = path.join(os.tmpdir(), `infinite-loop-api-tr-id-wf-${process.pid}`);
+const tmpTrDir = path.join(os.tmpdir(), `infinite-loop-api-tr-id-tr-${process.pid}`);
 
 async function writeWorkflow(id: string) {
   await fs.writeFile(

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Bun, Next.js 15 (App Router), TypeScript, `@modelcontextprotocol/sdk`, `zod`. Tests: `bun:test`.
 
-**Spec:** `docs/superpowers/specs/2026-05-12-trigger-api-mcp-design.md`
+**Spec:** `specs/trigger-api-mcp.md`
 
 ---
 
@@ -714,7 +714,7 @@ git commit -m "feat(api): optional INFLOOP_API_TOKEN bearer-token auth"
 #!/usr/bin/env bun
 // InfLoop MCP server: spawned over stdio by an MCP client (Claude Code, etc.)
 // and exposes each saved workflow as its own tool. See
-// docs/superpowers/specs/2026-05-12-trigger-api-mcp-design.md
+// specs/trigger-api-mcp.md
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';

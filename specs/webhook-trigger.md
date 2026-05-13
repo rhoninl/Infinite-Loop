@@ -1,7 +1,6 @@
 # Webhook Triggers
 
 **Status:** Design
-**Date:** 2026-05-13
 **Author:** rhoninlee (with Claude)
 
 ## Problem

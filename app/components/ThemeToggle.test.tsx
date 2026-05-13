@@ -70,7 +70,7 @@ describe('<ThemeToggle />', () => {
     });
 
     expect(document.documentElement.dataset.theme).toBe('light');
-    expect(window.localStorage.getItem('infloop:theme')).toBe('light');
+    expect(window.localStorage.getItem('infinite_loop:theme')).toBe('light');
     expect(
       screen.getByRole('button', { name: /switch to dark theme/i }),
     ).toBeInTheDocument();
@@ -86,6 +86,6 @@ describe('<ThemeToggle />', () => {
     });
 
     expect(document.documentElement.dataset.theme).toBe('dark');
-    expect(window.localStorage.getItem('infloop:theme')).toBe('dark');
+    expect(window.localStorage.getItem('infinite_loop:theme')).toBe('dark');
   });
 });

@@ -17,7 +17,7 @@ const stubIter: IterationRecord = {
 const tmpDirs: string[] = [];
 
 function makeTmpDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'infloop-cmd-test-'));
+  const dir = mkdtempSync(join(tmpdir(), 'infinite-loop-cmd-test-'));
   tmpDirs.push(dir);
   return dir;
 }

@@ -20,7 +20,7 @@ import ProviderIcon from './icons/ProviderIcon';
 import HermesConnectionsModal from './HermesConnectionsModal';
 import { refreshProviders } from '@/lib/client/use-providers';
 
-const DRAG_MIME = 'application/x-infloop-node';
+const DRAG_MIME = 'application/x-infinite-loop-node';
 
 interface DragPayload {
   type: NodeType;

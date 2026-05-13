@@ -71,7 +71,7 @@ describe('Palette', () => {
     // the actual dnd contract — still propagates correctly.
     expect(dataTransfer.setData).toHaveBeenCalledTimes(1);
     const [mime, payload] = dataTransfer.setData.mock.calls[0];
-    expect(mime).toBe('application/x-infloop-node');
+    expect(mime).toBe('application/x-infinite-loop-node');
     expect(JSON.parse(payload)).toEqual({ type: 'agent', providerId: 'claude' });
   });
 

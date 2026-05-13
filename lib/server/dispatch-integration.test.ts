@@ -9,8 +9,8 @@ import { triggerQueue } from './trigger-queue-singleton';
 import { eventBus } from './event-bus';
 import type { WorkflowEvent } from '../shared/workflow';
 
-const tmpWfDir = path.join(os.tmpdir(), `infloop-dispatch-int-wf-${process.pid}`);
-const tmpTrDir = path.join(os.tmpdir(), `infloop-dispatch-int-tr-${process.pid}`);
+const tmpWfDir = path.join(os.tmpdir(), `infinite-loop-dispatch-int-wf-${process.pid}`);
+const tmpTrDir = path.join(os.tmpdir(), `infinite-loop-dispatch-int-tr-${process.pid}`);
 
 beforeEach(async () => {
   await fs.rm(tmpWfDir, { recursive: true, force: true });

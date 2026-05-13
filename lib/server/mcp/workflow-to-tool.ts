@@ -28,7 +28,7 @@ export function deconflictNames(names: string[]): string[] {
 }
 
 function inputToSchemaProperty(input: WorkflowInputDecl): Record<string, unknown> {
-  // 'text' is multi-line string in InfLoop; JSON schema doesn't
+  // 'text' is multi-line string in Infinite Loop; JSON schema doesn't
   // distinguish, so we map both to 'string'.
   const jsonType: 'string' | 'number' | 'boolean' =
     input.type === 'number' ? 'number'
@@ -55,10 +55,10 @@ export function workflowToTool(
   }
 
   const description =
-    `${workflow.name}\n\nEnqueues InfLoop workflow "${workflow.id}" and returns ` +
+    `${workflow.name}\n\nEnqueues Infinite Loop workflow "${workflow.id}" and returns ` +
     `immediately with {queueId, position}. The run is started serially when the ` +
-    `engine becomes idle. Use inflooop_get_run_status with the queueId to poll ` +
-    `for completion and outputs, or inflooop_remove_from_queue to cancel before start.`;
+    `engine becomes idle. Use infinite_loop_get_run_status with the queueId to poll ` +
+    `for completion and outputs, or infinite_loop_remove_from_queue to cancel before start.`;
 
   const inputSchema: McpToolSpec['inputSchema'] = {
     type: 'object',
