@@ -6,6 +6,7 @@ import { POST } from './route';
 import { triggerIndex } from '@/lib/server/trigger-index';
 import { triggerQueue } from '@/lib/server/trigger-queue-singleton';
 import { saveTrigger } from '@/lib/server/trigger-store';
+import { pluginIndex } from '@/lib/server/webhook-plugins';
 
 const tmpWfDir = path.join(os.tmpdir(), `infloop-webhook-wf-${process.pid}`);
 const tmpTrDir = path.join(os.tmpdir(), `infloop-webhook-tr-${process.pid}`);
@@ -36,6 +37,7 @@ beforeEach(async () => {
   process.env.INFLOOP_WORKFLOWS_DIR = tmpWfDir;
   process.env.INFLOOP_TRIGGERS_DIR = tmpTrDir;
   triggerIndex.invalidate();
+  pluginIndex.invalidate();
   triggerQueue.clear();
 });
 
@@ -136,5 +138,59 @@ describe('POST /api/webhook/[triggerId]', () => {
     const res = await POST(mkReq(goodId, {}), { params: Promise.resolve({ triggerId: goodId }) });
     expect(res.status).toBe(503);
     expect(res.headers.get('Retry-After')).toBe('30');
+  });
+});
+
+describe('plugin event-header filter (Dispatch v2)', () => {
+  const githubId = 'idGITHUBGITHUBGITHUBGI';
+
+  test('204 when plugin has eventHeader and request header is missing', async () => {
+    await writeWorkflow('wf-a');
+    await saveTrigger({
+      id: githubId, name: 'gh', enabled: true,
+      workflowId: 'wf-a', pluginId: 'github', eventType: 'issues',
+      match: [], inputs: {},
+    });
+    // No x-github-event header
+    const res = await POST(
+      mkReq(githubId, { action: 'opened' }),
+      { params: Promise.resolve({ triggerId: githubId }) },
+    );
+    expect(res.status).toBe(204);
+    expect(triggerQueue.size()).toBe(0);
+  });
+
+  test('204 when plugin event-header mismatches trigger eventType', async () => {
+    await writeWorkflow('wf-a');
+    await saveTrigger({
+      id: githubId, name: 'gh', enabled: true,
+      workflowId: 'wf-a', pluginId: 'github', eventType: 'issues',
+      match: [], inputs: {},
+    });
+    // Header present but wrong event type
+    const res = await POST(
+      mkReq(githubId, { action: 'opened' }, { 'x-github-event': 'push' }),
+      { params: Promise.resolve({ triggerId: githubId }) },
+    );
+    expect(res.status).toBe(204);
+    expect(triggerQueue.size()).toBe(0);
+  });
+
+  test('202 when plugin event-header matches AND user predicates pass', async () => {
+    await writeWorkflow('wf-a');
+    await saveTrigger({
+      id: githubId, name: 'gh', enabled: true,
+      workflowId: 'wf-a', pluginId: 'github', eventType: 'issues',
+      match: [], inputs: {},
+    });
+    // Header matches trigger's eventType
+    const res = await POST(
+      mkReq(githubId, { action: 'opened' }, { 'x-github-event': 'issues' }),
+      { params: Promise.resolve({ triggerId: githubId }) },
+    );
+    expect(res.status).toBe(202);
+    const json = await res.json();
+    expect(json.queued).toBe(true);
+    expect(typeof json.queueId).toBe('string');
   });
 });
