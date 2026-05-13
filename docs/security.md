@@ -1,6 +1,6 @@
 # Security model
 
-InfLoop is a developer tool that runs **on your machine** and can execute:
+Infinite Loop is a developer tool that runs **on your machine** and can execute:
 
 - Local agent CLIs (`claude`, `codex`, anything you register as a provider).
 - Inline TypeScript and Python (Script nodes).
@@ -30,7 +30,7 @@ INFLOOP_API_TOKEN=$(openssl rand -hex 32) bun run start
 Caveats:
 
 - The browser UI **stops working** for that server (the UI doesn't forward the token).
-- Use this for InfLoop instances dedicated to serving agent / MCP traffic.
+- Use this for Infinite Loop instances dedicated to serving agent / MCP traffic.
 - The token is compared in constant time but is otherwise a plain shared secret — rotate it like a password.
 
 ## Webhooks
@@ -44,13 +44,13 @@ The unguessable `triggerId` in a webhook URL is the credential. There is **no HM
 
 ## Don't expose to the public internet
 
-There is no rate limiting, no per-user auth, and no audit log. If you need a publicly reachable trigger surface, put InfLoop behind one of:
+There is no rate limiting, no per-user auth, and no audit log. If you need a publicly reachable trigger surface, put Infinite Loop behind one of:
 
 - A Cloudflare Tunnel with **Access policies** that gate inbound traffic.
 - A Tailscale ACL-restricted host.
 - A reverse proxy (Caddy / nginx) with HTTP auth and IP allow-lists.
 
-Never punch a port mapping on your router straight to InfLoop.
+Never punch a port mapping on your router straight to Infinite Loop.
 
 ## Workflow files are executable code
 
@@ -62,8 +62,8 @@ A `.workflow.json` file can:
 
 **Review every workflow you import or download before running it.** Treat them like you'd treat a Bash script from the internet.
 
-The same applies to `providers/*.json`, `webhook-plugins/*.json`, and `triggers/*.json` — they all influence what InfLoop will execute or accept.
+The same applies to `providers/*.json`, `webhook-plugins/*.json`, and `triggers/*.json` — they all influence what Infinite Loop will execute or accept.
 
 ## Reporting security issues
 
-InfLoop is pre-1.0 and currently has no formal disclosure channel. Open a GitHub issue for non-sensitive concerns; for anything that warrants private disclosure, contact the maintainer directly.
+Infinite Loop is pre-1.0 and currently has no formal disclosure channel. Open a GitHub issue for non-sensitive concerns; for anything that warrants private disclosure, contact the maintainer directly.

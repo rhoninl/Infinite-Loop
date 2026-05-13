@@ -1,6 +1,6 @@
 # Webhook guide
 
-Open the **Dispatch** view (top-bar button, next to the workflow menu) to create, edit, and test webhook triggers visually. Each trigger gets a unique URL. When an HTTP POST hits it, InfLoop matches the trigger's predicates against the request, queues a workflow run with templated inputs, and returns `202 { queued, queueId, position }`.
+Open the **Dispatch** view (top-bar button, next to the workflow menu) to create, edit, and test webhook triggers visually. Each trigger gets a unique URL. When an HTTP POST hits it, Infinite Loop matches the trigger's predicates against the request, queues a workflow run with templated inputs, and returns `202 { queued, queueId, position }`.
 
 ## Creating a trigger
 
@@ -16,7 +16,7 @@ Open the **Dispatch** view (top-bar button, next to the workflow menu) to create
 
 ## Wiring up GitHub
 
-InfLoop listens on `http://localhost:3000` by default. To reach it from `github.com`, expose your machine with a tunnel:
+Infinite Loop listens on `http://localhost:3000` by default. To reach it from `github.com`, expose your machine with a tunnel:
 
 ```bash
 cloudflared tunnel --url http://localhost:3000
@@ -59,7 +59,7 @@ Plugins are pure JSON. Create `webhook-plugins/<id>.json`:
 }
 ```
 
-Restart InfLoop. The plugin appears in the trigger form's plugin dropdown.
+Restart Infinite Loop. The plugin appears in the trigger form's plugin dropdown.
 
 ## Behavior reference
 

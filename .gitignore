@@ -22,3 +22,7 @@ coverage
 # file must never reach the repo. Anchored to `/providers/` so an unrelated
 # `*.local.json` elsewhere in the tree is unaffected.
 /providers/*.local.json
+
+# Screenshots captured by integration / E2E test runs. Heavy binaries
+# that shouldn't be tracked.
+/.integration-screenshots/
