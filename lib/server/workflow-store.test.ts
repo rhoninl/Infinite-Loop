@@ -284,103 +284,96 @@ describe('workflow-store', () => {
   });
 });
 
-describe('saveWorkflow trigger validation', () => {
+describe('saveWorkflow migration: legacy triggers[] → trigger-store', () => {
   // Inherits the global beforeEach/afterEach that set INFLOOP_WORKFLOWS_DIR=tmpDir.
-  // Also invalidate the trigger-index cache before each test so the singleton
-  // never carries state from a previous test's warm cache.
+  // This describe also sets up INFLOOP_TRIGGERS_DIR so the trigger-store has a
+  // clean, isolated directory per test.
   let tmpTrDir: string;
+
   beforeEach(async () => {
-    tmpTrDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infloop-wfstore-tr-'));
+    tmpTrDir = path.join(os.tmpdir(), `infloop-wfstore-triggers-${process.pid}`);
     process.env.INFLOOP_TRIGGERS_DIR = tmpTrDir;
+    await fsp.rm(tmpTrDir, { recursive: true, force: true });
+    await fsp.mkdir(tmpTrDir, { recursive: true });
     const { triggerIndex } = await import('./trigger-index');
     triggerIndex.invalidate();
   });
 
   afterEach(async () => {
-    delete process.env.INFLOOP_TRIGGERS_DIR;
     await fsp.rm(tmpTrDir, { recursive: true, force: true });
+    delete process.env.INFLOOP_TRIGGERS_DIR;
   });
 
-  const baseWorkflow = (id: string): Workflow => ({
-    id,
-    name: id,
-    version: 0,
-    createdAt: 0,
-    updatedAt: 0,
-    nodes: [{ id: 's', type: 'start', position: { x: 0, y: 0 }, config: {} }],
-    edges: [],
+  test('migrates legacy triggers on load and the in-memory workflow has them stripped', async () => {
+    const triggerId = 'abcdefghijklmnopqrst01';
+    // Drop a legacy workflow file with an embedded triggers[] array.
+    const legacy = {
+      id: 'wf-migrate',
+      name: 'Migrate Me',
+      version: 1,
+      createdAt: 1,
+      updatedAt: 2,
+      nodes: [{ id: 's', type: 'start', position: { x: 0, y: 0 }, config: {} }],
+      edges: [],
+      triggers: [
+        {
+          id: triggerId,
+          name: 'PR opened',
+          enabled: true,
+          match: [],
+          inputs: {},
+        },
+      ],
+    };
+    fs.writeFileSync(path.join(tmpDir, 'wf-migrate.json'), JSON.stringify(legacy));
+
+    const { getWorkflow: freshGetWorkflow } = await import('./workflow-store');
+    const loaded = await freshGetWorkflow('wf-migrate');
+
+    // The in-memory workflow should NOT have the triggers field.
+    expect((loaded as unknown as { triggers?: unknown }).triggers).toBeUndefined();
+
+    // The trigger should have been migrated into the trigger-store.
+    const { getTrigger } = await import('./trigger-store');
+    const migratedTrigger = await getTrigger(triggerId);
+    expect(migratedTrigger.id).toBe(triggerId);
+    expect(migratedTrigger.workflowId).toBe('wf-migrate');
+    expect(migratedTrigger.pluginId).toBe('generic');
   });
 
-  // TODO(dispatch-v2): Workflow.triggers is removed from the type in Task 1.
-  // These tests exercise the legacy validateTriggers() path still active in
-  // workflow-store until Task 3 (trigger-store + migration). We cast through
-  // `any` to keep the tests compilable during the transition.
-  type AnyWorkflow = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  test('migration is idempotent across multiple loads', async () => {
+    const triggerId = 'abcdefghijklmnopqrst02';
+    const legacy = {
+      id: 'wf-idem',
+      name: 'Idempotent',
+      version: 1,
+      createdAt: 1,
+      updatedAt: 2,
+      nodes: [{ id: 's', type: 'start', position: { x: 0, y: 0 }, config: {} }],
+      edges: [],
+      triggers: [
+        {
+          id: triggerId,
+          name: 'Push',
+          enabled: true,
+          match: [],
+          inputs: {},
+        },
+      ],
+    };
+    fs.writeFileSync(path.join(tmpDir, 'wf-idem.json'), JSON.stringify(legacy));
 
-  test('rejects an invalid trigger id format', async () => {
-    const wf: AnyWorkflow = baseWorkflow('wf-a');
-    wf.triggers = [
-      { id: 'too-short', name: 't', enabled: true, match: [], inputs: {} },
-    ];
-    await expect(saveWorkflow(wf)).rejects.toThrow(/trigger.*id/i);
-  });
+    const { getWorkflow: freshGetWorkflow } = await import('./workflow-store');
 
-  test('rejects a trigger id collision across workflows', async () => {
-    const wfA: AnyWorkflow = baseWorkflow('wf-a');
-    wfA.triggers = [
-      { id: 'abcdefghijklmnopqrst12', name: 't', enabled: true, match: [], inputs: {} },
-    ];
-    await saveWorkflow(wfA);
+    // First load: migrates.
+    await freshGetWorkflow('wf-idem');
+    // Second load: should NOT throw and should still return triggers stripped.
+    const second = await freshGetWorkflow('wf-idem');
+    expect((second as unknown as { triggers?: unknown }).triggers).toBeUndefined();
 
-    const wfB: AnyWorkflow = baseWorkflow('wf-b');
-    wfB.triggers = [
-      { id: 'abcdefghijklmnopqrst12', name: 't', enabled: true, match: [], inputs: {} },
-    ];
-    await expect(saveWorkflow(wfB)).rejects.toThrow(/trigger.*collision/i);
-  });
-
-  test('rejects trigger.inputs key that is not a declared workflow input', async () => {
-    const wf: AnyWorkflow = baseWorkflow('wf-a');
-    wf.inputs = [{ name: 'branch', type: 'string' }];
-    wf.triggers = [
-      {
-        id: 'idAAAAAAAAAAAAAAAAAAAA',
-        name: 't',
-        enabled: true,
-        match: [],
-        inputs: { not_a_declared_input: '{{body.x}}' },
-      },
-    ];
-    await expect(saveWorkflow(wf)).rejects.toThrow(/inputs.*not_a_declared_input/i);
-  });
-
-  test('rejects invalid predicate op', async () => {
-    const wf: AnyWorkflow = baseWorkflow('wf-a');
-    wf.triggers = [
-      {
-        id: 'idBBBBBBBBBBBBBBBBBBBB',
-        name: 't',
-        enabled: true,
-        match: [{ lhs: 'a', op: 'INVALID', rhs: 'b' }],
-        inputs: {},
-      },
-    ];
-    await expect(saveWorkflow(wf)).rejects.toThrow(/op/);
-  });
-
-  test('invalidates the trigger index on save', async () => {
-    const { triggerIndex } = await import('./trigger-index');
-    const { saveTrigger, deleteTrigger } = await import('./trigger-store');
-    // Seed the workflow and trigger into their respective stores
-    await saveWorkflow(baseWorkflow('wf-a'));
-    await saveTrigger({
-      id: 'idCCCCCCCCCCCCCCCCCCCC', name: 't', enabled: true,
-      workflowId: 'wf-a', pluginId: 'generic', match: [], inputs: {},
-    });
-    expect(await triggerIndex.lookup('idCCCCCCCCCCCCCCCCCCCC')).toBeDefined();
-
-    // Deleting from trigger-store invalidates the index
-    await deleteTrigger('idCCCCCCCCCCCCCCCCCCCC');
-    expect(await triggerIndex.lookup('idCCCCCCCCCCCCCCCCCCCC')).toBeUndefined();
+    // Only one trigger entry should exist in the trigger-store.
+    const { listTriggers } = await import('./trigger-store');
+    const all = await listTriggers();
+    expect(all.filter((t) => t.id === triggerId)).toHaveLength(1);
   });
 });
