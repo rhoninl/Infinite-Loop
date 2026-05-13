@@ -80,6 +80,16 @@ A workflow is a directed graph of typed nodes. Each node writes outputs into a f
 
 Full reference (handles, output keys, JSON schema): [docs/workflow-format.md](docs/workflow-format.md).
 
+### Bring your own agent runner
+
+Agent nodes are **provider-agnostic**. Three flavors ship today:
+
+- **CLI providers** — `claude`, `codex`, or any other binary you wrap with a JSON manifest. Token streaming is parsed live for Claude's `stream-json` format.
+- **HTTP providers — any OpenAI-compatible endpoint** including **Hermes**, **OpenRouter**, and **vLLM**. The manifest declares a base URL, auth (env-var or local-only inline token), and optional `profilesEndpoint` so Infinite Loop can **live-discover the models** the server exposes.
+- **Local Hermes connections** — manage them visually through the in-app Connections modal. Each connection produces one selectable provider per port/profile, grouped under its own palette section. Secrets live in gitignored `*.hermes.local.json` files.
+
+Drop a new manifest into `providers/` and the palette picks it up. Full format: [docs/providers.md](docs/providers.md).
+
 ### See it run
 
 A real run logged as plain text:
