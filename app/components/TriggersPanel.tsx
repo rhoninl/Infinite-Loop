@@ -1,80 +1,44 @@
 'use client';
 
-import React from 'react';
-import type { Workflow, WebhookTrigger } from '@/lib/shared/workflow';
-import { useWorkflowStore } from '@/lib/client/workflow-store-client';
+import type { Workflow } from '@/lib/shared/workflow';
+import { useEffect, useState } from 'react';
+import type { WebhookTrigger } from '@/lib/shared/trigger';
 
 export interface TriggersPanelProps {
   workflow: Workflow;
   origin: string;
 }
 
-export function TriggersPanel({ workflow, origin }: TriggersPanelProps) {
-  const triggers = workflow.triggers ?? [];
+export function TriggersPanel({ workflow }: TriggersPanelProps) {
+  const [count, setCount] = useState<number | null>(null);
 
-  if (triggers.length === 0) {
-    return (
-      <p className="field-hint">
-        No triggers configured. Add a <code className="bni-code">triggers[]</code>{' '}
-        entry to the workflow JSON to expose a webhook URL.
-      </p>
-    );
-  }
-
-  return (
-    <div className="trg-list">
-      {triggers.map((t) => (
-        <TriggerRow key={t.id} trigger={t} origin={origin} />
-      ))}
-      <p className="field-hint trg-foot">
-        To add or edit a trigger, edit the workflow JSON file.
-      </p>
-    </div>
-  );
-}
-
-function TriggerRow({ trigger, origin }: { trigger: WebhookTrigger; origin: string }) {
-  const url = `${origin}/api/webhook/${trigger.id}`;
-  const liveLastFiredAt = useWorkflowStore((s) => s.triggerLastFiredAt[trigger.id]);
-  // Pick the most recent of the persisted value and the live SSE overlay.
-  const effectiveLastFiredAt =
-    liveLastFiredAt != null && (trigger.lastFiredAt == null || liveLastFiredAt > trigger.lastFiredAt)
-      ? liveLastFiredAt
-      : trigger.lastFiredAt ?? null;
-  const lastFired =
-    effectiveLastFiredAt == null
-      ? 'Never fired'
-      : `Last fired: ${formatRelative(effectiveLastFiredAt)}`;
-  const chipClass = trigger.enabled
-    ? 'trg-chip trg-chip-enabled'
-    : 'trg-chip trg-chip-disabled';
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const r = await fetch(`/api/triggers?workflowId=${encodeURIComponent(workflow.id)}`);
+        if (!r.ok) return;
+        const json = (await r.json()) as { triggers: WebhookTrigger[] };
+        if (alive) setCount(json.triggers.length);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => { alive = false; };
+  }, [workflow.id]);
 
   return (
-    <div className="trg-row">
-      <div className="trg-row-head">
-        <span className="trg-row-name">{trigger.name}</span>
-        <span className={chipClass}>
-          {trigger.enabled ? 'Enabled' : 'Disabled'}
-        </span>
-      </div>
-      <div className="trg-url">{url}</div>
-      <div className="trg-meta">{lastFired}</div>
-      <div className="trg-meta">
-        Matches: {trigger.match.length} predicate
-        {trigger.match.length === 1 ? '' : 's'} &middot; Inputs:{' '}
-        {Object.keys(trigger.inputs).length} mapped
-      </div>
+    <div className="trg-summary">
+      <span className="trg-summary-count">
+        {count === null ? '…' : count} trigger{count === 1 ? '' : 's'} route{count === 1 ? 's' : ''} here.
+      </span>
+      <a
+        href="#dispatch"
+        className="trg-summary-link"
+        onClick={(e) => { e.preventDefault(); window.location.hash = `#dispatch?workflow=${encodeURIComponent(workflow.id)}`; }}
+      >
+        Manage in Dispatch →
+      </a>
     </div>
   );
-}
-
-function formatRelative(ts: number): string {
-  const diff = Date.now() - ts;
-  const min = Math.floor(diff / 60_000);
-  if (min < 1) return 'just now';
-  if (min < 60) return `${min} min ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} hr ago`;
-  const d = Math.floor(hr / 24);
-  return `${d} d ago`;
 }

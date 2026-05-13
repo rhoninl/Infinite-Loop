@@ -106,4 +106,19 @@ describe('TriggerQueue', () => {
     await q.drain();
     expect(started.map((s) => s.workflowId)).toEqual(['a', 'b']);
   });
+
+  test('drain calls touchLastFired after a successful engine start', async () => {
+    const touched: string[] = [];
+    const q2 = new TriggerQueue({
+      engineStart: async (wf) => `run-${wf.id}`,
+      loadWorkflow: async (id) => fakeWorkflow(id),
+      touchLastFired: async (id) => { touched.push(id); },
+    });
+    q2.enqueue({
+      workflow: fakeWorkflow('w'), resolvedInputs: {},
+      triggerId: 'tid-XYZ', receivedAt: 1,
+    });
+    await q2.drain();
+    expect(touched).toEqual(['tid-XYZ']);
+  });
 });

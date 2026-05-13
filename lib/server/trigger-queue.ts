@@ -15,6 +15,9 @@ export interface TriggerQueueDeps {
   engineStart: (wf: Workflow, opts: { resolvedInputs: ResolvedInputs }) => Promise<string>;
   /** Re-fetch the freshest workflow JSON by id. Used to detect deletions. */
   loadWorkflow: (id: string) => Promise<Workflow>;
+  /** Called after a successful engine start to record the fire time on the
+   *  persisted trigger. Optional for tests that don't care. */
+  touchLastFired?: (triggerId: string) => Promise<void>;
   maxQueue?: number;
 }
 
@@ -29,11 +32,13 @@ export class TriggerQueue {
   private draining = false;
   private engineStart: TriggerQueueDeps['engineStart'];
   private loadWorkflow: TriggerQueueDeps['loadWorkflow'];
+  private touchLastFired?: TriggerQueueDeps['touchLastFired'];
   private maxQueue: number;
 
   constructor(deps: TriggerQueueDeps) {
     this.engineStart = deps.engineStart;
     this.loadWorkflow = deps.loadWorkflow;
+    this.touchLastFired = deps.touchLastFired;
     this.maxQueue = deps.maxQueue ?? 100;
   }
 
@@ -96,6 +101,10 @@ export class TriggerQueue {
             workflowId: workflow.id,
             runId,
           });
+          if (this.touchLastFired) {
+            try { await this.touchLastFired(head.triggerId); }
+            catch (err) { console.error('[trigger-queue] touchLastFired failed:', err); }
+          }
         } catch (err) {
           if (isBusyError(err)) {
             this.q.unshift(head); // wait for next settle

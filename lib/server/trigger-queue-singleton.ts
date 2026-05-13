@@ -1,6 +1,7 @@
 import { TriggerQueue } from './trigger-queue';
 import { workflowEngine } from './workflow-engine';
 import { getWorkflow } from './workflow-store';
+import { touchLastFired } from './trigger-store';
 import { eventBus } from './event-bus';
 import type { Workflow } from '../shared/workflow';
 import type { ResolvedInputs } from '../shared/resolve-run-inputs';
@@ -31,6 +32,7 @@ function createSingleton(): TriggerQueue {
   const q = new TriggerQueue({
     engineStart: engineStartAdapter,
     loadWorkflow: getWorkflow,
+    touchLastFired: (id) => touchLastFired(id),
     maxQueue: 100,
   });
 

@@ -16,6 +16,7 @@ import RunHistory from './components/RunHistory';
 import WorkflowMenu from './components/WorkflowMenu';
 import ThemeToggle from './components/ThemeToggle';
 import { QueueBadge } from './components/QueueBadge';
+import { DispatchView } from './components/DispatchView';
 import { useEngineWebSocket } from '../lib/client/ws-client';
 import { useWorkflowStore } from '../lib/client/workflow-store-client';
 import { useAutoSave } from '../lib/client/use-auto-save';
@@ -38,6 +39,16 @@ export default function Page() {
   const undo = useWorkflowStore((s) => s.undo);
   const redo = useWorkflowStore((s) => s.redo);
   const isRunning = runStatus === 'running';
+
+  const [view, setView] = useState<'editor' | 'dispatch'>('editor');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const sync = () => setView(window.location.hash.startsWith('#dispatch') ? 'dispatch' : 'editor');
+    sync();
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
 
   // Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z = redo. Skip when focus is in an
   // editable field — let the browser's native field-level undo win there so
@@ -198,6 +209,13 @@ export default function Page() {
         </div>
 
         <div className="actions">
+          <button
+            type="button"
+            className={`btn ${view === 'dispatch' ? 'btn-active' : ''}`}
+            onClick={() => { window.location.hash = view === 'dispatch' ? '' : '#dispatch'; }}
+          >
+            Dispatch
+          </button>
           <ThemeToggle />
           <QueueBadge />
           <button
@@ -274,32 +292,36 @@ export default function Page() {
         </div>
       </header>
 
-      <div
-        className={`workspace ${showRightPanel ? 'workspace-tri' : 'workspace-bi'}`}
-        style={{ '--right-w': `${rightWidth}px` } as CSSProperties}
-      >
-        <Palette />
-        <Canvas />
-        {showRightPanel && (
-          <>
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="resize right panel"
-              tabIndex={0}
-              className="resize-gutter"
-              onMouseDown={onResizeStart}
-            />
-            {isRunning ? (
-              <RunView />
-            ) : historyOpen ? (
-              <RunHistory workflowId={currentWorkflow?.id} />
-            ) : (
-              <ConfigPanel />
-            )}
-          </>
-        )}
-      </div>
+      {view === 'dispatch' ? (
+        <DispatchView origin={typeof window !== 'undefined' ? window.location.origin : ''} />
+      ) : (
+        <div
+          className={`workspace ${showRightPanel ? 'workspace-tri' : 'workspace-bi'}`}
+          style={{ '--right-w': `${rightWidth}px` } as CSSProperties}
+        >
+          <Palette />
+          <Canvas />
+          {showRightPanel && (
+            <>
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="resize right panel"
+                tabIndex={0}
+                className="resize-gutter"
+                onMouseDown={onResizeStart}
+              />
+              {isRunning ? (
+                <RunView />
+              ) : historyOpen ? (
+                <RunHistory workflowId={currentWorkflow?.id} />
+              ) : (
+                <ConfigPanel />
+              )}
+            </>
+          )}
+        </div>
+      )}
       {runModalOpen && currentWorkflow && (
         <RunInputsModal
           declared={currentWorkflow.inputs ?? []}

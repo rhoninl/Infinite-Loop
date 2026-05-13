@@ -1,17 +1,14 @@
 import { NextResponse } from 'next/server';
 import { triggerIndex } from '@/lib/server/trigger-index';
+import { pluginIndex } from '@/lib/server/webhook-plugins';
 import { triggerQueue } from '@/lib/server/trigger-queue-singleton';
 import { buildWebhookScope } from '@/lib/server/webhook-scope';
 import { evaluatePredicate } from '@/lib/server/predicate';
 import { resolve as resolveTemplate } from '@/lib/server/templating';
 import { resolveRunInputs, WorkflowInputError } from '@/lib/shared/resolve-run-inputs';
 import { getWorkflow } from '@/lib/server/workflow-store';
-import type {
-  Scope,
-  TriggerPredicate,
-  WebhookTrigger,
-  Workflow,
-} from '@/lib/shared/workflow';
+import type { TriggerPredicate, WebhookTrigger } from '@/lib/shared/trigger';
+import type { Scope, Workflow } from '@/lib/shared/workflow';
 
 // NOTE: This route deliberately bypasses INFLOOP_API_TOKEN. The unguessable
 // `triggerId` in the path is the auth credential. Every other route uses
@@ -42,6 +39,15 @@ export async function POST(req: Request, { params }: RouteParams): Promise<Respo
   const hit = await triggerIndex.lookup(triggerId);
   if (!hit) return notFound();
   if (!hit.trigger.enabled) return notFound();
+
+  const plugin = await pluginIndex.lookup(hit.trigger.pluginId);
+  if (!plugin) return notFound();
+  if (plugin.eventHeader) {
+    const header = req.headers.get(plugin.eventHeader);
+    if (!header || header !== hit.trigger.eventType) {
+      return new Response(null, { status: 204 });
+    }
+  }
 
   let workflow: Workflow;
   try {
