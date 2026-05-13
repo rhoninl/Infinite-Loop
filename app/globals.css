@@ -3353,3 +3353,333 @@ input[type='number'].no-spin {
   text-transform: uppercase;
   color: var(--fg-dim);
 }
+
+/* ─── Dispatch (Dispatch v2) ─────────────────────────────────────────── */
+
+.dsp-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px 20px;
+  gap: 12px;
+}
+
+.dsp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dsp-title {
+  font-family: var(--mono);
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-soft);
+  margin: 0;
+}
+
+.dsp-new-btn {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-input);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.dsp-new-btn:hover { background: var(--bg-elevated); }
+
+.dsp-split {
+  display: grid;
+  grid-template-columns: 40% 1fr;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.dsp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  padding: 6px;
+}
+
+.dsp-list-row {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  text-align: left;
+  background: var(--bg-elevated);
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--fg);
+}
+
+.dsp-list-row:hover { background: var(--bg-input); }
+.dsp-list-row-selected { border-color: var(--border-strong); }
+
+.dsp-pip {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--fg-dim);
+}
+.dsp-pip.on { background: var(--accent-ok); }
+.dsp-pip.off { background: var(--fg-dim); }
+
+.dsp-list-name { font-weight: 600; }
+.dsp-list-meta { font-size: 11px; color: var(--fg-soft); }
+
+.dsp-detail {
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  padding: 14px;
+}
+
+.dsp-empty, .dsp-loading {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--fg-dim);
+  padding: 16px;
+}
+
+.dsp-error {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  padding: 6px 10px;
+}
+
+.dsp-read {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dsp-read-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.dsp-read-actions { display: flex; gap: 6px; }
+
+.dsp-read-line {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.dsp-label {
+  display: inline-block;
+  min-width: 90px;
+  color: var(--fg-soft);
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+/* ─── Trigger form ─────────────────────────────────────────────────── */
+
+.trg-form { display: flex; flex-direction: column; gap: 10px; }
+
+.trg-form-row {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.trg-form-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg-soft);
+  text-transform: uppercase;
+}
+
+.trg-form-input,
+.trg-form-select,
+.trg-form-textarea {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--fg);
+}
+
+.trg-form-textarea { font-family: var(--mono); resize: vertical; }
+
+.trg-form-section {
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trg-form-section-head {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--fg-soft);
+  display: flex;
+  justify-content: space-between;
+}
+
+.trg-form-add,
+.trg-form-remove {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.trg-form-predicate {
+  display: grid;
+  grid-template-columns: 1fr 100px 1fr 24px;
+  gap: 6px;
+  align-items: center;
+}
+
+.trg-form-input-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.trg-form-input-name {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg);
+}
+
+.trg-form-hint {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg-dim);
+  margin: 0;
+}
+
+.trg-form-error {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  padding: 6px 10px;
+}
+
+.trg-form-actions { display: flex; gap: 8px; padding-top: 4px; }
+
+.trg-form-save,
+.trg-form-cancel {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 4px 12px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-input);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.trg-form-save:hover { background: var(--bg-elevated); }
+
+.trg-form-url {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg);
+  background: var(--bg-input);
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+}
+
+.trg-form-test-response {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+}
+
+/* ─── Field picker ─────────────────────────────────────────────────── */
+
+.fp-root {
+  position: relative;
+  width: 100%;
+}
+
+.fp-input {
+  font-family: var(--mono);
+  font-size: 12px;
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--fg);
+}
+
+.fp-menu {
+  position: absolute;
+  top: 100%; left: 0; right: 0;
+  z-index: 10;
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 2px 0 0 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.fp-option {
+  padding: 4px 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.fp-option:hover { background: var(--bg-input); }
+
+.fp-option-path { color: var(--fg); }
+.fp-option-desc { color: var(--fg-soft); font-size: 11px; }
+.fp-option-empty { color: var(--fg-dim); cursor: default; }
+.fp-option-empty:hover { background: transparent; }
+
+/* ─── TriggersPanel summary card (replaces v1 list) ──────────────── */
+
+.trg-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.trg-summary-count { color: var(--fg); }
+
+.trg-summary-link {
+  color: var(--fg-soft);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.trg-summary-link:hover { color: var(--fg); }
