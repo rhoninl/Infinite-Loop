@@ -2,6 +2,7 @@
 
 import React from 'react';
 import type { Workflow, WebhookTrigger } from '@/lib/shared/workflow';
+import { useWorkflowStore } from '@/lib/client/workflow-store-client';
 
 export interface TriggersPanelProps {
   workflow: Workflow;
@@ -34,10 +35,16 @@ export function TriggersPanel({ workflow, origin }: TriggersPanelProps) {
 
 function TriggerRow({ trigger, origin }: { trigger: WebhookTrigger; origin: string }) {
   const url = `${origin}/api/webhook/${trigger.id}`;
+  const liveLastFiredAt = useWorkflowStore((s) => s.triggerLastFiredAt[trigger.id]);
+  // Pick the most recent of the persisted value and the live SSE overlay.
+  const effectiveLastFiredAt =
+    liveLastFiredAt != null && (trigger.lastFiredAt == null || liveLastFiredAt > trigger.lastFiredAt)
+      ? liveLastFiredAt
+      : trigger.lastFiredAt ?? null;
   const lastFired =
-    trigger.lastFiredAt == null
+    effectiveLastFiredAt == null
       ? 'Never fired'
-      : `Last fired: ${formatRelative(trigger.lastFiredAt)}`;
+      : `Last fired: ${formatRelative(effectiveLastFiredAt)}`;
   const chipClass = trigger.enabled
     ? 'trg-chip trg-chip-enabled'
     : 'trg-chip trg-chip-disabled';
