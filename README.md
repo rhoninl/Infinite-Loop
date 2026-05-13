@@ -9,8 +9,7 @@
   <a href="#core-concepts">Core concepts</a> •
   <a href="#how-infinite-loop-is-different">Comparison</a> •
   <a href="#security-model">Security</a> •
-  <a href="#status">Status</a> •
-  <a href="#docs">Docs</a>
+  <a href="#status">Status</a>
 </p>
 
 <p align="center">
@@ -166,16 +165,6 @@ Full posture, recipes, and reporting guidance: [docs/security.md](docs/security.
 - Webhook signature verification (GitHub HMAC, Stripe signing, …)
 - Durable queue persistence across restarts
 - MCP tool-name migration from legacy `inflooop_*` to canonical `infinite_loop_*`
-
-## Docs
-
-- [MCP guide](docs/mcp.md)
-- [Webhook guide](docs/webhooks.md)
-- [Provider manifests](docs/providers.md)
-- [Workflow JSON format & node reference](docs/workflow-format.md)
-- [Configuration & environment variables](docs/configuration.md)
-- [Architecture](docs/architecture.md)
-- [Security model](docs/security.md)
 
 ## Contributing
 
