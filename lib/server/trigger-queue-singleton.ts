@@ -1,5 +1,5 @@
 import { TriggerQueue } from './trigger-queue';
-import { workflowEngine } from './workflow-engine';
+import { workflowEngine, type WorkflowEngine } from './workflow-engine';
 import { getWorkflow } from './workflow-store';
 import { touchLastFired } from './trigger-store';
 import { eventBus } from './event-bus';
@@ -15,18 +15,30 @@ import type { ResolvedInputs } from '../shared/resolve-run-inputs';
 // (before its first await). Verified in workflow-engine.ts as of 2026-05-13.
 // Lines 129 and 143-150 of workflow-engine.ts set this.currentRunId and
 // this.snapshot.runId synchronously; the first await is at line 182
-// (walkFrom). The void-kick-and-read pattern below is therefore safe.
-async function engineStartAdapter(
+// (walkFrom). The void-kick-and-read pattern below is therefore safe on the
+// happy path.
+//
+// The busy path is NOT safe with void-kick alone: start() rejects
+// synchronously BEFORE assigning a new runId (line 116-117), the void's
+// .catch() swallows the rejection, and the subsequent getState().runId
+// returns the in-flight run's runId. drain() would then think the start
+// succeeded and silently drop the queued item. Pre-check the busy state
+// here and throw a busy-shaped error so drain() re-prepends and waits.
+export async function engineStartAdapter(
+  engine: WorkflowEngine,
   wf: Workflow,
   opts: { resolvedInputs: ResolvedInputs },
 ): Promise<string> {
+  if (engine.getState().status === 'running') {
+    throw new Error('a run is already active');
+  }
   // engine.start() flips status to 'running' and assigns currentRunId in its
   // first synchronous block before any await. Kick it off without awaiting,
   // then read the runId from the snapshot.
-  void workflowEngine.start(wf, opts).catch((err) => {
+  void engine.start(wf, opts).catch((err) => {
     console.error('[trigger-queue] engine.start rejected later:', err);
   });
-  const runId = workflowEngine.getState().runId;
+  const runId = engine.getState().runId;
   if (!runId) {
     throw new Error('engine.start did not assign a runId');
   }
@@ -35,7 +47,7 @@ async function engineStartAdapter(
 
 function createSingleton(): TriggerQueue {
   const q = new TriggerQueue({
-    engineStart: engineStartAdapter,
+    engineStart: (wf, opts) => engineStartAdapter(workflowEngine, wf, opts),
     loadWorkflow: getWorkflow,
     touchLastFired: (id) => touchLastFired(id),
     maxQueue: 100,
