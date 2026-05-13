@@ -211,4 +211,84 @@ describe('QueuePage', () => {
     unmount();
     expect(es.closed).toBe(true);
   });
+
+  test('on 404, row stays removed and a notice is shown', async () => {
+    installFakes({
+      size: 1,
+      items: [
+        { queueId: 'q-1', triggerId: 't1', workflowId: 'w1', workflowName: 'First', receivedAt: 100, position: 1 },
+      ],
+    });
+    // Override fetch so the DELETE returns 404
+    // @ts-expect-error override
+    globalThis.fetch = async (input: any, init?: any) => {
+      if (init?.method === 'DELETE') {
+        return { ok: false, status: 404, json: async () => ({ error: 'not-in-queue' }) } as any;
+      }
+      return {
+        ok: true, status: 200,
+        json: async () => ({ size: 1, items: [{ queueId: 'q-1', triggerId: 't1', workflowId: 'w1', workflowName: 'First', receivedAt: 100, position: 1 }] }),
+      } as any;
+    };
+
+    render(<QueuePage />);
+    await waitFor(() => screen.getByText('First'));
+
+    fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm\?/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('First')).toBeNull();
+      expect(screen.getByText(/already started/i)).toBeTruthy();
+    });
+  });
+
+  test('on network failure, row is restored and a notice is shown', async () => {
+    installFakes({
+      size: 1,
+      items: [
+        { queueId: 'q-1', triggerId: 't1', workflowId: 'w1', workflowName: 'First', receivedAt: 100, position: 1 },
+      ],
+    });
+    // Override fetch so the DELETE throws
+    // @ts-expect-error override
+    globalThis.fetch = async (input: any, init?: any) => {
+      if (init?.method === 'DELETE') { throw new Error('network down'); }
+      return {
+        ok: true, status: 200,
+        json: async () => ({ size: 1, items: [{ queueId: 'q-1', triggerId: 't1', workflowId: 'w1', workflowName: 'First', receivedAt: 100, position: 1 }] }),
+      } as any;
+    };
+
+    render(<QueuePage />);
+    await waitFor(() => screen.getByText('First'));
+
+    fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm\?/i }));
+
+    await waitFor(() => {
+      // row is back
+      expect(screen.getByText('First')).toBeTruthy();
+      expect(screen.getByText(/failed to cancel/i)).toBeTruthy();
+    });
+  });
+
+  test('confirm state auto-reverts after ~4 seconds', async () => {
+    installFakes({
+      size: 1,
+      items: [
+        { queueId: 'q-1', triggerId: 't1', workflowId: 'w1', workflowName: 'First', receivedAt: 100, position: 1 },
+      ],
+    });
+    render(<QueuePage />);
+    await waitFor(() => screen.getByText('First'));
+
+    fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+    expect(screen.getByRole('button', { name: /confirm\?/i })).toBeTruthy();
+
+    // Wait for the auto-revert. Use 4500ms to give some margin.
+    await new Promise((r) => setTimeout(r, 4500));
+    expect(screen.queryByRole('button', { name: /confirm\?/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /delete/i })).toBeTruthy();
+  }, 10000); // bun:test per-test timeout
 });

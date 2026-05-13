@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+
+export const CONFIRM_TIMEOUT_MS = 4000;
 
 interface QueueItem {
   queueId: string;
@@ -25,6 +27,8 @@ export default function QueuePage() {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -84,21 +88,63 @@ export default function QueuePage() {
     return () => { es.close(); };
   }, []);
 
+  // Clear the confirm auto-revert timer on unmount
+  useEffect(() => {
+    return () => {
+      if (confirmTimerRef.current !== null) {
+        clearTimeout(confirmTimerRef.current);
+      }
+    };
+  }, []);
+
   const startConfirm = useCallback((queueId: string) => {
+    if (confirmTimerRef.current !== null) {
+      clearTimeout(confirmTimerRef.current);
+    }
     setConfirming(queueId);
+    confirmTimerRef.current = setTimeout(() => {
+      setConfirming(null);
+      confirmTimerRef.current = null;
+    }, CONFIRM_TIMEOUT_MS);
   }, []);
 
   const cancelConfirm = useCallback(() => {
+    if (confirmTimerRef.current !== null) {
+      clearTimeout(confirmTimerRef.current);
+      confirmTimerRef.current = null;
+    }
     setConfirming(null);
   }, []);
 
   const doDelete = useCallback(async (queueId: string) => {
-    setItems((prev) => prev.filter((it) => it.queueId !== queueId));
+    if (confirmTimerRef.current !== null) {
+      clearTimeout(confirmTimerRef.current);
+      confirmTimerRef.current = null;
+    }
+    // Snapshot before optimistic removal so we can restore on failure
+    let snapshot: QueueItem[] = [];
+    setItems((prev) => {
+      snapshot = prev;
+      return prev.filter((it) => it.queueId !== queueId);
+    });
     setConfirming(null);
     try {
-      await fetch(`/api/triggers/queue/${queueId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/triggers/queue/${queueId}`, { method: 'DELETE' });
+      if (res.status === 204) {
+        // success — nothing more to do
+      } else if (res.status === 404) {
+        // Row is already gone server-side; SSE will handle removal if it hasn't yet.
+        setNotice('Already started — couldn\'t cancel');
+        setTimeout(() => setNotice(null), 3000);
+      } else {
+        // Unexpected error — restore the row so the user knows nothing was deleted
+        setItems(snapshot);
+        setNotice('Failed to cancel — please retry');
+      }
     } catch {
-      // SSE will re-sync on reconnect; not retrying.
+      // Network error — restore the row
+      setItems(snapshot);
+      setNotice('Failed to cancel — please retry');
     }
   }, []);
 
@@ -108,6 +154,8 @@ export default function QueuePage() {
         <h1>Trigger Queue</h1>
         <span className="queue-count">{items.length} queued</span>
       </header>
+
+      {notice && <p className="queue-notice">{notice}</p>}
 
       {loaded && items.length === 0 ? (
         <p className="queue-empty">No queued runs.</p>

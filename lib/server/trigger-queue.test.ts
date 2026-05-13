@@ -173,6 +173,21 @@ describe('TriggerQueue', () => {
     }
   });
 
+  test('drain skips an item that was removed before drain started', async () => {
+    const a = q.enqueue({
+      workflow: fakeWorkflow('w1'), resolvedInputs: {},
+      triggerId: 't1', receivedAt: 1,
+    });
+    const b = q.enqueue({
+      workflow: fakeWorkflow('w2'), resolvedInputs: {},
+      triggerId: 't2', receivedAt: 2,
+    });
+    q.removeByQueueId(a.queueId);
+    await q.drain();
+    expect(started).toEqual([{ workflowId: 'w2', runId: 'run-1' }]);
+    expect(q.size()).toBe(0);
+  });
+
   test('list returns items in order as a copy', () => {
     const a = q.enqueue({
       workflow: fakeWorkflow('w1'), resolvedInputs: {},
