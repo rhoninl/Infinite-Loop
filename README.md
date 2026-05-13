@@ -1,7 +1,7 @@
 <h1 align="center">InfLoop</h1>
 
 <p align="center">
-  <em>Turn Claude Code from a single answer into a pipeline you can see, replay, and trust.</em>
+  <em>Visual orchestration for AI agents — loop, branch, fan out, judge, and replay.</em>
 </p>
 
 <p align="center">
@@ -29,18 +29,19 @@
 
 ## Why InfLoop
 
-`claude --print "<prompt>"` gives you one answer. Real work usually wants more:
+A single `claude --print` call gives you one answer. Real work needs agents that *compose*:
 
-- **Loop** until the model says it's done.
-- **Branch** on what the output looks like.
-- **Check** the filesystem, run tests, or let *another* model grade the answer.
-- **Fan out** to several agents and pick the best result.
+- **Loop** an agent until the work is actually done.
+- **Branch** the flow on what the output looks like.
+- **Check** the filesystem, run tests, or let *another* agent grade the answer.
+- **Fan out** to several agents in parallel and pick the best result.
+- **Compose** workflows out of other workflows.
 
-Wiring that into a shell script is painful and disappears the moment it runs — you can't see what's happening, can't rerun a single step, and can't share the flow with anyone else.
+Wiring that into shell scripts is painful and disappears the moment it runs — you can't see what's happening, can't rerun a single step, and can't share the flow with anyone else.
 
-**InfLoop is a local app that turns those flows into something you can draw.** Drag nodes onto a canvas, connect them, hit Run, and watch every token stream into the console as it's generated. Workflows are plain JSON files you can version, share, and trigger from agents or webhooks.
+**InfLoop is a local app for orchestrating AI agents visually.** Drag nodes onto a canvas, connect them, hit Run, and watch every token stream into the console as it's generated. Workflows are plain JSON files you can version, share, and trigger from MCP clients or webhooks.
 
-It's the difference between *one Claude call* and *a Claude pipeline you can edit, rerun, and watch in real time*.
+It's the difference between *one agent call* and *an agent system you can edit, rerun, and watch in real time*.
 
 ## What you can build
 
