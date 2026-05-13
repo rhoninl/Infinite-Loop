@@ -121,4 +121,23 @@ describe('TriggerQueue', () => {
     await q2.drain();
     expect(touched).toEqual(['tid-XYZ']);
   });
+
+  test('list returns items in order as a copy', () => {
+    const a = q.enqueue({
+      workflow: fakeWorkflow('w1'), resolvedInputs: {},
+      triggerId: 't1', receivedAt: 1,
+    });
+    const b = q.enqueue({
+      workflow: fakeWorkflow('w2'), resolvedInputs: {},
+      triggerId: 't2', receivedAt: 2,
+    });
+
+    const items = q.list();
+    expect(items.map((i) => i.queueId)).toEqual([a.queueId, b.queueId]);
+    expect(items.map((i) => i.workflow.id)).toEqual(['w1', 'w2']);
+
+    // mutating the returned array must not affect internal state
+    items.pop();
+    expect(q.size()).toBe(2);
+  });
 });

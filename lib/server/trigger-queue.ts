@@ -46,6 +46,10 @@ export class TriggerQueue {
 
   peek(): QueuedRun | undefined { return this.q[0]; }
 
+  list(): QueuedRun[] {
+    return [...this.q];
+  }
+
   enqueue(item: Omit<QueuedRun, 'queueId'>): { queueId: string; position: number } {
     if (this.q.length >= this.maxQueue) {
       const err = new Error('trigger queue is full');
