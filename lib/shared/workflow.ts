@@ -101,6 +101,32 @@ export interface BranchConfig {
   rhs: string;
 }
 
+/** Trigger predicate. Same `lhs op rhs` shape as Branch; both sides are
+ *  templated against the webhook scope. */
+export type TriggerPredicateOp = BranchOp;
+
+export interface TriggerPredicate {
+  lhs: string;
+  op: TriggerPredicateOp;
+  rhs: string;
+}
+
+/** Webhook trigger attached to a workflow. The `id` appears verbatim in the
+ *  URL: POST /api/webhook/<id>. The id IS the auth token. */
+export interface WebhookTrigger {
+  id: string;
+  name: string;
+  enabled: boolean;
+  /** AND-joined; empty array = always fires. */
+  match: TriggerPredicate[];
+  /** Maps workflow input names to templated strings evaluated against the
+   *  webhook scope `{headers, query, body}`. Inputs not listed fall back to
+   *  the workflow input's `default`. */
+  inputs: Record<string, string>;
+  /** Epoch ms; updated when the trigger most recently fired a run. */
+  lastFiredAt?: number | null;
+}
+
 export type ParallelMode = 'wait-all' | 'race' | 'quorum';
 export type ParallelOnError = 'fail-fast' | 'best-effort';
 
@@ -255,6 +281,9 @@ export interface Workflow {
    * values come from the caller (API/subworkflow/UI), not from the
    * workflow JSON. */
   inputs?: WorkflowInputDecl[];
+  /** Webhook triggers. Each declares a URL-shaped id, AND-joined predicates,
+   *  and templated input mappings. See docs/superpowers/specs/2026-05-13-webhook-trigger-design.md. */
+  triggers?: WebhookTrigger[];
 }
 
 export interface WorkflowSummary {
@@ -364,6 +393,30 @@ export interface RunFinishedEvent {
   scope: Scope;
 }
 
+export interface TriggerEnqueuedEvent {
+  type: 'trigger_enqueued';
+  queueId: string;
+  triggerId: string;
+  workflowId: string;
+  position: number;
+  receivedAt: number;
+}
+
+export interface TriggerStartedEvent {
+  type: 'trigger_started';
+  queueId: string;
+  triggerId: string;
+  workflowId: string;
+  runId: string;
+}
+
+export interface TriggerDroppedEvent {
+  type: 'trigger_dropped';
+  queueId: string;
+  triggerId: string;
+  reason: 'workflow-deleted' | 'queue-full' | 'engine-start-failed';
+}
+
 export type WorkflowEvent =
   | RunStartedEvent
   | NodeStartedEvent
@@ -372,7 +425,10 @@ export type WorkflowEvent =
   | ConditionCheckedEvent
   | TemplateWarningEvent
   | ErrorEvent
-  | RunFinishedEvent;
+  | RunFinishedEvent
+  | TriggerEnqueuedEvent
+  | TriggerStartedEvent
+  | TriggerDroppedEvent;
 
 export type WsStatus = 'connecting' | 'open' | 'closed';
 

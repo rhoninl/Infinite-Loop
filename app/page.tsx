@@ -15,6 +15,7 @@ import RunView from './components/RunView';
 import RunHistory from './components/RunHistory';
 import WorkflowMenu from './components/WorkflowMenu';
 import ThemeToggle from './components/ThemeToggle';
+import { QueueBadge } from './components/QueueBadge';
 import { useEngineWebSocket } from '../lib/client/ws-client';
 import { useWorkflowStore } from '../lib/client/workflow-store-client';
 import { useAutoSave } from '../lib/client/use-auto-save';
@@ -198,6 +199,7 @@ export default function Page() {
 
         <div className="actions">
           <ThemeToggle />
+          <QueueBadge />
           <button
             type="button"
             className="btn btn-toggle"

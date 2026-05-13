@@ -25,6 +25,8 @@ export interface WorkflowStoreState {
   runStatus: RunStatus;
   runEvents: WorkflowEvent[];
   connectionStatus: WsStatus;
+  /** Live overlay: maps triggerId → epoch-ms of most recent trigger_started event. */
+  triggerLastFiredAt: Record<string, number>;
 
   /** Cross-component "pan canvas to this node" signal. `seq` advances on each
    * call so a repeat request for the same node id still fires the canvas
@@ -275,6 +277,7 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
   runStatus: 'idle',
   runEvents: [],
   connectionStatus: 'connecting',
+  triggerLastFiredAt: {},
   panRequest: null,
   past: [],
   future: [],
@@ -521,6 +524,12 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
       };
       if (ev.type === 'run_started') next.runStatus = 'running';
       if (ev.type === 'run_finished') next.runStatus = ev.status;
+      if (ev.type === 'trigger_started') {
+        next.triggerLastFiredAt = {
+          ...s.triggerLastFiredAt,
+          [ev.triggerId]: Date.now(),
+        };
+      }
       return next as WorkflowStoreState;
     }),
 

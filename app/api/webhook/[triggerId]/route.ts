@@ -1,0 +1,140 @@
+import { NextResponse } from 'next/server';
+import { triggerIndex } from '@/lib/server/trigger-index';
+import { triggerQueue } from '@/lib/server/trigger-queue-singleton';
+import { buildWebhookScope } from '@/lib/server/webhook-scope';
+import { evaluatePredicate } from '@/lib/server/predicate';
+import { resolve as resolveTemplate } from '@/lib/server/templating';
+import { resolveRunInputs, WorkflowInputError } from '@/lib/shared/resolve-run-inputs';
+import { getWorkflow } from '@/lib/server/workflow-store';
+import type {
+  Scope,
+  TriggerPredicate,
+  WebhookTrigger,
+  Workflow,
+} from '@/lib/shared/workflow';
+
+// NOTE: This route deliberately bypasses INFLOOP_API_TOKEN. The unguessable
+// `triggerId` in the path is the auth credential. Every other route uses
+// requireAuth(); this is the one explicit exception.
+
+const MAX_BODY_BYTES = 1024 * 1024;
+
+interface RouteParams {
+  params: Promise<{ triggerId: string }>;
+}
+
+function notFound() {
+  return NextResponse.json({ error: 'not-found' }, { status: 404 });
+}
+
+export async function POST(req: Request, { params }: RouteParams): Promise<Response> {
+  const { triggerId } = await params;
+
+  // Body-size guard via content-length, BEFORE consuming body.
+  const lenHeader = req.headers.get('content-length');
+  if (lenHeader) {
+    const len = Number.parseInt(lenHeader, 10);
+    if (Number.isFinite(len) && len > MAX_BODY_BYTES) {
+      return NextResponse.json({ error: 'payload-too-large' }, { status: 413 });
+    }
+  }
+
+  const hit = await triggerIndex.lookup(triggerId);
+  if (!hit) return notFound();
+  if (!hit.trigger.enabled) return notFound();
+
+  let workflow: Workflow;
+  try {
+    workflow = await getWorkflow(hit.workflowId);
+  } catch {
+    return notFound();
+  }
+
+  let bodyText: string;
+  try {
+    bodyText = await req.text();
+  } catch {
+    return NextResponse.json({ error: 'bad-body' }, { status: 400 });
+  }
+  if (bodyText.length > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: 'payload-too-large' }, { status: 413 });
+  }
+
+  const scope = buildWebhookScope({
+    headers: req.headers,
+    url: req.url,
+    bodyText,
+  });
+
+  if (!matchesAllPredicates(hit.trigger.match, scope)) {
+    return new Response(null, { status: 204 });
+  }
+
+  let suppliedInputs: Record<string, string>;
+  try {
+    suppliedInputs = resolveTriggerInputs(hit.trigger, scope);
+  } catch (err) {
+    console.error('[webhook] inputs resolve failed:', err);
+    return NextResponse.json({ error: 'inputs-template-failed' }, { status: 500 });
+  }
+
+  let resolvedInputs;
+  try {
+    resolvedInputs = resolveRunInputs(workflow.inputs ?? [], suppliedInputs);
+  } catch (err) {
+    if (err instanceof WorkflowInputError) {
+      return NextResponse.json(
+        {
+          error: 'invalid-inputs',
+          field: err.field,
+          reason: err.reason,
+          ...(err.expected ? { expected: err.expected } : {}),
+          ...(err.got ? { got: err.got } : {}),
+        },
+        { status: 422 },
+      );
+    }
+    throw err;
+  }
+
+  try {
+    const { queueId, position } = triggerQueue.enqueue({
+      workflow,
+      resolvedInputs,
+      triggerId,
+      receivedAt: Date.now(),
+    });
+    void triggerQueue.drain();
+    return NextResponse.json(
+      { queued: true, queueId, position },
+      { status: 202 },
+    );
+  } catch (err) {
+    if ((err as { code?: string }).code === 'QUEUE_FULL') {
+      return NextResponse.json(
+        { error: 'queue-full' },
+        { status: 503, headers: { 'Retry-After': '30' } },
+      );
+    }
+    throw err;
+  }
+}
+
+function matchesAllPredicates(match: TriggerPredicate[], scope: Scope): boolean {
+  for (const p of match) {
+    const lhs = resolveTemplate(p.lhs, scope).text;
+    const rhs = resolveTemplate(p.rhs, scope).text;
+    const verdict = evaluatePredicate({ lhs, op: p.op, rhs });
+    if (!verdict.ok) return false;
+    if (verdict.result === false) return false;
+  }
+  return true;
+}
+
+function resolveTriggerInputs(t: WebhookTrigger, scope: Scope): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, tmpl] of Object.entries(t.inputs)) {
+    out[k] = resolveTemplate(tmpl, scope).text;
+  }
+  return out;
+}
