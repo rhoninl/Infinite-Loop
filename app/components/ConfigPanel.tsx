@@ -13,6 +13,7 @@ import { useWorkflowStore } from '@/lib/client/workflow-store-client';
 import FolderPicker from './FolderPicker';
 import SelectMenu from './SelectMenu';
 import TemplateField from './TemplateField';
+import { TriggersPanel } from './TriggersPanel';
 import {
   availableVariables,
   type TemplateRef,
@@ -2167,6 +2168,24 @@ function GlobalsPanel({ workflow }: { workflow: Workflow | null }) {
           Select a node on the canvas to edit its config.
         </p>
       </form>
+      <section style={{ marginTop: 24 }}>
+        <header
+          style={{
+            fontFamily: 'var(--mono)',
+            fontSize: 11,
+            letterSpacing: '0.22em',
+            textTransform: 'uppercase',
+            color: 'var(--fg-soft)',
+            marginBottom: 10,
+          }}
+        >
+          workflow · triggers
+        </header>
+        <TriggersPanel
+          workflow={workflow}
+          origin={typeof window === 'undefined' ? '' : window.location.origin}
+        />
+      </section>
     </aside>
   );
 }
