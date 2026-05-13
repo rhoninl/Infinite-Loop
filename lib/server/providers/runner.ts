@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { RunnerOptions, RunnerResult } from '../../shared/types';
-import { parsers } from './parsers/index';
+import { parserFactories } from './parsers/index';
 import { resolveBin } from './loader';
 import { runHttpProvider } from './http-runner';
 import type { CliProviderManifest, ProviderManifest } from './types';
@@ -83,7 +83,11 @@ export async function runProvider(
  * What changes per provider:
  *   - the binary (manifest.bin, env-overridable via INFLOOP_PROVIDER_BIN_<ID>)
  *   - argv (manifest.args with `{prompt}` substituted, or stdin delivery)
- *   - line parsing (manifest.outputFormat → parsers[key])
+ *   - line parsing (manifest.outputFormat → parserFactories[key]())
+ *
+ * The parser is built fresh per invocation so any per-run state (e.g.
+ * claude-stream-json's in-flight tool_use_id map) is isolated from other
+ * concurrent CLI spawns in the same process — notably the `parallel` node.
  */
 async function runCliProvider(
   manifest: CliProviderManifest,
@@ -97,8 +101,8 @@ async function runCliProvider(
     agent: opts.agent,
     promptVia,
   });
-  const parser = parsers[manifest.outputFormat];
-  if (!parser) {
+  const parserFactory = parserFactories[manifest.outputFormat];
+  if (!parserFactory) {
     // Loader validates this, but guard runtime injection too.
     return {
       exitCode: null,
@@ -108,6 +112,7 @@ async function runCliProvider(
       timedOut: false,
     };
   }
+  const parser = parserFactory();
 
   const startedAt = Date.now();
 
