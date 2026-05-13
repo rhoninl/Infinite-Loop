@@ -303,8 +303,14 @@ describe('saveWorkflow trigger validation', () => {
     edges: [],
   });
 
+  // TODO(dispatch-v2): Workflow.triggers is removed from the type in Task 1.
+  // These tests exercise the legacy validateTriggers() path still active in
+  // workflow-store until Task 3 (trigger-store + migration). We cast through
+  // `any` to keep the tests compilable during the transition.
+  type AnyWorkflow = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+
   test('rejects an invalid trigger id format', async () => {
-    const wf = baseWorkflow('wf-a');
+    const wf: AnyWorkflow = baseWorkflow('wf-a');
     wf.triggers = [
       { id: 'too-short', name: 't', enabled: true, match: [], inputs: {} },
     ];
@@ -312,13 +318,13 @@ describe('saveWorkflow trigger validation', () => {
   });
 
   test('rejects a trigger id collision across workflows', async () => {
-    const wfA = baseWorkflow('wf-a');
+    const wfA: AnyWorkflow = baseWorkflow('wf-a');
     wfA.triggers = [
       { id: 'abcdefghijklmnopqrst12', name: 't', enabled: true, match: [], inputs: {} },
     ];
     await saveWorkflow(wfA);
 
-    const wfB = baseWorkflow('wf-b');
+    const wfB: AnyWorkflow = baseWorkflow('wf-b');
     wfB.triggers = [
       { id: 'abcdefghijklmnopqrst12', name: 't', enabled: true, match: [], inputs: {} },
     ];
@@ -326,7 +332,7 @@ describe('saveWorkflow trigger validation', () => {
   });
 
   test('rejects trigger.inputs key that is not a declared workflow input', async () => {
-    const wf = baseWorkflow('wf-a');
+    const wf: AnyWorkflow = baseWorkflow('wf-a');
     wf.inputs = [{ name: 'branch', type: 'string' }];
     wf.triggers = [
       {
@@ -341,13 +347,13 @@ describe('saveWorkflow trigger validation', () => {
   });
 
   test('rejects invalid predicate op', async () => {
-    const wf = baseWorkflow('wf-a');
+    const wf: AnyWorkflow = baseWorkflow('wf-a');
     wf.triggers = [
       {
         id: 'idBBBBBBBBBBBBBBBBBBBB',
         name: 't',
         enabled: true,
-        match: [{ lhs: 'a', op: 'INVALID' as any, rhs: 'b' }],
+        match: [{ lhs: 'a', op: 'INVALID', rhs: 'b' }],
         inputs: {},
       },
     ];
@@ -356,7 +362,7 @@ describe('saveWorkflow trigger validation', () => {
 
   test('invalidates the trigger index on save', async () => {
     const { triggerIndex } = await import('./trigger-index');
-    const wf = baseWorkflow('wf-a');
+    const wf: AnyWorkflow = baseWorkflow('wf-a');
     wf.triggers = [
       { id: 'idCCCCCCCCCCCCCCCCCCCC', name: 't', enabled: true, match: [], inputs: {} },
     ];

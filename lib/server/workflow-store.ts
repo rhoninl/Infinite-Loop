@@ -119,7 +119,10 @@ const TRIGGER_ID_RE = /^[A-Za-z0-9_-]{16,32}$/;
 const ALLOWED_OPS = new Set(['==', '!=', 'contains', 'matches']);
 
 function validateTriggers(wf: Workflow): void {
-  const triggers = wf.triggers;
+  // TODO(dispatch-v2): Workflow.triggers is deprecated; triggers move to the
+  // trigger store in a later task. This path handles legacy workflow JSONs that
+  // still embed triggers[]. Drop in Task 3 (trigger-store + workflow-store cleanup).
+  const triggers = (wf as unknown as { triggers?: unknown }).triggers;
   if (triggers === undefined) return;
   if (!Array.isArray(triggers)) {
     throw new Error('invalid workflow: triggers must be an array');
@@ -183,7 +186,11 @@ function validateTriggers(wf: Workflow): void {
 }
 
 async function validateNoCrossWorkflowTriggerCollisions(wf: Workflow): Promise<void> {
-  const ids = new Set((wf.triggers ?? []).map((t) => t.id));
+  // TODO(dispatch-v2): legacy path; remove in Task 3.
+  type LegacyTrigger = { id: string };
+  type LegacyWorkflow = { triggers?: LegacyTrigger[] };
+  const legacyWf = wf as unknown as LegacyWorkflow;
+  const ids = new Set((legacyWf.triggers ?? []).map((t) => t.id));
   if (ids.size === 0) return;
   const summaries = await listWorkflows();
   for (const summary of summaries) {
@@ -194,7 +201,8 @@ async function validateNoCrossWorkflowTriggerCollisions(wf: Workflow): Promise<v
     } catch {
       continue;
     }
-    for (const t of other.triggers ?? []) {
+    const legacyOther = other as unknown as LegacyWorkflow;
+    for (const t of legacyOther.triggers ?? []) {
       if (ids.has(t.id)) {
         throw new Error(
           `invalid workflow: trigger id collision: "${t.id}" already used by workflow "${other.id}"`,

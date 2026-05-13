@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import type { Workflow, WebhookTrigger } from '@/lib/shared/workflow';
+import type { WebhookTrigger } from '@/lib/shared/trigger';
+import type { Workflow } from '@/lib/shared/workflow';
 import { useWorkflowStore } from '@/lib/client/workflow-store-client';
 
 export interface TriggersPanelProps {
@@ -10,7 +11,10 @@ export interface TriggersPanelProps {
 }
 
 export function TriggersPanel({ workflow, origin }: TriggersPanelProps) {
-  const triggers = workflow.triggers ?? [];
+  // TODO(dispatch-v2): replace with trigger-store data fetched via the new
+  // /api/triggers?workflowId= endpoint in the DispatchView task.
+  type LegacyWorkflow = { triggers?: WebhookTrigger[] };
+  const triggers = (workflow as unknown as LegacyWorkflow).triggers ?? [];
 
   if (triggers.length === 0) {
     return (

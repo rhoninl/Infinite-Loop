@@ -4,7 +4,10 @@ import { TriggersPanel } from './TriggersPanel';
 import { useWorkflowStore } from '@/lib/client/workflow-store-client';
 import type { Workflow, TriggerStartedEvent } from '@/lib/shared/workflow';
 
-const wf: Workflow = {
+// TODO(dispatch-v2): Workflow.triggers removed from type in Task 1. Cast
+// through unknown to keep test compilable until TriggersPanel is rewritten
+// in the DispatchView task to fetch from /api/triggers?workflowId=.
+const wf = {
   id: 'wf-a', name: 'A', version: 1, createdAt: 0, updatedAt: 0,
   nodes: [{ id: 's', type: 'start', position: { x: 0, y: 0 }, config: {} }],
   edges: [],
@@ -26,11 +29,11 @@ const wf: Workflow = {
       lastFiredAt: 1_700_000_000_000,
     },
   ],
-};
+} as unknown as Workflow;
 
 describe('TriggersPanel', () => {
   test('renders empty state when no triggers', () => {
-    render(<TriggersPanel workflow={{ ...wf, triggers: [] }} origin="http://localhost:3000" />);
+    render(<TriggersPanel workflow={{ ...wf, triggers: [] } as unknown as Workflow} origin="http://localhost:3000" />);
     expect(screen.getByText(/no triggers/i)).toBeTruthy();
   });
 

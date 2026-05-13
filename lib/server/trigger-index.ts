@@ -1,4 +1,5 @@
-import type { WebhookTrigger, Workflow } from '../shared/workflow';
+import type { WebhookTrigger } from '../shared/trigger';
+import type { Workflow } from '../shared/workflow';
 import { listWorkflows, getWorkflow } from './workflow-store';
 
 export interface TriggerIndexHit {
@@ -41,7 +42,9 @@ class TriggerIndex {
         } catch {
           continue;
         }
-        for (const t of wf.triggers ?? []) {
+        // TODO(dispatch-v2): replace with trigger-store.listTriggers() in Task 3.
+        type LegacyWorkflow = { triggers?: WebhookTrigger[] };
+        for (const t of (wf as unknown as LegacyWorkflow).triggers ?? []) {
           if (!map.has(t.id)) map.set(t.id, { workflowId: wf.id, trigger: t });
         }
       }

@@ -101,32 +101,6 @@ export interface BranchConfig {
   rhs: string;
 }
 
-/** Trigger predicate. Same `lhs op rhs` shape as Branch; both sides are
- *  templated against the webhook scope. */
-export type TriggerPredicateOp = BranchOp;
-
-export interface TriggerPredicate {
-  lhs: string;
-  op: TriggerPredicateOp;
-  rhs: string;
-}
-
-/** Webhook trigger attached to a workflow. The `id` appears verbatim in the
- *  URL: POST /api/webhook/<id>. The id IS the auth token. */
-export interface WebhookTrigger {
-  id: string;
-  name: string;
-  enabled: boolean;
-  /** AND-joined; empty array = always fires. */
-  match: TriggerPredicate[];
-  /** Maps workflow input names to templated strings evaluated against the
-   *  webhook scope `{headers, query, body}`. Inputs not listed fall back to
-   *  the workflow input's `default`. */
-  inputs: Record<string, string>;
-  /** Epoch ms; updated when the trigger most recently fired a run. */
-  lastFiredAt?: number | null;
-}
-
 export type ParallelMode = 'wait-all' | 'race' | 'quorum';
 export type ParallelOnError = 'fail-fast' | 'best-effort';
 
@@ -281,9 +255,6 @@ export interface Workflow {
    * values come from the caller (API/subworkflow/UI), not from the
    * workflow JSON. */
   inputs?: WorkflowInputDecl[];
-  /** Webhook triggers. Each declares a URL-shaped id, AND-joined predicates,
-   *  and templated input mappings. See docs/superpowers/specs/2026-05-13-webhook-trigger-design.md. */
-  triggers?: WebhookTrigger[];
 }
 
 export interface WorkflowSummary {

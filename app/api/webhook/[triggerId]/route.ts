@@ -6,12 +6,8 @@ import { evaluatePredicate } from '@/lib/server/predicate';
 import { resolve as resolveTemplate } from '@/lib/server/templating';
 import { resolveRunInputs, WorkflowInputError } from '@/lib/shared/resolve-run-inputs';
 import { getWorkflow } from '@/lib/server/workflow-store';
-import type {
-  Scope,
-  TriggerPredicate,
-  WebhookTrigger,
-  Workflow,
-} from '@/lib/shared/workflow';
+import type { TriggerPredicate, WebhookTrigger } from '@/lib/shared/trigger';
+import type { Scope, Workflow } from '@/lib/shared/workflow';
 
 // NOTE: This route deliberately bypasses INFLOOP_API_TOKEN. The unguessable
 // `triggerId` in the path is the auth credential. Every other route uses
