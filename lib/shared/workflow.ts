@@ -388,6 +388,14 @@ export interface TriggerDroppedEvent {
   reason: 'workflow-deleted' | 'queue-full' | 'engine-start-failed';
 }
 
+export interface TriggerRemovedEvent {
+  type: 'trigger_removed';
+  queueId: string;
+  triggerId: string;
+  workflowId: string;
+  reason: 'user-cancelled';
+}
+
 export type WorkflowEvent =
   | RunStartedEvent
   | NodeStartedEvent
@@ -399,7 +407,8 @@ export type WorkflowEvent =
   | RunFinishedEvent
   | TriggerEnqueuedEvent
   | TriggerStartedEvent
-  | TriggerDroppedEvent;
+  | TriggerDroppedEvent
+  | TriggerRemovedEvent;
 
 export type WsStatus = 'connecting' | 'open' | 'closed';
 
