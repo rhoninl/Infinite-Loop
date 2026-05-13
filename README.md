@@ -177,20 +177,6 @@ Full posture, recipes, and reporting guidance: [docs/security.md](docs/security.
 - [Architecture](docs/architecture.md)
 - [Security model](docs/security.md)
 
-## A note on naming
-
-| Surface | Canonical name |
-|---|---|
-| Product (UI, prose) | **Infinite Loop** |
-| Repository | `Infinite-Loop` (GitHub URL) / `infinite-loop` (kebab-case) |
-| Package | `infinite-loop` |
-| MCP server id | `infinite_loop` |
-| MCP tool prefix | `infinite_loop_*` |
-
-> **Compatibility.** Current builds still expose tools under the legacy `inflooop_*` prefix and the legacy server identifier `inflooop`; these continue to work. The canonical `infinite_loop` / `infinite_loop_*` names will land in a coming release — see [Status → Planned](#status). Point new integrations at the canonical names where supported; existing client configs that use `inflooop` keep working in the meantime.
-
-You may also see `INFLOOP_*` environment variable names (`INFLOOP_API_TOKEN`, `INFLOOP_WORKFLOWS_DIR`, …). Those are stable — env vars don't need to follow the product rename.
-
 ## Contributing
 
 Issues and PRs welcome. The codebase is small — a good way in is to read the original design at [`specs/workflow-dag-design.md`](specs/workflow-dag-design.md) and the engine at [`lib/server/workflow-engine.ts`](lib/server/workflow-engine.ts).
