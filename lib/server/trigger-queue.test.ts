@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { TriggerQueue } from './trigger-queue';
 import type { Workflow } from '../shared/workflow';
+import { eventBus } from './event-bus';
+import type { WorkflowEvent } from '../shared/workflow';
 
 function fakeWorkflow(id: string): Workflow {
   return {
@@ -120,5 +122,88 @@ describe('TriggerQueue', () => {
     });
     await q2.drain();
     expect(touched).toEqual(['tid-XYZ']);
+  });
+
+  test('removeByQueueId removes the matching item and emits trigger_removed', () => {
+    const captured: WorkflowEvent[] = [];
+    const unsub = eventBus.subscribe((e) => { captured.push(e); });
+    try {
+      const a = q.enqueue({
+        workflow: fakeWorkflow('w1'), resolvedInputs: {},
+        triggerId: 't1', receivedAt: 1,
+      });
+      const b = q.enqueue({
+        workflow: fakeWorkflow('w2'), resolvedInputs: {},
+        triggerId: 't2', receivedAt: 2,
+      });
+
+      const result = q.removeByQueueId(a.queueId);
+      expect(result).toEqual({ removed: true });
+      expect(q.list().map((i) => i.queueId)).toEqual([b.queueId]);
+
+      const removed = captured.find((e) => e.type === 'trigger_removed');
+      expect(removed).toEqual({
+        type: 'trigger_removed',
+        queueId: a.queueId,
+        triggerId: 't1',
+        workflowId: 'w1',
+        reason: 'user-cancelled',
+      });
+    } finally {
+      unsub();
+    }
+  });
+
+  test('removeByQueueId on unknown id returns { removed: false } and emits nothing', () => {
+    const captured: WorkflowEvent[] = [];
+    const unsub = eventBus.subscribe((e) => { captured.push(e); });
+    try {
+      q.enqueue({
+        workflow: fakeWorkflow('w'), resolvedInputs: {},
+        triggerId: 't', receivedAt: 1,
+      });
+      const before = captured.length;
+
+      const result = q.removeByQueueId('q-does-not-exist');
+      expect(result).toEqual({ removed: false });
+      expect(q.size()).toBe(1);
+      expect(captured.length).toBe(before);
+    } finally {
+      unsub();
+    }
+  });
+
+  test('drain skips an item that was removed before drain started', async () => {
+    const a = q.enqueue({
+      workflow: fakeWorkflow('w1'), resolvedInputs: {},
+      triggerId: 't1', receivedAt: 1,
+    });
+    const b = q.enqueue({
+      workflow: fakeWorkflow('w2'), resolvedInputs: {},
+      triggerId: 't2', receivedAt: 2,
+    });
+    q.removeByQueueId(a.queueId);
+    await q.drain();
+    expect(started).toEqual([{ workflowId: 'w2', runId: 'run-1' }]);
+    expect(q.size()).toBe(0);
+  });
+
+  test('list returns items in order as a copy', () => {
+    const a = q.enqueue({
+      workflow: fakeWorkflow('w1'), resolvedInputs: {},
+      triggerId: 't1', receivedAt: 1,
+    });
+    const b = q.enqueue({
+      workflow: fakeWorkflow('w2'), resolvedInputs: {},
+      triggerId: 't2', receivedAt: 2,
+    });
+
+    const items = q.list();
+    expect(items.map((i) => i.queueId)).toEqual([a.queueId, b.queueId]);
+    expect(items.map((i) => i.workflow.id)).toEqual(['w1', 'w2']);
+
+    // mutating the returned array must not affect internal state
+    items.pop();
+    expect(q.size()).toBe(2);
   });
 });

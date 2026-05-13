@@ -16,6 +16,7 @@ const VALID_EVENT_TYPES = new Set<WorkflowEvent['type']>([
   'trigger_enqueued',
   'trigger_started',
   'trigger_dropped',
+  'trigger_removed',
 ]);
 
 function isWorkflowEvent(v: unknown): v is WorkflowEvent {

@@ -3359,6 +3359,71 @@ input[type='number'].no-spin {
   color: var(--fg-dim);
 }
 
+/* ─── /queue page (queue-page) ────────────────────────────────────
+ * Trigger queue listing with per-row delete and inline two-step
+ * confirm. Reuses .btn / .btn-stop / .btn-ghost from the topbar. */
+.queue-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-6, 24px);
+  color: var(--fg);
+}
+
+.queue-page-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4, 16px);
+  margin-bottom: var(--space-5, 20px);
+}
+
+.queue-page-header h1 {
+  margin: 0;
+  font-size: var(--font-size-h1, 24px);
+}
+
+.queue-count {
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.queue-empty {
+  color: var(--fg-muted);
+  padding: var(--space-6, 24px) 0;
+  text-align: center;
+}
+
+.queue-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-body, 14px);
+}
+
+.queue-table th,
+.queue-table td {
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.queue-table th {
+  color: var(--fg-muted);
+  font-weight: var(--font-weight-medium, 500);
+}
+
+.queue-row[data-confirming='true'] {
+  background: var(--bg-danger-soft, rgba(255, 80, 80, 0.06));
+}
+
+.queue-row-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.queue-row-actions .btn + .btn {
+  margin-left: var(--space-2, 8px);
+}
+
 /* ─── Dispatch (Dispatch v2) ─────────────────────────────────────────── */
 
 .dsp-root {

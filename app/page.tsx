@@ -17,6 +17,7 @@ import WorkflowMenu from './components/WorkflowMenu';
 import ThemeToggle from './components/ThemeToggle';
 import { QueueBadge } from './components/QueueBadge';
 import { DispatchView } from './components/DispatchView';
+import Link from 'next/link';
 import { useEngineWebSocket } from '../lib/client/ws-client';
 import { useWorkflowStore } from '../lib/client/workflow-store-client';
 import { useAutoSave } from '../lib/client/use-auto-save';
@@ -217,6 +218,7 @@ export default function Page() {
             Dispatch
           </button>
           <ThemeToggle />
+          <Link href="/queue" className="btn btn-ghost">Queue</Link>
           <QueueBadge />
           <button
             type="button"
