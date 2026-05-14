@@ -98,4 +98,84 @@ describe('loadPlugins', () => {
     const g = plugins.find((p) => p.id === 'generic');
     expect(g?.displayName).toBe('Generic'); // built-in wins
   });
+
+  test('loads a plugin with a valid signature block and lowercases the header', async () => {
+    await writePlugin('frogo', {
+      id: 'frogo',
+      displayName: 'Frogo',
+      eventHeader: 'X-Frogo-Event',
+      signature: {
+        header: 'X-Frogo-Signature',
+        scheme: 'hmac-sha256',
+        format: 'sha256=<hex>',
+      },
+      events: [
+        {
+          type: 'task.created',
+          displayName: 'Task created',
+          fields: [{ path: 'body.event', type: 'string' }],
+        },
+      ],
+    });
+    const plugins = await loadPlugins(tmpDir);
+    const f = plugins.find((p) => p.id === 'frogo');
+    expect(f).toBeDefined();
+    expect(f?.eventHeader).toBe('x-frogo-event');
+    expect(f?.signature?.header).toBe('x-frogo-signature');
+    expect(f?.signature?.scheme).toBe('hmac-sha256');
+    expect(f?.signature?.format).toBe('sha256=<hex>');
+  });
+
+  test('rejects a plugin with an unsupported signature scheme', async () => {
+    await writePlugin('bad-scheme', {
+      id: 'badscheme',
+      displayName: 'Bad',
+      eventHeader: 'x-e',
+      signature: { header: 'x-sig', scheme: 'md5', format: 'hex' },
+      events: [{ type: 'x', displayName: 'X', fields: [] }],
+    });
+    const plugins = await loadPlugins(tmpDir);
+    expect(plugins.find((p) => p.id === 'badscheme')).toBeUndefined();
+  });
+
+  test('rejects a plugin with an unknown signature format', async () => {
+    await writePlugin('bad-format', {
+      id: 'badformat',
+      displayName: 'Bad',
+      eventHeader: 'x-e',
+      signature: { header: 'x-sig', scheme: 'hmac-sha256', format: 'pem' },
+      events: [{ type: 'x', displayName: 'X', fields: [] }],
+    });
+    const plugins = await loadPlugins(tmpDir);
+    expect(plugins.find((p) => p.id === 'badformat')).toBeUndefined();
+  });
+
+  test('rejects a plugin where signature is present but header is missing', async () => {
+    await writePlugin('no-header', {
+      id: 'noheader',
+      displayName: 'Bad',
+      eventHeader: 'x-e',
+      signature: { scheme: 'hmac-sha256', format: 'hex' },
+      events: [{ type: 'x', displayName: 'X', fields: [] }],
+    });
+    const plugins = await loadPlugins(tmpDir);
+    expect(plugins.find((p) => p.id === 'noheader')).toBeUndefined();
+  });
+});
+
+describe('loadPlugins — real frogo.json from repo', () => {
+  test('the shipped webhook-plugins/frogo.json loads cleanly', async () => {
+    const repoPluginsDir = path.resolve(__dirname, '..', '..', '..', 'webhook-plugins');
+    const plugins = await loadPlugins(repoPluginsDir);
+    const frogo = plugins.find((p) => p.id === 'frogo');
+    expect(frogo).toBeDefined();
+    expect(frogo?.signature?.header).toBe('x-frogo-signature');
+    expect(frogo?.signature?.scheme).toBe('hmac-sha256');
+    expect(frogo?.signature?.format).toBe('sha256=<hex>');
+    expect(frogo?.events.find((e) => e.type === 'task.created')).toBeDefined();
+    expect(frogo?.events.find((e) => e.type === 'task.updated')).toBeDefined();
+    expect(frogo?.events.find((e) => e.type === 'task.deleted')).toBeDefined();
+    expect(frogo?.events.find((e) => e.type === 'task.commented')).toBeDefined();
+    expect(frogo?.events.find((e) => e.type === 'ping')).toBeDefined();
+  });
 });

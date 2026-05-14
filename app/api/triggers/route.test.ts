@@ -3,9 +3,14 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { GET, POST } from './route';
+import { pluginIndex } from '@/lib/server/webhook-plugins/index';
 
 const tmpWfDir = path.join(os.tmpdir(), `infinite-loop-api-tr-wf-${process.pid}`);
 const tmpTrDir = path.join(os.tmpdir(), `infinite-loop-api-tr-tr-${process.pid}`);
+const tmpPluginDir = path.join(os.tmpdir(), `infinite-loop-api-tr-plugins-${process.pid}`);
+
+// Path to the bundled built-in plugins shipped with the project.
+const builtinPluginsDir = path.resolve(__dirname, '../../../webhook-plugins');
 
 async function writeWorkflow(id: string, inputs: unknown[] = []) {
   await fs.writeFile(
@@ -18,13 +23,32 @@ async function writeWorkflow(id: string, inputs: unknown[] = []) {
   );
 }
 
+async function writePlugin(name: string, body: unknown) {
+  await fs.writeFile(path.join(tmpPluginDir, `${name}.json`), JSON.stringify(body), 'utf8');
+}
+
 beforeEach(async () => {
   await fs.rm(tmpWfDir, { recursive: true, force: true });
   await fs.rm(tmpTrDir, { recursive: true, force: true });
+  await fs.rm(tmpPluginDir, { recursive: true, force: true });
   await fs.mkdir(tmpWfDir, { recursive: true });
   await fs.mkdir(tmpTrDir, { recursive: true });
+  await fs.mkdir(tmpPluginDir, { recursive: true });
+  // Seed built-in plugins so pre-existing tests that use pluginId:'github' keep working.
+  try {
+    for (const file of await fs.readdir(builtinPluginsDir)) {
+      await fs.copyFile(
+        path.join(builtinPluginsDir, file),
+        path.join(tmpPluginDir, file),
+      );
+    }
+  } catch {
+    // builtinPluginsDir may not exist in all environments; that's OK.
+  }
   process.env.INFLOOP_WORKFLOWS_DIR = tmpWfDir;
   process.env.INFLOOP_TRIGGERS_DIR = tmpTrDir;
+  process.env.INFLOOP_WEBHOOK_PLUGINS_DIR = tmpPluginDir;
+  pluginIndex.invalidate();
   await writeWorkflow('wf-a');
   await writeWorkflow('wf-b');
 });
@@ -32,6 +56,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await fs.rm(tmpWfDir, { recursive: true, force: true });
   await fs.rm(tmpTrDir, { recursive: true, force: true });
+  await fs.rm(tmpPluginDir, { recursive: true, force: true });
 });
 
 describe('GET /api/triggers', () => {
@@ -127,5 +152,50 @@ describe('POST /api/triggers', () => {
       }),
     }));
     expect(res.status).toBe(400);
+  });
+
+  test('400 invalid-trigger when signed plugin trigger has no secret and no verifyOptional', async () => {
+    await writePlugin('frogo', {
+      id: 'frogo',
+      displayName: 'Frogo',
+      eventHeader: 'x-frogo-event',
+      signature: { header: 'x-frogo-signature', scheme: 'hmac-sha256', format: 'sha256=<hex>' },
+      events: [{ type: 'task.created', displayName: 'Task created', fields: [] }],
+    });
+    pluginIndex.invalidate();
+    const res = await POST(
+      new Request('http://test/api/triggers', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: 't', enabled: true, workflowId: 'wf-a', pluginId: 'frogo',
+          eventType: 'task.created', match: [], inputs: {},
+        }),
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: 'invalid-trigger', reason: 'secret-required' });
+  });
+
+  test('201 when signed plugin trigger has verifyOptional=true', async () => {
+    await writePlugin('frogo', {
+      id: 'frogo',
+      displayName: 'Frogo',
+      eventHeader: 'x-frogo-event',
+      signature: { header: 'x-frogo-signature', scheme: 'hmac-sha256', format: 'sha256=<hex>' },
+      events: [{ type: 'task.created', displayName: 'Task created', fields: [] }],
+    });
+    pluginIndex.invalidate();
+    const res = await POST(
+      new Request('http://test/api/triggers', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: 't', enabled: true, workflowId: 'wf-a', pluginId: 'frogo',
+          eventType: 'task.created', match: [], inputs: {}, verifyOptional: true,
+        }),
+      }),
+    );
+    expect(res.status).toBe(201);
   });
 });

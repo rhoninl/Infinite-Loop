@@ -1,0 +1,113 @@
+{
+  "id": "frogo",
+  "displayName": "Frogo",
+  "icon": "frogo",
+  "eventHeader": "x-frogo-event",
+  "signature": {
+    "header": "x-frogo-signature",
+    "scheme": "hmac-sha256",
+    "format": "sha256=<hex>"
+  },
+  "events": [
+    {
+      "type": "task.created",
+      "displayName": "Task created",
+      "fields": [
+        { "path": "body.event",                 "type": "string" },
+        { "path": "body.taskId",                "type": "number" },
+        { "path": "body.timestamp",             "type": "string" },
+        { "path": "body.payload.task.id",       "type": "number" },
+        { "path": "body.payload.task.title",    "type": "string" },
+        { "path": "body.payload.task.body",     "type": "string" },
+        { "path": "body.payload.task.status",   "type": "string" },
+        { "path": "body.payload.task.parentId", "type": "number" },
+        { "path": "body.payload.task.createdBy","type": "string" }
+      ],
+      "examplePayload": {
+        "event": "task.created",
+        "taskId": 42,
+        "timestamp": "2026-05-14T12:00:00Z",
+        "payload": {
+          "task": {
+            "id": 42,
+            "title": "Triage incoming bug report",
+            "body": "Repro on staging…",
+            "status": "todo",
+            "parentId": null,
+            "createdBy": "alice"
+          }
+        }
+      }
+    },
+    {
+      "type": "task.updated",
+      "displayName": "Task updated",
+      "fields": [
+        { "path": "body.event",                  "type": "string" },
+        { "path": "body.taskId",                 "type": "number" },
+        { "path": "body.payload.task.id",        "type": "number" },
+        { "path": "body.payload.task.title",     "type": "string" },
+        { "path": "body.payload.task.status",    "type": "string" },
+        { "path": "body.payload.task.assignees", "type": "array"  }
+      ],
+      "examplePayload": {
+        "event": "task.updated",
+        "taskId": 42,
+        "timestamp": "2026-05-14T12:01:00Z",
+        "payload": {
+          "task": { "id": 42, "title": "Triage incoming bug report", "status": "in_progress", "assignees": ["bob"] }
+        }
+      }
+    },
+    {
+      "type": "task.deleted",
+      "displayName": "Task deleted",
+      "fields": [
+        { "path": "body.event",           "type": "string" },
+        { "path": "body.taskId",          "type": "number" },
+        { "path": "body.payload.task.id", "type": "number" }
+      ],
+      "examplePayload": {
+        "event": "task.deleted",
+        "taskId": 42,
+        "timestamp": "2026-05-14T12:05:00Z",
+        "payload": { "task": { "id": 42, "title": "Triage incoming bug report" } }
+      }
+    },
+    {
+      "type": "task.commented",
+      "displayName": "Task commented",
+      "fields": [
+        { "path": "body.event",                  "type": "string" },
+        { "path": "body.taskId",                 "type": "number" },
+        { "path": "body.payload.task.id",        "type": "number" },
+        { "path": "body.payload.comment.id",     "type": "number" },
+        { "path": "body.payload.comment.body",   "type": "string" },
+        { "path": "body.payload.comment.author", "type": "string" }
+      ],
+      "examplePayload": {
+        "event": "task.commented",
+        "taskId": 42,
+        "timestamp": "2026-05-14T12:10:00Z",
+        "payload": {
+          "task": { "id": 42, "title": "Triage incoming bug report" },
+          "comment": { "id": 7, "body": "Found root cause in cache layer.", "author": "alice" }
+        }
+      }
+    },
+    {
+      "type": "ping",
+      "displayName": "Ping (test)",
+      "fields": [
+        { "path": "body.event",           "type": "string" },
+        { "path": "body.payload.message", "type": "string" }
+      ],
+      "examplePayload": {
+        "event": "ping",
+        "taskId": null,
+        "timestamp": "2026-05-14T12:00:00Z",
+        "payload": { "message": "Webhook test from Frogo" }
+      }
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import { evaluatePredicate } from '@/lib/server/predicate';
 import { resolve as resolveTemplate } from '@/lib/server/templating';
 import { resolveRunInputs, WorkflowInputError } from '@/lib/shared/resolve-run-inputs';
 import { getWorkflow } from '@/lib/server/workflow-store';
+import { verifySignature } from '@/lib/server/webhook-signature';
 import type { TriggerPredicate, WebhookTrigger } from '@/lib/shared/trigger';
 import type { Scope, Workflow } from '@/lib/shared/workflow';
 
@@ -49,13 +50,6 @@ export async function POST(req: Request, { params }: RouteParams): Promise<Respo
     }
   }
 
-  let workflow: Workflow;
-  try {
-    workflow = await getWorkflow(hit.workflowId);
-  } catch {
-    return notFound();
-  }
-
   let bodyText: string;
   try {
     bodyText = await req.text();
@@ -64,6 +58,40 @@ export async function POST(req: Request, { params }: RouteParams): Promise<Respo
   }
   if (bodyText.length > MAX_BODY_BYTES) {
     return NextResponse.json({ error: 'payload-too-large' }, { status: 413 });
+  }
+
+  if (plugin.signature) {
+    if (hit.trigger.secret) {
+      const verdict = verifySignature({
+        scheme: plugin.signature.scheme,
+        format: plugin.signature.format,
+        secret: hit.trigger.secret,
+        bodyText,
+        headerValue: req.headers.get(plugin.signature.header),
+      });
+      if (!verdict.ok) {
+        console.error(
+          `[webhook] signature verification failed for trigger ${hit.trigger.id}: ${verdict.reason}`,
+        );
+        return NextResponse.json({ error: 'bad-signature' }, { status: 401 });
+      }
+    } else if (hit.trigger.verifyOptional === true) {
+      console.warn(
+        `[webhook] verifyOptional=true on trigger ${hit.trigger.id} — accepting unsigned request`,
+      );
+    } else {
+      console.error(
+        `[webhook] trigger ${hit.trigger.id} requires a secret (plugin "${plugin.id}" declares signing) and has neither secret nor verifyOptional set`,
+      );
+      return NextResponse.json({ error: 'trigger-misconfigured' }, { status: 500 });
+    }
+  }
+
+  let workflow: Workflow;
+  try {
+    workflow = await getWorkflow(hit.workflowId);
+  } catch {
+    return notFound();
   }
 
   const scope = buildWebhookScope({

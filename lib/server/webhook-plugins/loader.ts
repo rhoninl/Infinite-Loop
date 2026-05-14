@@ -4,6 +4,7 @@ import type {
   PluginEvent,
   PluginField,
   PluginFieldType,
+  PluginSignature,
   WebhookPlugin,
 } from '../../shared/trigger';
 
@@ -59,6 +60,29 @@ function validatePluginEvent(v: unknown, file: string): PluginEvent {
   };
 }
 
+const SIG_FORMATS: PluginSignature['format'][] = ['sha256=<hex>', 'hex', 'base64'];
+
+function validatePluginSignature(v: unknown, file: string): PluginSignature {
+  if (!v || typeof v !== 'object') {
+    throw new Error(`${file}: signature must be an object`);
+  }
+  const s = v as Record<string, unknown>;
+  if (!isStringNonEmpty(s.header)) {
+    throw new Error(`${file}: signature.header must be non-empty string`);
+  }
+  if (s.scheme !== 'hmac-sha256') {
+    throw new Error(`${file}: signature.scheme must be "hmac-sha256"`);
+  }
+  if (typeof s.format !== 'string' || !SIG_FORMATS.includes(s.format as PluginSignature['format'])) {
+    throw new Error(`${file}: signature.format must be one of ${SIG_FORMATS.join(', ')}`);
+  }
+  return {
+    header: s.header.toLowerCase(),
+    scheme: 'hmac-sha256',
+    format: s.format as PluginSignature['format'],
+  };
+}
+
 function validatePlugin(raw: unknown, file: string): WebhookPlugin {
   if (!raw || typeof raw !== 'object') throw new Error(`${file}: not an object`);
   const p = raw as Record<string, unknown>;
@@ -86,8 +110,13 @@ function validatePlugin(raw: unknown, file: string): WebhookPlugin {
     id: p.id,
     displayName: p.displayName,
     icon: typeof p.icon === 'string' ? p.icon : undefined,
-    eventHeader: p.eventHeader as string | undefined,
+    eventHeader: typeof p.eventHeader === 'string'
+      ? p.eventHeader.toLowerCase()
+      : undefined,
     events,
+    signature: p.signature !== undefined
+      ? validatePluginSignature(p.signature, file)
+      : undefined,
   };
 }
 
