@@ -1,0 +1,69 @@
+# Security model
+
+Infinite Loop is a developer tool that runs **on your machine** and can execute:
+
+- Local agent CLIs (`claude`, `codex`, anything you register as a provider).
+- Inline TypeScript and Python (Script nodes).
+- Shell commands (Condition nodes with `kind: command`).
+- Workflows queued by inbound webhooks.
+
+That power means it should be treated like a local code execution surface, not a typical web app.
+
+## Default network posture
+
+Out of the box `server.ts` binds to `0.0.0.0` so the console is reachable from other machines on your LAN. This is convenient on a trusted home/office network, but **anyone who can reach your port can also run your workflows** — including the shell-condition and script nodes.
+
+If you don't need LAN access:
+
+```bash
+HOST=127.0.0.1 bun run dev
+```
+
+## Headless / multi-user posture
+
+Set `INFLOOP_API_TOKEN` to require a bearer token on every `/api/*` call:
+
+```bash
+INFLOOP_API_TOKEN=$(openssl rand -hex 32) bun run start
+```
+
+Caveats:
+
+- The browser UI **stops working** for that server (the UI doesn't forward the token).
+- Use this for Infinite Loop instances dedicated to serving agent / MCP traffic.
+- The token is compared in constant time but is otherwise a plain shared secret — rotate it like a password.
+
+## Webhooks
+
+The unguessable `triggerId` in a webhook URL is the credential. There is **no HMAC signature verification** in the current build.
+
+- Treat webhook URLs like passwords. Don't paste them in shared docs or screenshots.
+- Rotate via the regenerate-id button in the Dispatch form.
+- `INFLOOP_API_TOKEN` does **not** apply to webhook ingress — external services like GitHub can't carry custom auth headers.
+- Signature verification (GitHub HMAC, Stripe signing) is planned; see [the roadmap](../README.md#status).
+
+## Don't expose to the public internet
+
+There is no rate limiting, no per-user auth, and no audit log. If you need a publicly reachable trigger surface, put Infinite Loop behind one of:
+
+- A Cloudflare Tunnel with **Access policies** that gate inbound traffic.
+- A Tailscale ACL-restricted host.
+- A reverse proxy (Caddy / nginx) with HTTP auth and IP allow-lists.
+
+Never punch a port mapping on your router straight to Infinite Loop.
+
+## Workflow files are executable code
+
+A `.workflow.json` file can:
+
+- Run arbitrary shell commands via a Condition.
+- Execute arbitrary TypeScript or Python via a Script node.
+- Invoke any provider you have registered.
+
+**Review every workflow you import or download before running it.** Treat them like you'd treat a Bash script from the internet.
+
+The same applies to `providers/*.json`, `webhook-plugins/*.json`, and `triggers/*.json` — they all influence what Infinite Loop will execute or accept.
+
+## Reporting security issues
+
+Infinite Loop is pre-1.0 and currently has no formal disclosure channel. Open a GitHub issue for non-sensitive concerns; for anything that warrants private disclosure, contact the maintainer directly.

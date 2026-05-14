@@ -8,8 +8,8 @@ import { triggerQueue } from '@/lib/server/trigger-queue-singleton';
 import { saveTrigger } from '@/lib/server/trigger-store';
 import { pluginIndex } from '@/lib/server/webhook-plugins';
 
-const tmpWfDir = path.join(os.tmpdir(), `infloop-webhook-wf-${process.pid}`);
-const tmpTrDir = path.join(os.tmpdir(), `infloop-webhook-tr-${process.pid}`);
+const tmpWfDir = path.join(os.tmpdir(), `infinite-loop-webhook-wf-${process.pid}`);
+const tmpTrDir = path.join(os.tmpdir(), `infinite-loop-webhook-tr-${process.pid}`);
 const tmpPluginDir = path.join(os.tmpdir(), `infinite-loop-webhook-plugins-${process.pid}`);
 
 async function writePlugin(name: string, body: unknown) {

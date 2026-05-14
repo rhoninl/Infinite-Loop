@@ -1076,28 +1076,28 @@ function lookupDotted(scope: Scope, path: string): unknown {
 // IMPORTANT: bump ENGINE_VERSION whenever behavior of WorkflowEngine changes
 // in a way that requires recreating the live instance. Without this, Next.js
 // HMR will pick up the new file but the cached instance under
-// `globalThis.__infloopWorkflowEngine` was constructed with the old class
+// `globalThis.__infiniteLoopWorkflowEngine` was constructed with the old class
 // definition and behaves the old way for the rest of the dev server's life.
 const ENGINE_VERSION = 9; // v9: parallel + subworkflow walkers
 
 declare global {
   // eslint-disable-next-line no-var
-  var __infloopWorkflowEngine:
+  var __infiniteLoopWorkflowEngine:
     | { instance: WorkflowEngine; version: number }
     | undefined;
 }
 
-const cached = globalThis.__infloopWorkflowEngine;
+const cached = globalThis.__infiniteLoopWorkflowEngine;
 const engineInstance =
   cached && cached.version === ENGINE_VERSION
     ? cached.instance
     : new WorkflowEngine();
 
 if (
-  !globalThis.__infloopWorkflowEngine ||
-  globalThis.__infloopWorkflowEngine.version !== ENGINE_VERSION
+  !globalThis.__infiniteLoopWorkflowEngine ||
+  globalThis.__infiniteLoopWorkflowEngine.version !== ENGINE_VERSION
 ) {
-  globalThis.__infloopWorkflowEngine = {
+  globalThis.__infiniteLoopWorkflowEngine = {
     instance: engineInstance,
     version: ENGINE_VERSION,
   };

@@ -1,8 +1,7 @@
 # InfLoop · Multi-Agent Orchestration Design
 
-**Date:** 2026-05-06
 **Status:** Draft for review
-**Builds on:** `2026-04-28-workflow-dag-design.md` (Phase 1 DAG + 6 node types).
+**Builds on:** `workflow-dag-design.md` (Phase 1 DAG + 6 node types).
 **Roadmap mapping:** delivers Phase 2 `Judge` (promoted to first-class node) and Phase 3 `Parallel` + `Subworkflow`, plus a `Team` preset workflow.
 
 ## Goal

@@ -26,7 +26,7 @@ describe('RunView', () => {
       currentWorkflow: null,
     });
     try {
-      window.localStorage.removeItem('infloop:runview:expandSubworkflows');
+      window.localStorage.removeItem('infinite_loop:runview:expandSubworkflows');
     } catch {
       // ignore
     }
@@ -459,7 +459,7 @@ describe('RunView', () => {
     seed([], { runStatus: 'idle' });
     const { unmount } = render(<RunView />);
     fireEvent.click(screen.getByLabelText('toggle subworkflow expansion'));
-    expect(window.localStorage.getItem('infloop:runview:expandSubworkflows')).toBe(
+    expect(window.localStorage.getItem('infinite_loop:runview:expandSubworkflows')).toBe(
       '1',
     );
     unmount();

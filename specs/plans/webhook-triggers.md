@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript on Bun, Next.js 15 App Router, HeroUI components, `bun:test`. No new runtime dependencies.
 
-**Reference spec:** `docs/superpowers/specs/2026-05-13-webhook-trigger-design.md`
+**Reference spec:** `specs/webhook-trigger.md`
 
 ---
 
@@ -87,7 +87,7 @@ export interface Workflow {
   // …existing fields…
   inputs?: WorkflowInputDecl[];
   /** Webhook triggers. Each declares a URL-shaped id, AND-joined predicates,
-   *  and templated input mappings. See docs/superpowers/specs/2026-05-13-webhook-trigger-design.md. */
+   *  and templated input mappings. See specs/webhook-trigger.md. */
   triggers?: WebhookTrigger[];
 }
 ```

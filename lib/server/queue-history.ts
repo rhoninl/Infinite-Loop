@@ -104,13 +104,13 @@ function createSingleton(): QueueHistory {
 
 declare global {
   // eslint-disable-next-line no-var
-  var __infloopQueueHistory: QueueHistory | undefined;
+  var __infiniteLoopQueueHistory: QueueHistory | undefined;
 }
 
 export const queueHistory: QueueHistory =
-  globalThis.__infloopQueueHistory ?? createSingleton();
-if (!globalThis.__infloopQueueHistory) {
-  globalThis.__infloopQueueHistory = queueHistory;
+  globalThis.__infiniteLoopQueueHistory ?? createSingleton();
+if (!globalThis.__infiniteLoopQueueHistory) {
+  globalThis.__infiniteLoopQueueHistory = queueHistory;
 }
 
 export { QueueHistory };

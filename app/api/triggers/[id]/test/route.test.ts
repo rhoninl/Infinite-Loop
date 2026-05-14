@@ -5,8 +5,8 @@ import os from 'node:os';
 import { POST } from './route';
 import { triggerQueue } from '@/lib/server/trigger-queue-singleton';
 
-const tmpWfDir = path.join(os.tmpdir(), `infloop-api-test-wf-${process.pid}`);
-const tmpTrDir = path.join(os.tmpdir(), `infloop-api-test-tr-${process.pid}`);
+const tmpWfDir = path.join(os.tmpdir(), `infinite-loop-api-test-wf-${process.pid}`);
+const tmpTrDir = path.join(os.tmpdir(), `infinite-loop-api-test-tr-${process.pid}`);
 
 async function writeWorkflow(id: string) {
   await fs.writeFile(

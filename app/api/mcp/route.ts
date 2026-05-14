@@ -11,7 +11,13 @@
  * Workflow discovery is per-request so the list is always live.
  *
  * Workflow tools always enqueue (non-blocking). Callers poll with
- * inflooop_get_run_status using the returned queueId.
+ * infinite_loop_get_run_status using the returned queueId.
+ *
+ * Backward compatibility: the historical tool prefix was `inflooop_*` (triple
+ * `o`) and the server identifier was `inflooop`. Existing client configs that
+ * still call those tool names continue to work — `tools/call` accepts both
+ * prefixes and dispatches identically. The `tools/list` response now returns
+ * only the canonical `infinite_loop_*` names.
  */
 
 import { NextResponse } from 'next/server';
@@ -39,12 +45,12 @@ const MCP_PROTOCOL_VERSION = '2024-11-05';
 
 const UTILITY_TOOLS: McpToolSpec[] = [
   {
-    name: 'inflooop_get_run_status',
+    name: 'infinite_loop_get_run_status',
     description:
-      'Fetch the status and outputs of an InfLoop run, identified by either ' +
-      '{workflowId, runId} or {queueId}. Use queueId to track a call returned ' +
-      'by a workflow tool (state goes queued → started; once started the ' +
-      'response includes runId and run outputs).',
+      'Fetch the status and outputs of an Infinite Loop run, identified by ' +
+      'either {workflowId, runId} or {queueId}. Use queueId to track a call ' +
+      'returned by a workflow tool (state goes queued → started; once started ' +
+      'the response includes runId and run outputs).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -59,8 +65,8 @@ const UTILITY_TOOLS: McpToolSpec[] = [
     },
   },
   {
-    name: 'inflooop_list_runs',
-    description: 'List recent InfLoop runs, optionally filtered by workflowId.',
+    name: 'infinite_loop_list_runs',
+    description: 'List recent Infinite Loop runs, optionally filtered by workflowId.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -70,8 +76,9 @@ const UTILITY_TOOLS: McpToolSpec[] = [
     },
   },
   {
-    name: 'inflooop_cancel_run',
-    description: 'Cancel an in-flight InfLoop run, if runId matches the current run.',
+    name: 'infinite_loop_cancel_run',
+    description:
+      'Cancel an in-flight Infinite Loop run, if runId matches the current run.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -83,11 +90,11 @@ const UTILITY_TOOLS: McpToolSpec[] = [
     },
   },
   {
-    name: 'inflooop_list_queue',
+    name: 'infinite_loop_list_queue',
     description:
       'List the current trigger queue (pending workflow runs, in order). ' +
       'Items already started or finished do not appear here — use ' +
-      'inflooop_get_run_status with a queueId to track those.',
+      'infinite_loop_get_run_status with a queueId to track those.',
     inputSchema: {
       type: 'object',
       properties: {},
@@ -95,7 +102,7 @@ const UTILITY_TOOLS: McpToolSpec[] = [
     },
   },
   {
-    name: 'inflooop_remove_from_queue',
+    name: 'infinite_loop_remove_from_queue',
     description:
       'Remove a queued workflow run by queueId before it starts. Returns ' +
       '{removed:false} if the item has already started or never existed.',
@@ -109,6 +116,18 @@ const UTILITY_TOOLS: McpToolSpec[] = [
     },
   },
 ];
+
+/**
+ * Map legacy `inflooop_*` tool names to their canonical `infinite_loop_*`
+ * equivalents. Used by `tools/call` so existing client configs continue to
+ * work after the rename. Legacy names are NOT advertised in `tools/list`.
+ */
+function normalizeUtilityToolName(name: string): string {
+  if (name.startsWith('inflooop_')) {
+    return 'infinite_loop_' + name.slice('inflooop_'.length);
+  }
+  return name;
+}
 
 // ─── Workflow discovery ───────────────────────────────────────────────────────
 
@@ -195,7 +214,7 @@ export async function POST(req: Request) {
   if (method === 'initialize') {
     return jsonRpcSuccess(id, {
       protocolVersion: MCP_PROTOCOL_VERSION,
-      serverInfo: { name: 'inflooop', version: '0.1.0' },
+      serverInfo: { name: 'infinite_loop', version: '0.1.0' },
       capabilities: { tools: {} },
     });
   }
@@ -213,15 +232,20 @@ export async function POST(req: Request) {
   // ── tools/call ──────────────────────────────────────────────────────────────
   if (method === 'tools/call') {
     const toolParams = params as { name?: string; arguments?: Record<string, unknown> };
-    const name = toolParams.name;
+    const rawName = toolParams.name;
     const args = toolParams.arguments ?? {};
 
-    if (typeof name !== 'string') {
+    if (typeof rawName !== 'string') {
       return jsonRpcError(id, -32602, 'tools/call requires params.name');
     }
 
+    // Normalize legacy `inflooop_*` aliases to canonical `infinite_loop_*`
+    // names for utility-tool dispatch. Per-workflow tool names are not
+    // affected by this rewrite — they're matched as-is below.
+    const name = normalizeUtilityToolName(rawName);
+
     // Utility tools.
-    if (name === 'inflooop_get_run_status') {
+    if (name === 'infinite_loop_get_run_status') {
       const out = await getRunStatus(
         args as { workflowId?: string; runId?: string; queueId?: string },
       );
@@ -230,25 +254,25 @@ export async function POST(req: Request) {
         isError: out.status === 'error',
       });
     }
-    if (name === 'inflooop_list_runs') {
+    if (name === 'infinite_loop_list_runs') {
       const out = await listRuns(args as { workflowId?: string });
       return jsonRpcSuccess(id, {
         content: [{ type: 'text', text: JSON.stringify(out, null, 2) }],
       });
     }
-    if (name === 'inflooop_cancel_run') {
+    if (name === 'infinite_loop_cancel_run') {
       const out = await cancelRun(args as { workflowId: string; runId: string });
       return jsonRpcSuccess(id, {
         content: [{ type: 'text', text: JSON.stringify(out, null, 2) }],
       });
     }
-    if (name === 'inflooop_list_queue') {
+    if (name === 'infinite_loop_list_queue') {
       const out = listQueue();
       return jsonRpcSuccess(id, {
         content: [{ type: 'text', text: JSON.stringify(out, null, 2) }],
       });
     }
-    if (name === 'inflooop_remove_from_queue') {
+    if (name === 'infinite_loop_remove_from_queue') {
       const out = removeFromQueue(args as { queueId: string });
       return jsonRpcSuccess(id, {
         content: [{ type: 'text', text: JSON.stringify(out, null, 2) }],

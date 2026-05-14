@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript on Bun, Next.js 15 App Router, React 19, Zustand store, plain HTML + project CSS variables for UI, `bun:test`.
 
-**Reference spec:** `docs/superpowers/specs/2026-05-13-dispatch-v2-design.md`
+**Reference spec:** `specs/dispatch-v2.md`
 
 ---
 

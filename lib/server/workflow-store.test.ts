@@ -48,7 +48,7 @@ function makeWorkflow(overrides: Partial<Workflow> = {}): Workflow {
 }
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infloop-wfstore-'));
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infinite-loop-wfstore-'));
   prevEnv = process.env.INFLOOP_WORKFLOWS_DIR;
   process.env.INFLOOP_WORKFLOWS_DIR = tmpDir;
 });
@@ -64,7 +64,7 @@ afterEach(async () => {
 
 describe('workflow-store', () => {
   it('listWorkflows returns [] when the directory is empty (and creates it)', async () => {
-    const fresh = fs.mkdtempSync(path.join(os.tmpdir(), 'infloop-wfstore-empty-'));
+    const fresh = fs.mkdtempSync(path.join(os.tmpdir(), 'infinite-loop-wfstore-empty-'));
     const nested = path.join(fresh, 'does-not-exist-yet');
     process.env.INFLOOP_WORKFLOWS_DIR = nested;
 
@@ -291,7 +291,7 @@ describe('saveWorkflow migration: legacy triggers[] → trigger-store', () => {
   let tmpTrDir: string;
 
   beforeEach(async () => {
-    tmpTrDir = path.join(os.tmpdir(), `infloop-wfstore-triggers-${process.pid}`);
+    tmpTrDir = path.join(os.tmpdir(), `infinite-loop-wfstore-triggers-${process.pid}`);
     process.env.INFLOOP_TRIGGERS_DIR = tmpTrDir;
     await fsp.rm(tmpTrDir, { recursive: true, force: true });
     await fsp.mkdir(tmpTrDir, { recursive: true });

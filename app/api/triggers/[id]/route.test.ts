@@ -5,9 +5,9 @@ import os from 'node:os';
 import { GET, PUT, DELETE } from './route';
 import { pluginIndex } from '@/lib/server/webhook-plugins/index';
 
-const tmpWfDir = path.join(os.tmpdir(), `infloop-api-tr-id-wf-${process.pid}`);
-const tmpTrDir = path.join(os.tmpdir(), `infloop-api-tr-id-tr-${process.pid}`);
-const tmpPluginDir = path.join(os.tmpdir(), `infloop-api-tr-id-plugins-${process.pid}`);
+const tmpWfDir = path.join(os.tmpdir(), `infinite-loop-api-tr-id-wf-${process.pid}`);
+const tmpTrDir = path.join(os.tmpdir(), `infinite-loop-api-tr-id-tr-${process.pid}`);
+const tmpPluginDir = path.join(os.tmpdir(), `infinite-loop-api-tr-id-plugins-${process.pid}`);
 
 // Path to the bundled built-in plugins shipped with the project.
 const builtinPluginsDir = path.resolve(__dirname, '../../../../webhook-plugins');

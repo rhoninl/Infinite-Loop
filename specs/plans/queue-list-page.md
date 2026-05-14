@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js App Router, React 18 client components, Bun test runner, `@testing-library/react`, semantic CSS classes in `app/globals.css` (no HeroUI, no inline styles).
 
-**Spec:** `docs/superpowers/specs/2026-05-13-queue-list-page-design.md`
+**Spec:** `specs/queue-list-page.md`
 
 ---
 

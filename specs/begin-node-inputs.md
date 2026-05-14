@@ -1,7 +1,6 @@
 # Begin-Node Inputs
 
 **Status:** Design
-**Date:** 2026-05-12
 **Author:** rhoninlee (with Claude)
 
 ## Problem

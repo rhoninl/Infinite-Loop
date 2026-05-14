@@ -9,8 +9,8 @@ import { eventBus } from './event-bus';
 import { saveTrigger } from './trigger-store';
 import type { WorkflowEvent } from '../shared/workflow';
 
-const tmpWfDir = path.join(os.tmpdir(), `infloop-webhook-int-wf-${process.pid}`);
-const tmpTrDir = path.join(os.tmpdir(), `infloop-webhook-int-tr-${process.pid}`);
+const tmpWfDir = path.join(os.tmpdir(), `infinite-loop-webhook-int-wf-${process.pid}`);
+const tmpTrDir = path.join(os.tmpdir(), `infinite-loop-webhook-int-tr-${process.pid}`);
 
 beforeEach(async () => {
   await fs.rm(tmpWfDir, { recursive: true, force: true });

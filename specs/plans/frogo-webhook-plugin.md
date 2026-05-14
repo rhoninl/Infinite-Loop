@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, Bun test runner (`bun:test`), Next.js 15 route handlers, `node:crypto` for HMAC.
 
-**Spec:** `docs/superpowers/specs/2026-05-14-frogo-webhook-plugin-design.md`
+**Spec:** `specs/frogo-webhook-plugin.md`
 
 **Convention notes (verified before writing this plan):**
 - The existing `WebhookTrigger` already includes `workflowId`, `pluginId`, `eventType`, `createdAt`, `updatedAt` beyond what the spec sketched. New fields just add onto it.

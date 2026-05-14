@@ -2,11 +2,11 @@
 
 **Status:** Design
 **Author:** rhoninlee (with Claude)
-**Related:** [`2026-05-13-webhook-trigger-design.md`](./2026-05-13-webhook-trigger-design.md)
+**Related:** [`webhook-trigger.md`](./webhook-trigger.md)
 
 ## Problem
 
-InfLoop's webhook trigger system (see `2026-05-13-webhook-trigger-design.md`) is generic:
+InfLoop's webhook trigger system (see `webhook-trigger.md`) is generic:
 any service that POSTs JSON can drive a workflow, and a plugin file in
 `webhook-plugins/` declares the event header, event types, and field
 paths for templating and autocomplete. Today only `github.json` exists.
@@ -47,7 +47,7 @@ out for free once the plugin file exists.
   timestamp window). Frogo does sign delivery via `X-Frogo-Timestamp`
   but the timestamp is not part of the HMAC input today.
 - **No trigger-editing GUI.** Per current state of
-  `docs/superpowers/specs/2026-05-13-webhook-trigger-design.md`, triggers are authored by editing
+  `specs/webhook-trigger.md`, triggers are authored by editing
   workflow JSON. The new `secret` and `verifyOptional` fields live in
   the same JSON, surfaced through the save-time validation in
   `app/api/triggers/route.ts` (422 on misconfig).
@@ -115,7 +115,7 @@ Extend `validatePlugin` in `loader.ts` to:
 
 The field is optional. Plugins that omit it (today: `github.json`) keep
 existing behavior — no verification step. This preserves
-`2026-05-13-webhook-trigger-design.md`'s "URL is the secret" model as the floor.
+`webhook-trigger.md`'s "URL is the secret" model as the floor.
 
 ### 2. Per-trigger secret and opt-out
 
@@ -339,7 +339,7 @@ correct.
 - `app/api/webhook/[triggerId]/route.ts` — insert verification gate after body read, before scope construction; emit `500 trigger-misconfigured` for the secret-required-but-missing case
 - `app/api/webhook/[triggerId]/route.test.ts` — extend with signed-request cases (good, bad, missing header, misconfigured trigger, verifyOptional)
 - `app/api/triggers/route.ts` and `app/api/triggers/[id]/route.ts` — save-time validation rejecting misconfigured triggers (422)
-- `docs/superpowers/specs/2026-05-14-frogo-webhook-plugin-design.md` — this document
+- `specs/frogo-webhook-plugin.md` — this document
 
 ## Validation plan
 

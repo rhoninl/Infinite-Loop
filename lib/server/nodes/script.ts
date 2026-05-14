@@ -324,7 +324,7 @@ export const scriptExecutor: NodeExecutor = {
 
     let tmpDir: string | undefined;
     try {
-      tmpDir = await mkdtemp(join(tmpdir(), 'infloop-script-'));
+      tmpDir = await mkdtemp(join(tmpdir(), 'infinite-loop-script-'));
       const file = join(tmpDir, `script.${extFor(language)}`);
       const source = buildWrapperSource(language, code, argNames);
       await writeFile(file, source, 'utf8');

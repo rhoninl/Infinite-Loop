@@ -11,8 +11,8 @@ import {
 } from './trigger-store';
 import type { WebhookTrigger } from '../shared/trigger';
 
-const tmpWfDir = path.join(os.tmpdir(), `infloop-tstore-wf-${process.pid}`);
-const tmpTrDir = path.join(os.tmpdir(), `infloop-tstore-tr-${process.pid}`);
+const tmpWfDir = path.join(os.tmpdir(), `infinite-loop-tstore-wf-${process.pid}`);
+const tmpTrDir = path.join(os.tmpdir(), `infinite-loop-tstore-tr-${process.pid}`);
 
 async function writeWorkflow(id: string, inputs: unknown[] = []) {
   await fs.writeFile(

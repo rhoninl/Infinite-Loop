@@ -22,7 +22,7 @@ const httpServer = createServer((req, res) => {
 });
 
 const port = await listenWithFallback(httpServer, startPort, host, MAX_PORT_FALLBACK);
-console.log(`InfLoop ready on http://${host}:${port}`);
+console.log(`Infinite Loop ready on http://${host}:${port}`);
 if (port !== startPort) {
   console.log(`  (port ${startPort} was in use; fell through to ${port})`);
 }

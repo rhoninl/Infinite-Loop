@@ -135,15 +135,26 @@ describe('POST /api/mcp — tools/list', () => {
     expect(Array.isArray(body.result.tools)).toBe(true);
   });
 
-  it('always includes the three inflooop_* utility tools', async () => {
+  it('always includes the canonical infinite_loop_* utility tools', async () => {
     const res = await POST(
       mcpRequest({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
     );
     const body = (await res.json()) as { result: { tools: Array<{ name: string }> } };
     const names = body.result.tools.map((t) => t.name);
-    expect(names).toContain('inflooop_get_run_status');
-    expect(names).toContain('inflooop_list_runs');
-    expect(names).toContain('inflooop_cancel_run');
+    expect(names).toContain('infinite_loop_get_run_status');
+    expect(names).toContain('infinite_loop_list_runs');
+    expect(names).toContain('infinite_loop_cancel_run');
+  });
+
+  it('does not advertise the legacy inflooop_* names in tools/list', async () => {
+    const res = await POST(
+      mcpRequest({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
+    );
+    const body = (await res.json()) as { result: { tools: Array<{ name: string }> } };
+    const names = body.result.tools.map((t) => t.name);
+    expect(names).not.toContain('inflooop_get_run_status');
+    expect(names).not.toContain('inflooop_list_runs');
+    expect(names).not.toContain('inflooop_cancel_run');
   });
 
   it('includes discovered workflow tools alongside utility tools', async () => {
@@ -156,8 +167,28 @@ describe('POST /api/mcp — tools/list', () => {
     const body = (await res.json()) as { result: { tools: Array<{ name: string }> } };
     const names = body.result.tools.map((t) => t.name);
     expect(names).toContain('wf_sample');
-    // Utility tools still present.
-    expect(names).toContain('inflooop_get_run_status');
+    // Canonical utility tools still present.
+    expect(names).toContain('infinite_loop_get_run_status');
+  });
+
+  it('still dispatches calls made with the legacy inflooop_* names', async () => {
+    const res = await POST(
+      mcpRequest({
+        jsonrpc: '2.0',
+        id: 99,
+        method: 'tools/call',
+        params: { name: 'inflooop_list_queue', arguments: {} },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      result?: { content?: Array<{ type: string; text: string }>; isError?: boolean };
+      error?: { code: number; message: string };
+    };
+    // Legacy names dispatch the same handler — must not return Unknown tool / RPC error.
+    expect(body.error).toBeUndefined();
+    expect(body.result?.isError).not.toBe(true);
+    expect(body.result?.content?.[0]?.type).toBe('text');
   });
 });
 

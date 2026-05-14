@@ -18,8 +18,8 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata = {
-  title: 'InfLoop · Console',
-  description: 'Drive Claude Code in a loop until a condition is met.',
+  title: 'Infinite Loop · Console',
+  description: 'Visual orchestration for AI agents — loop, branch, fan out, judge, and replay.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -33,11 +33,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {/*
          * Pre-paint theme application — must run before <body> renders to
          * avoid a flash of the wrong theme. Reads the user's saved choice
-         * (`infloop:theme`), falling back to OS preference.
+         * (`infinite_loop:theme`), falling back to OS preference.
          */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=localStorage.getItem('infloop:theme');var t=s||(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t;}catch(e){document.documentElement.dataset.theme='dark';}})();`,
+            __html: `(function(){try{var s=localStorage.getItem('infinite_loop:theme');var t=s||(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t;}catch(e){document.documentElement.dataset.theme='dark';}})();`,
           }}
         />
       </head>
