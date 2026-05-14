@@ -21,6 +21,7 @@ import HermesConnectionsModal from './HermesConnectionsModal';
 import { refreshProviders } from '@/lib/client/use-providers';
 
 const DRAG_MIME = 'application/x-infinite-loop-node';
+const ADD_NODE_EVENT = 'infinite-loop:add-node';
 
 interface DragPayload {
   type: NodeType;
@@ -161,6 +162,15 @@ function handleDragStart(
   }
 }
 
+function handlePaletteItemClick(item: PaletteItem): void {
+  if (typeof window === 'undefined') return;
+  const isMobileLayout = window.matchMedia('(max-width: 920px)').matches;
+  if (!isMobileLayout) return;
+  const payload: DragPayload = { type: item.type };
+  if (item.providerId) payload.providerId = item.providerId;
+  window.dispatchEvent(new CustomEvent(ADD_NODE_EVENT, { detail: payload }));
+}
+
 export default function Palette() {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
@@ -211,8 +221,9 @@ export default function Palette() {
   );
 
   return (
-    <aside aria-label="palette" className="palette">
+    <>
       <style>{paletteCss}</style>
+      <aside aria-label="palette" className="palette">
       {categories.map((category) => (
         <section key={category.heading} className="palette-section">
           <h3 className="section-eyebrow">{category.heading}</h3>
@@ -237,6 +248,7 @@ export default function Palette() {
                     // hover (native OS tooltip) instead of taking a row
                     // of vertical space in the card.
                     title={item.description}
+                    onClick={() => handlePaletteItemClick(item)}
                     onDragStart={(e) => handleDragStart(e, item)}
                   >
                     <span className="palette-icon" aria-hidden="true">
@@ -330,6 +342,7 @@ export default function Palette() {
                                 draggable
                                 aria-label={`add ${item.providerId} agent node`}
                                 title={item.description}
+                                onClick={() => handlePaletteItemClick(item)}
                                 onDragStart={(e) => handleDragStart(e, item)}
                               >
                                 <span
@@ -377,7 +390,8 @@ export default function Palette() {
           onConnectionsChanged={loadProviders}
         />
       )}
-    </aside>
+      </aside>
+    </>
   );
 }
 
@@ -618,5 +632,78 @@ const paletteCss = `
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+
+@media (max-width: 920px) {
+  .palette {
+    grid-area: palette;
+    height: min(220px, 36dvh);
+    min-height: 168px;
+    padding: 10px 10px 12px;
+    border-right: 0;
+    border-top: 1px solid var(--border-strong);
+    overflow-x: hidden;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    scrollbar-width: thin;
+  }
+  .palette-section {
+    min-width: 0;
+    overflow: visible;
+    padding-right: 0;
+  }
+  .palette .section-eyebrow {
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 10.5px;
+    letter-spacing: 0.22em;
+    line-height: 1.2;
+    min-width: 0;
+  }
+  .palette .section-eyebrow::before {
+    flex: 0 0 auto;
+  }
+  .palette .section-eyebrow::after {
+    min-width: 24px;
+  }
+  .palette-list {
+    gap: 1px;
+  }
+  .palette-item {
+    min-height: 30px;
+    grid-template-columns: 10px 18px minmax(0, 1fr);
+    gap: 7px;
+    padding: 5px 8px 5px 4px;
+  }
+  .palette-icon {
+    font-size: 15px;
+    margin-left: -4px;
+  }
+  .palette-name {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+  }
+  .palette-empty {
+    padding: 4px 8px;
+    font-size: 11.5px;
+  }
+  .palette-subgroup {
+    margin-top: 5px;
+    padding-top: 4px;
+  }
+  .palette-subgroup-head {
+    padding: 3px 6px 3px 0;
+    font-size: 10px;
+  }
+  .palette-conn-head {
+    padding: 3px 8px 1px;
+    font-size: 10px;
+  }
+  .palette-manage {
+    margin: 4px 8px 0;
+    font-size: 10.5px;
+  }
 }
 `;

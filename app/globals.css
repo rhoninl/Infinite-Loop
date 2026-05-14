@@ -145,6 +145,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: 'ss01', 'ss02', 'cv01';
   letter-spacing: 0.01em;
+  overflow-x: hidden;
 }
 
 body {
@@ -1078,6 +1079,25 @@ button.event-card-head-toggle:focus-visible {
   white-space: nowrap;
   min-width: 0;
 }
+.provider-icon-mask {
+  display: inline-block;
+  background-color: currentColor;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+.provider-icon-img,
+.provider-icon-fallback {
+  display: inline-block;
+  flex: 0 0 auto;
+  line-height: 1;
+}
+.provider-icon-img {
+  object-fit: contain;
+}
 /* Per-node-type tinting — each node card on the canvas gets its title and
  * a soft left-edge stripe in its own color, so a workflow reads as a
  * keyboard of distinct instruments rather than a sea of identical blocks.
@@ -1306,6 +1326,7 @@ button.event-card-head-toggle:focus-visible {
 
 .wf-menu-list {
   max-height: 320px;
+  overflow-x: hidden;
   overflow-y: auto;
   border-bottom: 1px solid var(--border);
 }
@@ -1364,32 +1385,63 @@ button.event-card-head-toggle:focus-visible {
   outline-offset: -2px;
 }
 
-/* Per-row delete: a × glyph that appears only when the row is hovered or
- * keyboard-focused. Keeps the rest list calm — no permanent destructive
- * affordance. confirm() prompt fires on click. */
-.wf-menu-row-delete {
+.wf-menu-row-edit {
+  cursor: default;
+}
+.wf-menu-row-input {
   appearance: none;
   background: transparent;
   border: 0;
-  align-self: stretch;
+  width: 100%;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--fg);
+  outline: 1px dashed var(--accent-live);
+  outline-offset: 2px;
+  padding: 1px 2px;
+  text-transform: none;
+}
+
+/* Per-row actions: edit and delete live together at the right edge. They
+ * appear on hover/focus so the list stays calm, but keyboard focus still
+ * reveals them independently. */
+.wf-menu-row-actions {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+}
+.wf-menu-row-action {
+  appearance: none;
+  background: transparent;
+  border: 0;
   width: 32px;
   flex: 0 0 32px;
-  font-family: var(--mono);
-  font-size: 16px;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--fg-muted);
   cursor: pointer;
   opacity: 0;
   transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
 }
-.wf-menu-row:hover .wf-menu-row-delete { opacity: 1; }
+.wf-menu-row:hover .wf-menu-row-action,
+.wf-menu-row:focus-within .wf-menu-row-action {
+  opacity: 1;
+}
+.wf-menu-row-rename:hover {
+  color: var(--accent-live);
+  background: rgba(255, 158, 100, 0.08);
+}
 .wf-menu-row-delete:hover {
   color: var(--accent-err);
   background: rgba(247, 118, 142, 0.08);
 }
-.wf-menu-row-delete:focus-visible {
+.wf-menu-row-action:focus-visible {
   opacity: 1;
-  outline: 1px solid var(--accent-err);
+  outline: 1px solid currentColor;
   outline-offset: -2px;
 }
 
@@ -2155,6 +2207,13 @@ input[type='number'].no-spin {
 }
 .folder-picker-row:hover .folder-picker-row-icon { color: var(--accent-live); }
 
+.folder-picker-row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .folder-picker-actions {
   display: flex;
   justify-content: flex-end;
@@ -2253,6 +2312,9 @@ input[type='number'].no-spin {
 .btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent-live) 84%, white 16%);
   border-color: color-mix(in srgb, var(--accent-live) 84%, white 16%);
+}
+.btn-active {
+  box-shadow: inset 0 -2px 0 var(--accent-on-live-soft);
 }
 .btn:active:not(:disabled) {
   transform: translateY(1px);
@@ -2659,9 +2721,17 @@ input[type='number'].no-spin {
 @media (max-width: 920px) {
   :root {
     --rail-w: 100%;
+    --palette-w: 100%;
+    --top-bar-h: 112px;
   }
   .top-bar {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    height: var(--top-bar-h);
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: 44px 68px;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
   }
   .top-bar .crumbs {
     /* Keep the workflow menu reachable on narrow viewports — it's the only
@@ -2670,33 +2740,146 @@ input[type='number'].no-spin {
     padding-inline: 12px;
     gap: 12px;
     min-width: 0;
+    height: 100%;
   }
   .top-bar .crumbs .wf-menu-trigger-name {
-    max-width: 14ch;
+    max-width: min(18ch, calc(100vw - 220px));
+  }
+  .top-bar .crumbs .wf-menu {
+    width: auto;
+    max-width: min(100%, 300px);
+    min-width: 0;
+  }
+  .top-bar .crumbs .wf-menu-trigger {
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .top-bar .crumbs .wf-menu-rename-input {
+    width: min(100%, 300px);
+    min-width: 0;
+    max-width: 100%;
+  }
+  .top-bar .crumbs .wf-menu-panel {
+    position: fixed;
+    top: var(--top-bar-h);
+    left: 8px;
+    right: 8px;
+    width: auto;
+    min-width: 0;
+    max-width: calc(100vw - 16px);
+    max-height: min(360px, calc(100dvh - var(--top-bar-h) - 12px));
+    z-index: 40;
+  }
+  .top-bar .crumbs .wf-menu-list {
+    max-height: min(300px, calc(100dvh - var(--top-bar-h) - 58px));
   }
   .brand {
-    padding-inline: 16px;
+    padding-inline: 12px;
+    height: 100%;
   }
+  .brand-mark {
+    width: 8px;
+    height: 8px;
+  }
+  .brand-text {
+    font-size: 13px;
+    letter-spacing: 0.14em;
+  }
+  .brand-text em { display: none; }
   .actions {
-    padding-inline: 16px;
-    gap: 10px;
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-rows: 24px;
+    align-content: start;
+    align-items: stretch;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    padding: 6px 8px 8px;
+    gap: 4px 6px;
+    overflow: hidden;
+    border-top: 1px solid var(--border);
+  }
+  .actions .btn,
+  .actions .theme-toggle,
+  .actions .pill,
+  .actions .queue-badge,
+  .actions .run-group {
+    width: 100%;
+    min-width: 0;
+  }
+  .actions .btn,
+  .actions .theme-toggle,
+  .actions .pill,
+  .actions .queue-badge {
+    height: 24px;
+    padding-inline: 6px;
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+  .actions .theme-toggle {
+    gap: 5px;
+  }
+  .actions .theme-toggle-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .actions .pill {
+    gap: 5px;
+  }
+  .actions .run-group {
+    display: flex;
+  }
+  .actions .run-group > .btn:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .actions .run-chevron {
+    flex: 0 0 24px;
+    padding-inline: 0;
   }
   .workspace {
     grid-template-columns: 1fr;
+    height: calc(100dvh - var(--top-bar-h));
+    min-height: calc(100dvh - var(--top-bar-h));
+    overflow: hidden;
   }
-  /* Inf·Loop is a desktop tool; below the breakpoint, keep the 3-pane
-   * geometry intact and let the workspace scroll horizontally so the
-   * canvas / palette / right panel each retain their working dimensions
-   * instead of stacking and squashing the ReactFlow viewport to zero. */
+  .canvas-shell {
+    grid-area: canvas;
+    min-width: 0;
+    min-height: 0;
+  }
   .workspace-tri {
-    grid-template-columns: var(--palette-w) minmax(360px, 1fr) 5px var(--right-w);
-    overflow-x: auto;
-    overflow-y: hidden;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(280px, 1fr) minmax(220px, 34vh) auto;
+    grid-template-areas:
+      "canvas"
+      "panel"
+      "palette";
   }
   .workspace-bi {
-    grid-template-columns: var(--palette-w) minmax(360px, 1fr);
-    overflow-x: auto;
-    overflow-y: hidden;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "canvas"
+      "palette";
+  }
+  .resize-gutter {
+    display: none;
+  }
+  .config-stub,
+  .run-view,
+  .run-view-stub {
+    grid-area: panel;
+    height: auto;
+    min-height: 0;
+    overflow: auto;
+    border-top: 1px solid var(--border);
+    border-left: 0;
   }
   .rail {
     position: static;
@@ -3108,6 +3291,16 @@ input[type='number'].no-spin {
   letter-spacing: 0.02em;
   color: var(--fg);
 }
+.modal-head {
+  margin: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--border);
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--fg);
+}
 .modal .field {
   gap: 4px;
 }
@@ -3371,10 +3564,17 @@ input[type='number'].no-spin {
 
 .queue-page-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-4, 16px);
   margin-bottom: var(--space-5, 20px);
+}
+
+.queue-page-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 
 .queue-page-header h1 {
@@ -3382,9 +3582,23 @@ input[type='number'].no-spin {
   font-size: var(--font-size-h1, 24px);
 }
 
+.queue-back {
+  flex: 0 0 auto;
+}
+
 .queue-count {
   color: var(--fg-muted);
   font-variant-numeric: tabular-nums;
+}
+
+.queue-notice {
+  margin: 0 0 var(--space-4, 16px);
+  padding: 8px 10px;
+  border: 1px dashed var(--border-strong);
+  background: var(--bg-input);
+  color: var(--fg-soft);
+  font-family: var(--mono);
+  font-size: 12px;
 }
 
 .queue-empty {
@@ -3422,6 +3636,71 @@ input[type='number'].no-spin {
 
 .queue-row-actions .btn + .btn {
   margin-left: var(--space-2, 8px);
+}
+
+.queue-input-toggle[aria-expanded='true'] {
+  color: var(--accent-live);
+  border-color: var(--accent-live);
+}
+
+.queue-input-row td {
+  padding-top: 0;
+  background: var(--bg-input);
+}
+
+.queue-input-empty {
+  margin: 0;
+  color: var(--fg-muted);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.queue-input-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.queue-input-item {
+  display: grid;
+  grid-template-columns: minmax(80px, 180px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.queue-input-item dt {
+  color: var(--accent-live);
+  overflow-wrap: anywhere;
+}
+
+.queue-input-item dd {
+  margin: 0;
+  color: var(--fg-soft);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 720px) {
+  .queue-page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .queue-table {
+    display: block;
+    overflow-x: auto;
+  }
+  .queue-row-actions {
+    white-space: normal;
+  }
+  .queue-row-actions .btn {
+    margin-block: 2px;
+  }
+  .queue-input-item {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
 }
 
 /* ─── Dispatch (Dispatch v2) ─────────────────────────────────────────── */
@@ -3503,7 +3782,16 @@ input[type='number'].no-spin {
 .dsp-pip.on { background: var(--accent-ok); }
 .dsp-pip.off { background: var(--fg-dim); }
 
-.dsp-list-name { font-weight: 600; }
+.dsp-list-name {
+  font-weight: 600;
+}
+.dsp-list-name,
+.dsp-list-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .dsp-list-meta { font-size: 11px; color: var(--fg-soft); }
 
 .dsp-detail {
@@ -3547,6 +3835,7 @@ input[type='number'].no-spin {
   margin: 0;
   font-family: var(--mono);
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .dsp-label {
@@ -3682,6 +3971,11 @@ input[type='number'].no-spin {
   padding: 8px;
   background: var(--bg-input);
   border: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.trg-form-modal {
+  width: min(720px, calc(100vw - 32px));
 }
 
 /* ─── Field picker ─────────────────────────────────────────────────── */
@@ -3743,6 +4037,10 @@ input[type='number'].no-spin {
   font-family: var(--mono);
   font-size: 12px;
   cursor: help;
+}
+
+.template-field {
+  width: 100%;
 }
 
 /* ─── DispatchView filter chip ───────────────────────────────────── */

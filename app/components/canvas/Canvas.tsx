@@ -71,6 +71,7 @@ export interface DropPayload {
 }
 
 const DROP_MIME = 'application/x-infinite-loop-node';
+const ADD_NODE_EVENT = 'infinite-loop:add-node';
 
 /** Random hex id chunk (no nanoid dep). */
 function rid(): string {
@@ -529,6 +530,21 @@ function CanvasInner() {
     [addNode, addChildNode, currentWorkflow],
   );
 
+  useEffect(() => {
+    const onAddNode = (event: Event) => {
+      const payload = (event as CustomEvent<DropPayload>).detail;
+      if (!payload?.type) return;
+      const canvas = document.querySelector('.canvas-shell');
+      const rect = canvas?.getBoundingClientRect();
+      const point = rect
+        ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+        : { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+      placeNodeFromPayload(payload, screenToFlowPosition(point));
+    };
+    window.addEventListener(ADD_NODE_EVENT, onAddNode);
+    return () => window.removeEventListener(ADD_NODE_EVENT, onAddNode);
+  }, [placeNodeFromPayload, screenToFlowPosition]);
+
   const onDragEnter = useCallback((e: DragEvent<HTMLDivElement>) => {
     // Browsers default to "drop forbidden" unless dragenter AND dragover both
     // call preventDefault().
@@ -637,6 +653,7 @@ function CanvasInner() {
   return (
     <div
       aria-label="canvas"
+      className="canvas-shell"
       style={{ width: '100%', height: '100%', position: 'relative' }}
       onDrop={onDrop}
       onDragEnter={onDragEnter}

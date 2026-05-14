@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { LuCheck, LuPencil, LuTrash2 } from 'react-icons/lu';
 import type { Workflow, WorkflowSummary } from '../../lib/shared/workflow';
 import { useWorkflowStore } from '../../lib/client/workflow-store-client';
 
@@ -37,7 +38,7 @@ export default function WorkflowMenu() {
   const [summaries, setSummaries] = useState<WorkflowSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -47,17 +48,19 @@ export default function WorkflowMenu() {
   // re-trigger commitEdit and race the cancel. The ref short-circuits that.
   const cancelledRef = useRef(false);
 
-  // Drop edit mode if the current workflow disappears or swaps under us.
   useEffect(() => {
-    if (!currentWorkflow) setEditing(false);
-  }, [currentWorkflow]);
+    if (!open) {
+      setEditingId(null);
+      setDraft('');
+    }
+  }, [open]);
 
   useEffect(() => {
-    if (editing && inputRef.current) {
+    if (editingId && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
     }
-  }, [editing]);
+  }, [editingId]);
 
   const refreshList = useCallback(async () => {
     setLoading(true);
@@ -152,17 +155,16 @@ export default function WorkflowMenu() {
     }
   };
 
-  const startEdit = () => {
-    if (!currentWorkflow) return;
+  const startRowEdit = (summary: WorkflowSummary) => {
     setError(null);
     cancelledRef.current = false;
-    setDraft(currentWorkflow.name);
-    setEditing(true);
+    setEditingId(summary.id);
+    setDraft(summary.name);
   };
 
   const cancelEdit = () => {
     cancelledRef.current = true;
-    setEditing(false);
+    setEditingId(null);
     setDraft('');
   };
 
@@ -171,13 +173,34 @@ export default function WorkflowMenu() {
       cancelledRef.current = false;
       return;
     }
-    if (!editing) return;
+    if (!editingId) return;
+    const id = editingId;
     const next = draft.trim();
-    setEditing(false);
+    const summary = summaries.find((s) => s.id === id);
+    setEditingId(null);
     setDraft('');
-    if (!currentWorkflow || !next || next === currentWorkflow.name) return;
+    if (!summary || !next || next === summary.name) return;
     try {
-      await renameCurrentWorkflow(next);
+      if (currentWorkflow?.id === id) {
+        await renameCurrentWorkflow(next);
+      } else {
+        const loadRes = await fetch(`/api/workflows/${encodeURIComponent(id)}`);
+        if (!loadRes.ok) throw new Error(`load failed: ${loadRes.status}`);
+        const data = (await loadRes.json()) as { workflow?: Workflow };
+        if (!data.workflow) throw new Error('malformed workflow response');
+        const renamed: Workflow = {
+          ...data.workflow,
+          name: next,
+          updatedAt: Date.now(),
+        };
+        const saveRes = await fetch(`/api/workflows/${encodeURIComponent(id)}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(renamed),
+        });
+        if (!saveRes.ok) throw new Error(`rename failed: ${saveRes.status}`);
+      }
+      await refreshList();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to rename');
     }
@@ -192,52 +215,18 @@ export default function WorkflowMenu() {
 
   return (
     <div ref={rootRef} className="wf-menu">
-      {editing && currentWorkflow ? (
-        <input
-          ref={inputRef}
-          type="text"
-          aria-label="workflow name"
-          className="wf-menu-trigger wf-menu-rename-input"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => void commitEdit()}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              void commitEdit();
-            } else if (e.key === 'Escape') {
-              e.preventDefault();
-              cancelEdit();
-            }
-          }}
-        />
-      ) : (
-        <div className="wf-menu-trigger">
-          {currentWorkflow ? (
-            <button
-              type="button"
-              aria-label="rename workflow"
-              className="wf-menu-trigger-name wf-menu-trigger-name-btn"
-              onClick={startEdit}
-            >
-              {triggerLabel}
-            </button>
-          ) : (
-            <span className="wf-menu-trigger-name">{triggerLabel}</span>
-          )}
-          <button
-            type="button"
-            aria-label="workflow menu"
-            aria-expanded={open}
-            className="wf-menu-trigger-caret-btn"
-            onClick={() => setOpen((o) => !o)}
-          >
-            <span className="wf-menu-trigger-caret" aria-hidden="true">
-              ▼
-            </span>
-          </button>
-        </div>
-      )}
+      <button
+        type="button"
+        aria-label="workflow menu"
+        aria-expanded={open}
+        className="wf-menu-trigger"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="wf-menu-trigger-name">{triggerLabel}</span>
+        <span className="wf-menu-trigger-caret" aria-hidden="true">
+          ▼
+        </span>
+      </button>
 
       {open && (
         <div aria-label="workflow list" className="wf-menu-panel">
@@ -260,35 +249,90 @@ export default function WorkflowMenu() {
               summaries.map((s) => {
                 const isCurrent = currentWorkflow?.id === s.id;
                 // Row is a wrapping <div> rather than a <button> so we can
-                // nest a separate "delete" button inside without putting a
-                // button-in-button (invalid HTML). Click anywhere except the
-                // delete glyph picks the row; the × handler stops propagation.
+                // keep row actions beside the pick target without nesting
+                // button-in-button (invalid HTML). Click the name/id area to
+                // pick; use the action icons for rename/delete.
+                const isEditing = editingId === s.id;
                 return (
                   <div
                     key={s.id}
                     aria-current={isCurrent}
                     className="wf-menu-row"
                   >
-                    <button
-                      type="button"
-                      aria-label={`workflow ${s.id}`}
-                      className="wf-menu-row-pick"
-                      onClick={() => void onPickRow(s.id)}
-                    >
-                      <span className="wf-menu-row-name">{s.name}</span>
-                      <span className="wf-menu-row-id">{s.id}</span>
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`delete workflow ${s.id}`}
-                      className="wf-menu-row-delete"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void onDeleteRow(s.id, s.name);
-                      }}
-                    >
-                      ×
-                    </button>
+                    {isEditing ? (
+                      <div className="wf-menu-row-pick wf-menu-row-edit">
+                        <input
+                          ref={inputRef}
+                          type="text"
+                          aria-label={`workflow name ${s.id}`}
+                          className="wf-menu-row-input"
+                          value={draft}
+                          onChange={(e) => setDraft(e.target.value)}
+                          onBlur={() => void commitEdit()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              void commitEdit();
+                            } else if (e.key === 'Escape') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              cancelEdit();
+                            }
+                          }}
+                        />
+                        <span className="wf-menu-row-id">{s.id}</span>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        aria-label={`workflow ${s.id}`}
+                        className="wf-menu-row-pick"
+                        onClick={() => void onPickRow(s.id)}
+                      >
+                        <span className="wf-menu-row-name">{s.name}</span>
+                        <span className="wf-menu-row-id">{s.id}</span>
+                      </button>
+                    )}
+                    <div className="wf-menu-row-actions">
+                      <button
+                        type="button"
+                        aria-label={
+                          isEditing
+                            ? `save workflow ${s.id}`
+                            : `rename workflow ${s.id}`
+                        }
+                        className="wf-menu-row-action wf-menu-row-rename"
+                        onMouseDown={(e) => {
+                          if (isEditing) e.preventDefault();
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isEditing) {
+                            void commitEdit();
+                          } else {
+                            startRowEdit(s);
+                          }
+                        }}
+                      >
+                        {isEditing ? (
+                          <LuCheck size={14} aria-hidden="true" />
+                        ) : (
+                          <LuPencil size={14} aria-hidden="true" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`delete workflow ${s.id}`}
+                        className="wf-menu-row-action wf-menu-row-delete"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void onDeleteRow(s.id, s.name);
+                        }}
+                      >
+                        <LuTrash2 size={14} aria-hidden="true" />
+                      </button>
+                    </div>
                   </div>
                 );
               })}

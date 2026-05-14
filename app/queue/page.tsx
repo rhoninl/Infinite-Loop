@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 export const CONFIRM_TIMEOUT_MS = 4000;
@@ -9,6 +10,7 @@ interface QueueItem {
   triggerId: string;
   workflowId: string;
   workflowName: string;
+  inputs: Record<string, string | number | boolean>;
   receivedAt: number;
   position: number;
 }
@@ -28,6 +30,9 @@ export default function QueuePage() {
   const [loaded, setLoaded] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [expandedInputs, setExpandedInputs] = useState<Set<string>>(
+    () => new Set(),
+  );
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -69,6 +74,10 @@ export default function QueuePage() {
                 triggerId: data.triggerId,
                 workflowId: data.workflowId,
                 workflowName: data.workflowId, // refined by next refetch / page reload
+                inputs:
+                  data.inputs && typeof data.inputs === 'object'
+                    ? data.inputs
+                    : {},
                 receivedAt: data.receivedAt,
                 position: prev.length + 1,
               },
@@ -79,6 +88,12 @@ export default function QueuePage() {
 
         if (t === 'trigger_started' || t === 'trigger_dropped' || t === 'trigger_removed') {
           setItems((prev) => prev.filter((it) => it.queueId !== data.queueId));
+          setExpandedInputs((prev) => {
+            if (!prev.has(data.queueId)) return prev;
+            const next = new Set(prev);
+            next.delete(data.queueId);
+            return next;
+          });
         }
       } catch {
         // ignore malformed frames
@@ -116,6 +131,15 @@ export default function QueuePage() {
     setConfirming(null);
   }, []);
 
+  const toggleInputs = useCallback((queueId: string) => {
+    setExpandedInputs((prev) => {
+      const next = new Set(prev);
+      if (next.has(queueId)) next.delete(queueId);
+      else next.add(queueId);
+      return next;
+    });
+  }, []);
+
   const doDelete = useCallback(async (queueId: string) => {
     if (confirmTimerRef.current !== null) {
       clearTimeout(confirmTimerRef.current);
@@ -151,7 +175,12 @@ export default function QueuePage() {
   return (
     <main className="queue-page">
       <header className="queue-page-header">
-        <h1>Trigger Queue</h1>
+        <div className="queue-page-title">
+          <Link href="/" className="btn btn-ghost queue-back">
+            Back
+          </Link>
+          <h1>Trigger Queue</h1>
+        </div>
         <span className="queue-count">{items.length} queued</span>
       </header>
 
@@ -173,45 +202,78 @@ export default function QueuePage() {
           <tbody>
             {items.map((it, idx) => {
               const isConfirming = confirming === it.queueId;
+              const inputsOpen = expandedInputs.has(it.queueId);
+              const inputCount = Object.keys(it.inputs ?? {}).length;
               return (
-                <tr
-                  key={it.queueId}
-                  className="queue-row"
-                  data-confirming={isConfirming || undefined}
-                >
-                  <td>{idx + 1}</td>
-                  <td>{it.workflowName}</td>
-                  <td>{it.triggerId}</td>
-                  <td>{formatTime(it.receivedAt)}</td>
-                  <td className="queue-row-actions">
-                    {isConfirming ? (
-                      <>
-                        <button
-                          type="button"
-                          className="btn btn-stop"
-                          onClick={() => doDelete(it.queueId)}
-                        >
-                          Confirm?
-                        </button>
+                <React.Fragment key={it.queueId}>
+                  <tr
+                    className="queue-row"
+                    data-confirming={isConfirming || undefined}
+                  >
+                    <td>{idx + 1}</td>
+                    <td>{it.workflowName}</td>
+                    <td>{it.triggerId}</td>
+                    <td>{formatTime(it.receivedAt)}</td>
+                    <td className="queue-row-actions">
+                      <button
+                        type="button"
+                        className="btn btn-ghost queue-input-toggle"
+                        aria-expanded={inputsOpen}
+                        aria-controls={`queue-inputs-${it.queueId}`}
+                        onClick={() => toggleInputs(it.queueId)}
+                      >
+                        Inputs ({inputCount})
+                      </button>
+                      {isConfirming ? (
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn-stop"
+                            onClick={() => doDelete(it.queueId)}
+                          >
+                            Confirm?
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            onClick={cancelConfirm}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
                         <button
                           type="button"
                           className="btn btn-ghost"
-                          onClick={cancelConfirm}
+                          onClick={() => startConfirm(it.queueId)}
                         >
-                          Cancel
+                          ✕ Delete
                         </button>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        onClick={() => startConfirm(it.queueId)}
-                      >
-                        ✕ Delete
-                      </button>
-                    )}
-                  </td>
-                </tr>
+                      )}
+                    </td>
+                  </tr>
+                  {inputsOpen && (
+                    <tr
+                      className="queue-input-row"
+                      id={`queue-inputs-${it.queueId}`}
+                    >
+                      <td colSpan={5}>
+                        {inputCount === 0 ? (
+                          <p className="queue-input-empty">No inputs.</p>
+                        ) : (
+                          <dl className="queue-input-list">
+                            {Object.entries(it.inputs).map(([key, value]) => (
+                              <div key={key} className="queue-input-item">
+                                <dt>{key}</dt>
+                                <dd>{String(value)}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               );
             })}
           </tbody>

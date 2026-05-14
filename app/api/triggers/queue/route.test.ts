@@ -31,7 +31,7 @@ describe('GET /api/triggers/queue', () => {
   test('returns items array with positions and workflow names', async () => {
     triggerQueue.enqueue({
       workflow: { id: 'w1', name: 'First', version: 1, nodes: [], edges: [], createdAt: 0, updatedAt: 0 } as any,
-      resolvedInputs: {},
+      resolvedInputs: { topic: 'alpha', count: 2 },
       triggerId: 'trig-1',
       receivedAt: 100,
     });
@@ -52,6 +52,7 @@ describe('GET /api/triggers/queue', () => {
       triggerId: 'trig-1',
       workflowId: 'w1',
       workflowName: 'First',
+      inputs: { topic: 'alpha', count: 2 },
       receivedAt: 100,
       position: 1,
     });
