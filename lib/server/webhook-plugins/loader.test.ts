@@ -162,3 +162,20 @@ describe('loadPlugins', () => {
     expect(plugins.find((p) => p.id === 'noheader')).toBeUndefined();
   });
 });
+
+describe('loadPlugins — real frogo.json from repo', () => {
+  test('the shipped webhook-plugins/frogo.json loads cleanly', async () => {
+    const repoPluginsDir = path.resolve(__dirname, '..', '..', '..', 'webhook-plugins');
+    const plugins = await loadPlugins(repoPluginsDir);
+    const frogo = plugins.find((p) => p.id === 'frogo');
+    expect(frogo).toBeDefined();
+    expect(frogo?.signature?.header).toBe('x-frogo-signature');
+    expect(frogo?.signature?.scheme).toBe('hmac-sha256');
+    expect(frogo?.signature?.format).toBe('sha256=<hex>');
+    expect(frogo?.events.find((e) => e.type === 'task.created')).toBeDefined();
+    expect(frogo?.events.find((e) => e.type === 'task.updated')).toBeDefined();
+    expect(frogo?.events.find((e) => e.type === 'task.deleted')).toBeDefined();
+    expect(frogo?.events.find((e) => e.type === 'task.commented')).toBeDefined();
+    expect(frogo?.events.find((e) => e.type === 'ping')).toBeDefined();
+  });
+});
