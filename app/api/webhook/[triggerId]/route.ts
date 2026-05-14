@@ -50,13 +50,6 @@ export async function POST(req: Request, { params }: RouteParams): Promise<Respo
     }
   }
 
-  let workflow: Workflow;
-  try {
-    workflow = await getWorkflow(hit.workflowId);
-  } catch {
-    return notFound();
-  }
-
   let bodyText: string;
   try {
     bodyText = await req.text();
@@ -92,6 +85,13 @@ export async function POST(req: Request, { params }: RouteParams): Promise<Respo
       );
       return NextResponse.json({ error: 'trigger-misconfigured' }, { status: 500 });
     }
+  }
+
+  let workflow: Workflow;
+  try {
+    workflow = await getWorkflow(hit.workflowId);
+  } catch {
+    return notFound();
   }
 
   const scope = buildWebhookScope({
