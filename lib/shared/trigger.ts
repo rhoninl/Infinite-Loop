@@ -30,6 +30,16 @@ export interface WebhookTrigger {
   lastFiredAt?: number | null;
   createdAt: number;
   updatedAt: number;
+  /** Shared secret for signature verification. Required when the trigger's
+   *  plugin declares a `signature` block, unless verifyOptional === true. */
+  secret?: string;
+
+  /** Explicit opt-out from signature verification even when the plugin
+   *  declares a `signature` block. Intended for local development against
+   *  a Frogo instance with no subscription secret. When true, the route
+   *  accepts the request without checking the signature header and logs a
+   *  one-line warning. */
+  verifyOptional?: boolean;
 }
 
 /* ─── webhook plugins ─────────────────────────────────────────────────────── */
@@ -52,6 +62,19 @@ export interface PluginEvent {
   examplePayload?: unknown;
 }
 
+export interface PluginSignature {
+  /** Header carrying the signature. Normalized to lowercase by validatePlugin
+   *  at load time, so route-side lookups can use the lowercased key. */
+  header: string;
+  /** Verification scheme. v1 supports `hmac-sha256` only. */
+  scheme: 'hmac-sha256';
+  /** How to parse the header value to extract the digest. v1 covers schemes
+   *  that HMAC the raw request body. Stripe-style (HMAC of constructed
+   *  payload) is intentionally not supported and would need a schema-
+   *  incompatible extension. */
+  format: 'sha256=<hex>' | 'hex' | 'base64';
+}
+
 export interface WebhookPlugin {
   id: string;
   displayName: string;
@@ -61,4 +84,5 @@ export interface WebhookPlugin {
    *  user predicates. When unset (Generic), no implicit filter. */
   eventHeader?: string;
   events: PluginEvent[];
+  signature?: PluginSignature;
 }
