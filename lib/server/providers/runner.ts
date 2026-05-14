@@ -4,6 +4,7 @@ import { parserFactories } from './parsers/index';
 import { resolveBin } from './loader';
 import { runHttpProvider } from './http-runner';
 import type { CliProviderManifest, ProviderManifest } from './types';
+import { registerChild, unregisterChild } from '../child-registry';
 
 const SIGKILL_GRACE_MS = 2000;
 
@@ -124,6 +125,7 @@ async function runCliProvider(
       stdio: [promptVia === 'stdin' ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       detached: true,
     });
+    if (child.pid != null) registerChild(child.pid);
 
     if (promptVia === 'stdin' && child.stdin) {
       child.stdin.setDefaultEncoding('utf8');
@@ -225,6 +227,7 @@ async function runCliProvider(
       if (settled) return;
       settled = true;
       cleanup();
+      if (child.pid != null) unregisterChild(child.pid);
       resolve({
         exitCode,
         stdout,

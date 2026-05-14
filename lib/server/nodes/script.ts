@@ -9,6 +9,7 @@ import type {
   ScriptConfig,
   ScriptLanguage,
 } from '../../shared/workflow';
+import { registerChild, unregisterChild } from '../child-registry';
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 const SIGKILL_GRACE_MS = 2000;
@@ -152,6 +153,7 @@ function runInterpreter(
         stdio: ['pipe', 'pipe', 'pipe'],
         detached: true,
       });
+      if (child.pid != null) registerChild(child.pid);
     } catch (err) {
       resolve({
         stdout: '',
@@ -261,6 +263,7 @@ function runInterpreter(
       if (settled) return;
       settled = true;
       cleanup();
+      if (child.pid != null) unregisterChild(child.pid);
       if (lineBuf.length > 0) {
         stdout += lineBuf;
         if (!lineBuf.startsWith(RESULT_SENTINEL)) {

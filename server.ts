@@ -1,6 +1,10 @@
 import { createServer } from 'http';
 import { networkInterfaces } from 'node:os';
 import next from 'next';
+import {
+  activeChildCount,
+  killAllChildren,
+} from './lib/server/child-registry';
 
 const dev = process.env.NODE_ENV !== 'production';
 const startPort = Number(process.env.PORT ?? 3000);
@@ -29,6 +33,8 @@ if (port !== startPort) {
 if (host === '0.0.0.0') {
   for (const url of lanUrls(port)) console.log(`  also: ${url}`);
 }
+
+installShutdownHandlers(httpServer);
 
 /**
  * Try to bind to `start`; on EADDRINUSE, bump the port and retry up to `maxTries` times.
@@ -67,6 +73,52 @@ function listenWithFallback(
 
     tryListen();
   });
+}
+
+/**
+ * Reap detached child processes on shutdown. Provider/script spawns use
+ * `detached: true` (so per-run cancel can kill grandchildren); the side
+ * effect is they sit in their own process group and don't receive the
+ * server's SIGINT. Without this hook, Ctrl+C leaves provider CLIs running
+ * as orphans. SIGTERM first, then SIGKILL after a short grace period.
+ *
+ * A second signal during shutdown forces immediate exit, so an impatient
+ * Ctrl+C still escapes if a child ignores SIGTERM.
+ */
+function installShutdownHandlers(server: ReturnType<typeof createServer>): void {
+  const GRACE_MS = 2000;
+  let shuttingDown = false;
+
+  const shutdown = (signal: NodeJS.Signals) => {
+    if (shuttingDown) {
+      console.warn(`received second ${signal}; forcing exit`);
+      killAllChildren('SIGKILL');
+      process.exit(1);
+    }
+    shuttingDown = true;
+    const count = activeChildCount();
+    if (count > 0) {
+      console.log(`shutting down (${signal}); terminating ${count} child process(es)...`);
+    }
+    killAllChildren('SIGTERM');
+    const graceTimer = setTimeout(() => {
+      killAllChildren('SIGKILL');
+      process.exit(0);
+    }, GRACE_MS);
+    graceTimer.unref();
+    server.close(() => {
+      // HTTP drain finished — if children are also gone, exit early instead
+      // of sitting on the full grace window.
+      if (activeChildCount() === 0) {
+        clearTimeout(graceTimer);
+        process.exit(0);
+      }
+    });
+  };
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGHUP', () => shutdown('SIGHUP'));
 }
 
 /** Best-effort enumeration of non-loopback IPv4 addresses for log output. */
