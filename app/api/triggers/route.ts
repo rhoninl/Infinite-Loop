@@ -52,7 +52,7 @@ export async function POST(req: Request): Promise<Response> {
 
   const plugin = await pluginIndex.lookup(draft.pluginId);
   if (plugin) {
-    const v = validateTriggerAgainstPlugin(draft as WebhookTrigger, plugin);
+    const v = validateTriggerAgainstPlugin(draft, plugin);
     if (!v.ok) {
       return NextResponse.json(
         { error: 'invalid-trigger', reason: v.reason },

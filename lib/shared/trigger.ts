@@ -34,11 +34,12 @@ export interface WebhookTrigger {
    *  plugin declares a `signature` block, unless verifyOptional === true. */
   secret?: string;
 
-  /** Explicit opt-out from signature verification even when the plugin
-   *  declares a `signature` block. Intended for local development against
-   *  a Frogo instance with no subscription secret. When true, the route
+  /** Explicit opt-out from signature verification when the trigger has no
+   *  secret. Intended for local development against a Frogo instance with
+   *  no subscription secret. When true AND `secret` is unset, the route
    *  accepts the request without checking the signature header and logs a
-   *  one-line warning. */
+   *  one-line warning. If `secret` is also set, verification runs normally
+   *  — the secret wins. */
   verifyOptional?: boolean;
 }
 

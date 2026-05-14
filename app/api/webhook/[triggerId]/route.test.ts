@@ -40,20 +40,24 @@ const builtinPluginsDir = path.resolve(__dirname, '../../../../webhook-plugins')
 beforeEach(async () => {
   await fs.rm(tmpWfDir, { recursive: true, force: true });
   await fs.rm(tmpTrDir, { recursive: true, force: true });
-  await fs.rm(tmpPluginDir, { recursive: true, force: true });   // NEW
+  await fs.rm(tmpPluginDir, { recursive: true, force: true });
   await fs.mkdir(tmpWfDir, { recursive: true });
   await fs.mkdir(tmpTrDir, { recursive: true });
-  await fs.mkdir(tmpPluginDir, { recursive: true });             // NEW
+  await fs.mkdir(tmpPluginDir, { recursive: true });
   // Seed built-in plugins so pre-existing tests that use pluginId:'github' keep working.
-  for (const file of await fs.readdir(builtinPluginsDir)) {
-    await fs.copyFile(
-      path.join(builtinPluginsDir, file),
-      path.join(tmpPluginDir, file),
-    );
+  try {
+    for (const file of await fs.readdir(builtinPluginsDir)) {
+      await fs.copyFile(
+        path.join(builtinPluginsDir, file),
+        path.join(tmpPluginDir, file),
+      );
+    }
+  } catch {
+    // builtin plugins dir not present — tests will operate on an empty plugin dir
   }
   process.env.INFLOOP_WORKFLOWS_DIR = tmpWfDir;
   process.env.INFLOOP_TRIGGERS_DIR = tmpTrDir;
-  process.env.INFLOOP_WEBHOOK_PLUGINS_DIR = tmpPluginDir;        // NEW
+  process.env.INFLOOP_WEBHOOK_PLUGINS_DIR = tmpPluginDir;
   triggerIndex.invalidate();
   pluginIndex.invalidate();
   triggerQueue.clear();
@@ -62,7 +66,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await fs.rm(tmpWfDir, { recursive: true, force: true });
   await fs.rm(tmpTrDir, { recursive: true, force: true });
-  await fs.rm(tmpPluginDir, { recursive: true, force: true });   // NEW
+  await fs.rm(tmpPluginDir, { recursive: true, force: true });
 });
 
 const goodId = 'idAAAAAAAAAAAAAAAAAAAA';

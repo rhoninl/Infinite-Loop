@@ -9,7 +9,7 @@ export type TriggerValidationResult =
  *  Currently the only rule: if the plugin declares a `signature` block,
  *  the trigger must have a `secret` OR `verifyOptional === true`. */
 export function validateTriggerAgainstPlugin(
-  trigger: WebhookTrigger,
+  trigger: Pick<WebhookTrigger, 'secret' | 'verifyOptional'>,
   plugin: WebhookPlugin,
 ): TriggerValidationResult {
   if (plugin.signature && !trigger.secret && trigger.verifyOptional !== true) {
