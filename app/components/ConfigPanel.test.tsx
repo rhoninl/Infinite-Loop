@@ -143,6 +143,36 @@ describe('ConfigPanel', () => {
     expect(stored.prompt).toBe('updated prompt');
   });
 
+  it('flushes a pending debounced edit when the selected node changes', () => {
+    clock = FakeTimers.install();
+    const wf = makeWorkflow([startNode, agentNode]);
+    act(() => {
+      useWorkflowStore.getState().loadWorkflow(wf);
+      useWorkflowStore.getState().selectNode('agent-1');
+    });
+
+    render(<ConfigPanel />);
+
+    const promptField = screen.getByLabelText('Prompt') as HTMLTextAreaElement;
+    act(() => {
+      fireEvent.change(promptField, { target: { value: 'switch-safe prompt' } });
+    });
+
+    let stored = useWorkflowStore.getState().currentWorkflow!.nodes.find(
+      (n) => n.id === 'agent-1',
+    )!.config as { prompt: string };
+    expect(stored.prompt).toBe('hello');
+
+    act(() => {
+      useWorkflowStore.getState().selectNode('start-1');
+    });
+
+    stored = useWorkflowStore.getState().currentWorkflow!.nodes.find(
+      (n) => n.id === 'agent-1',
+    )!.config as { prompt: string };
+    expect(stored.prompt).toBe('switch-safe prompt');
+  });
+
   it('shows the sentinel pattern by default and switches to command on segment click', () => {
     const wf = makeWorkflow([startNode, conditionNode]);
     act(() => {

@@ -115,6 +115,32 @@ describe('nextNodeId', () => {
     expect(nextNodeId('start', existing)).toBe('start-2');
     expect(nextNodeId('end', existing)).toBe('end-1');
   });
+
+  it('counts nested child node ids as globally reserved', () => {
+    const existing: WorkflowNode[] = [
+      {
+        id: 'loop-1',
+        type: 'loop',
+        position: { x: 0, y: 0 },
+        config: { maxIterations: 5, mode: 'while-not-met' },
+        children: [
+          {
+            id: 'agent-2',
+            type: 'agent',
+            position: { x: 0, y: 0 },
+            config: {} as AgentConfig,
+          },
+        ],
+      },
+      {
+        id: 'agent-1',
+        type: 'agent',
+        position: { x: 0, y: 0 },
+        config: {} as AgentConfig,
+      },
+    ];
+    expect(nextNodeId('agent', existing)).toBe('agent-3');
+  });
 });
 
 describe('buildDroppedNode', () => {

@@ -10,6 +10,10 @@ import type {
   WorkflowSummary,
 } from '../shared/workflow';
 import type { WebhookTrigger } from '../shared/trigger';
+import {
+  collectWorkflowNodeIds,
+  walkWorkflowNodes,
+} from '../shared/workflow-graph';
 
 /**
  * v5→v6 migration: rewrite `type: "claude"` nodes to `type: "agent"` with
@@ -60,25 +64,6 @@ function libraryFileFor(id: string): string {
   return path.join(libraryDir(), `${id}.json`);
 }
 
-function collectNodeIds(nodes: WorkflowNode[]): Set<string> {
-  const ids = new Set<string>();
-  const walk = (list: WorkflowNode[]) => {
-    for (const n of list) {
-      ids.add(n.id);
-      if (n.children && n.children.length > 0) walk(n.children);
-    }
-  };
-  walk(nodes);
-  return ids;
-}
-
-function walkAllNodes(nodes: WorkflowNode[], fn: (n: WorkflowNode) => void): void {
-  for (const n of nodes) {
-    fn(n);
-    if (n.children && n.children.length > 0) walkAllNodes(n.children, fn);
-  }
-}
-
 function validateNodeConfig(n: WorkflowNode): void {
   if (n.type === 'parallel') {
     const cfg = n.config as ParallelConfig;
@@ -117,7 +102,7 @@ function validateNodeConfig(n: WorkflowNode): void {
 
 function collectSubworkflowIds(nodes: WorkflowNode[]): string[] {
   const ids: string[] = [];
-  walkAllNodes(nodes, (n) => {
+  walkWorkflowNodes(nodes, (n) => {
     if (n.type === 'subworkflow') {
       const cfg = n.config as SubworkflowConfig;
       if (typeof cfg.workflowId === 'string' && cfg.workflowId.length > 0) {
@@ -199,7 +184,7 @@ function validateWorkflow(wf: Workflow): void {
     );
   }
 
-  const nodeIds = collectNodeIds(wf.nodes);
+  const nodeIds = collectWorkflowNodeIds(wf.nodes);
   for (const edge of wf.edges as WorkflowEdge[]) {
     if (!nodeIds.has(edge.source)) {
       throw new Error(
@@ -216,7 +201,7 @@ function validateWorkflow(wf: Workflow): void {
   // Per-node config validation for new multi-agent node types. Subworkflow
   // cycle detection is intentionally deferred to unit U1 (engine walkers)
   // since it requires reading other workflows from disk.
-  walkAllNodes(wf.nodes, validateNodeConfig);
+  walkWorkflowNodes(wf.nodes, validateNodeConfig);
 }
 
 async function readWorkflowFile(id: string): Promise<Workflow> {

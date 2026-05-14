@@ -41,6 +41,13 @@ import { nodeExecutors } from './nodes/index';
 import { saveRun } from './run-store';
 import { resolve as resolveTemplate } from './templating';
 import { getWorkflow } from './workflow-store';
+import {
+  collectBranchOutputs,
+  identifyBranchRoots,
+  lookupDotted,
+  snapshotScope,
+  successHandleFor,
+} from './workflow-engine-helpers';
 
 const TEXT_CONFIG_FIELDS: Partial<Record<string, string[]>> = {
   agent: ['prompt', 'cwd'],
@@ -997,78 +1004,6 @@ export class WorkflowEngine {
     }
     return resolved;
   }
-}
-
-/* ─── module-private helpers ──────────────────────────────────────────────── */
-
-function successHandleFor(mode: ParallelConfig['mode']): EdgeHandle {
-  if (mode === 'race') return 'first_done';
-  if (mode === 'quorum') return 'quorum_met';
-  return 'all_done';
-}
-
-function snapshotScope(scope: Scope): Scope {
-  // Per-key shallow clone is enough: branches write under their own node ids
-  // (new keys), and templating only reads from the snapshot's pre-existing
-  // entries. Frozen at the top level so a stray write to a sibling's key
-  // throws loudly in dev (silently ignored in prod, which is fine).
-  const copy: Scope = {};
-  for (const [k, v] of Object.entries(scope)) copy[k] = v;
-  return copy;
-}
-
-/**
- * Inside a parallel container, identify branch roots: every direct child whose
- * id is NOT the target of any container-internal edge (an edge whose source is
- * also a child of this container). External edges (e.g. start → first child)
- * don't count for branch-root identification — they enter the container, so
- * the child they point at is exactly one of the branch roots.
- */
-function identifyBranchRoots(
-  children: WorkflowNode[],
-  edges: WorkflowEdge[],
-  childIds: Set<string>,
-): WorkflowNode[] {
-  const targetsOfInternalEdges = new Set<string>();
-  for (const e of edges) {
-    if (childIds.has(e.source) && childIds.has(e.target)) {
-      targetsOfInternalEdges.add(e.target);
-    }
-  }
-  return children.filter((c) => !targetsOfInternalEdges.has(c.id));
-}
-
-/**
- * Given a branch's terminal scope and the parent snapshot it started from,
- * extract just the keys the branch wrote (i.e. anything not present in the
- * snapshot, plus the branch root's own outputs if mutated). Best-effort: we
- * can't distinguish "wrote the same value" from "didn't write at all," but
- * that's fine for downstream consumption.
- */
-function collectBranchOutputs(
-  branchScope: Scope,
-  parentSnapshot: Scope,
-): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(branchScope)) {
-    if (parentSnapshot[k] !== v) {
-      out[k] = v;
-    }
-  }
-  return out;
-}
-
-/** Walk a dotted path through nested objects. Returns undefined on miss. */
-function lookupDotted(scope: Scope, path: string): unknown {
-  if (!path) return undefined;
-  const segments = path.split('.');
-  let cursor: unknown = scope;
-  for (const segment of segments) {
-    if (cursor == null || typeof cursor !== 'object') return undefined;
-    cursor = (cursor as Record<string, unknown>)[segment];
-    if (cursor === undefined) return undefined;
-  }
-  return cursor;
 }
 
 // Pin the singleton across Next.js dev module reloads (see event-bus.ts).

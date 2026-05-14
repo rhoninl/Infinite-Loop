@@ -542,13 +542,25 @@ describe('undo / redo', () => {
 
   it('undo restores edges that were cascade-removed alongside a node', () => {
     loadFresh();
+    useWorkflowStore.getState().addChildNode('loop-1', {
+      id: 'agent-child',
+      type: 'agent',
+      position: { x: 0, y: 0 },
+      config: { providerId: 'claude', prompt: '', cwd: '', timeoutMs: 60000 },
+    });
     useWorkflowStore.getState().addEdge({
       id: 'e1',
       source: 'start-1',
       sourceHandle: 'next',
       target: 'loop-1',
     });
-    expect(useWorkflowStore.getState().currentWorkflow!.edges).toHaveLength(1);
+    useWorkflowStore.getState().addEdge({
+      id: 'e2',
+      source: 'agent-child',
+      sourceHandle: 'next',
+      target: 'start-1',
+    });
+    expect(useWorkflowStore.getState().currentWorkflow!.edges).toHaveLength(2);
 
     step();
     useWorkflowStore.getState().removeNode('loop-1');
@@ -561,6 +573,7 @@ describe('undo / redo', () => {
     expect(restored.nodes.find((n) => n.id === 'loop-1')).toBeDefined();
     expect(restored.edges).toEqual([
       { id: 'e1', source: 'start-1', sourceHandle: 'next', target: 'loop-1' },
+      { id: 'e2', source: 'agent-child', sourceHandle: 'next', target: 'start-1' },
     ]);
   });
 

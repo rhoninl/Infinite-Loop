@@ -34,6 +34,15 @@ import type {
   WorkflowEvent,
   WorkflowNode,
 } from '../../../lib/shared/workflow';
+import {
+  LOOP_DEFAULT_H,
+  LOOP_DEFAULT_W,
+  findContainingLoop,
+  loopSizeFromChildren,
+  pushOutsideLoops,
+  pushSiblingsAfterLoopChange,
+} from '../../../lib/shared/workflow-layout';
+import { nextWorkflowNodeId } from '../../../lib/shared/workflow-graph';
 import AgentNode from './nodes/AgentNode';
 import BranchNode from './nodes/BranchNode';
 import ConditionNode from './nodes/ConditionNode';
@@ -122,15 +131,7 @@ export function defaultConfigFor<T extends NodeType>(type: T): NodeConfigByType[
 
 /** Compute the next available numeric suffix id for a given node type. */
 export function nextNodeId(type: NodeType, existing: WorkflowNode[]): string {
-  const prefix = `${type}-`;
-  let max = 0;
-  for (const n of existing) {
-    if (!n.id.startsWith(prefix)) continue;
-    const tail = n.id.slice(prefix.length);
-    const n2 = Number(tail);
-    if (Number.isFinite(n2) && n2 > max) max = n2;
-  }
-  return `${type}-${max + 1}`;
+  return nextWorkflowNodeId(type, existing);
 }
 
 /** Build a fresh node from a drop payload + position + existing nodes. */
@@ -188,185 +189,7 @@ export function buildLiveStateMap(
   return out;
 }
 
-/** Default visual size for an empty Loop container. */
-const LOOP_DEFAULT_W = 460;
-const LOOP_DEFAULT_H = 240;
-
-/** Default visual size for a non-container node card. Matches the
- * `.wf-node` rule in globals.css. Used for Loop-overlap detection when the
- * candidate doesn't carry an explicit `size`. */
-const NODE_DEFAULT_W = 220;
-const NODE_DEFAULT_H = 72;
-
-/** Inner padding (px) we leave around the children's bbox when auto-sizing
- * a Loop container so children sit clear of the LOOP header label and the
- * dashed inner border instead of pressed against them. */
-const LOOP_PAD_LEFT = 24;
-const LOOP_PAD_RIGHT = 24;
-const LOOP_PAD_TOP = 56;
-const LOOP_PAD_BOTTOM = 24;
-
-/**
- * Compute a Loop container's render size from its children's bounding box
- * when no `size` is persisted on disk. Without this, an old workflow whose
- * children sit at e.g. x=320 (a CONDITION's left edge) gets clamped into a
- * 460px-wide default loop by xyflow's `extent: 'parent'`, which visually
- * shoves siblings on top of each other.
- */
-function loopSizeForChildren(
-  children: WorkflowNode[] | undefined,
-): { width: number; height: number } {
-  if (!children || children.length === 0) {
-    return { width: LOOP_DEFAULT_W, height: LOOP_DEFAULT_H };
-  }
-  let maxRight = 0;
-  let maxBottom = 0;
-  for (const c of children) {
-    const w = c.size?.width ?? NODE_DEFAULT_W;
-    const h = c.size?.height ?? NODE_DEFAULT_H;
-    const right = (c.position?.x ?? 0) + w;
-    const bottom = (c.position?.y ?? 0) + h;
-    if (right > maxRight) maxRight = right;
-    if (bottom > maxBottom) maxBottom = bottom;
-  }
-  return {
-    width: Math.max(LOOP_DEFAULT_W, maxRight + LOOP_PAD_RIGHT + LOOP_PAD_LEFT),
-    height: Math.max(LOOP_DEFAULT_H, maxBottom + LOOP_PAD_BOTTOM + LOOP_PAD_TOP),
-  };
-}
-
-interface CandidateNode {
-  /** Node id, or `''` for a not-yet-created node (e.g. fresh drop). */
-  id: string;
-  position: { x: number; y: number };
-  size?: { width: number; height: number };
-}
-
-interface LoopBbox {
-  id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-/**
- * After a Loop moves or resizes, compute the list of top-level non-Loop
- * siblings whose positions need to be pushed out of the Loop's NEW bbox.
- * Returns a list of `{ id, position }` updates; an empty list when no
- * sibling needs to move. Pure — caller dispatches the updates.
- */
-export function pushSiblingsAfterLoopChange(
-  newBbox: LoopBbox,
-  topLevelNodes: WorkflowNode[],
-): Array<{ id: string; position: { x: number; y: number } }> {
-  const syntheticLoop: WorkflowNode = {
-    id: newBbox.id,
-    type: 'loop',
-    position: { x: newBbox.x, y: newBbox.y },
-    config: { maxIterations: 1, mode: 'while-not-met' },
-    size: { width: newBbox.width, height: newBbox.height },
-  };
-  const updates: Array<{ id: string; position: { x: number; y: number } }> = [];
-  for (const n of topLevelNodes) {
-    if (n.id === newBbox.id) continue;
-    if (n.type === 'loop') continue;
-    const next = pushOutsideLoops(
-      { id: n.id, position: n.position, size: n.size },
-      [syntheticLoop],
-    );
-    if (next.x !== n.position.x || next.y !== n.position.y) {
-      updates.push({ id: n.id, position: next });
-    }
-  }
-  return updates;
-}
-
-/**
- * If `position` falls inside any top-level Loop container's bbox, return that
- * Loop. Otherwise return null. Used by the drop handler to decide whether a
- * fresh node should be added as a child of a Loop or as a top-level sibling.
- */
-export function findContainingLoop(
-  position: { x: number; y: number },
-  topLevelNodes: WorkflowNode[],
-): WorkflowNode | null {
-  // Last-match wins so that if Loops were ever stacked, the topmost (= last
-  // in render order) catches the drop.
-  let hit: WorkflowNode | null = null;
-  for (const n of topLevelNodes) {
-    if (n.type !== 'loop') continue;
-    const lx = n.position.x;
-    const ly = n.position.y;
-    const lw = n.size?.width ?? LOOP_DEFAULT_W;
-    const lh = n.size?.height ?? LOOP_DEFAULT_H;
-    if (
-      position.x >= lx &&
-      position.x <= lx + lw &&
-      position.y >= ly &&
-      position.y <= ly + lh
-    ) {
-      hit = n;
-    }
-  }
-  return hit;
-}
-
-/**
- * Snap a top-level node's position so it doesn't overlap any Loop container
- * bbox in `topLevelNodes`. Returns the candidate's original position when
- * there's no overlap. On overlap, pushes along the single axis with the
- * shortest distance to a clear edge — left/right/up/down — so the resulting
- * node is flush against the Loop's outside.
- *
- * Loops can shift around independently and the user can resize them, so this
- * is purely a placement guard, not a layout system: it doesn't move other
- * nodes out of the way, it only relocates the candidate.
- */
-export function pushOutsideLoops(
-  candidate: CandidateNode,
-  topLevelNodes: WorkflowNode[],
-): { x: number; y: number } {
-  const cw = candidate.size?.width ?? NODE_DEFAULT_W;
-  const ch = candidate.size?.height ?? NODE_DEFAULT_H;
-  let { x, y } = candidate.position;
-
-  // Multiple overlapping Loops are rare but possible; cap iterations so a
-  // pathological layout can't loop forever.
-  for (let pass = 0; pass < 4; pass++) {
-    let moved = false;
-    for (const loop of topLevelNodes) {
-      if (loop.type !== 'loop') continue;
-      if (loop.id === candidate.id) continue;
-      const lx = loop.position.x;
-      const ly = loop.position.y;
-      const lw = loop.size?.width ?? LOOP_DEFAULT_W;
-      const lh = loop.size?.height ?? LOOP_DEFAULT_H;
-
-      const overlaps =
-        x < lx + lw && x + cw > lx && y < ly + lh && y + ch > ly;
-      if (!overlaps) continue;
-
-      const pushLeft = lx - cw - x; // ≤ 0
-      const pushRight = lx + lw - x; // ≥ 0
-      const pushUp = ly - ch - y; // ≤ 0
-      const pushDown = ly + lh - y; // ≥ 0
-      const choices = [
-        { dx: pushLeft, dy: 0, dist: Math.abs(pushLeft) },
-        { dx: pushRight, dy: 0, dist: Math.abs(pushRight) },
-        { dx: 0, dy: pushUp, dist: Math.abs(pushUp) },
-        { dx: 0, dy: pushDown, dist: Math.abs(pushDown) },
-      ];
-      choices.sort((a, b) => a.dist - b.dist);
-      x += choices[0].dx;
-      y += choices[0].dy;
-      moved = true;
-    }
-    if (!moved) break;
-  }
-
-  return { x, y };
-}
+export { findContainingLoop, pushOutsideLoops, pushSiblingsAfterLoopChange };
 
 /** Build an xyflow node from a workflow node, optionally as a child. */
 function buildXyNode(
@@ -402,7 +225,7 @@ function buildXyNode(
   if (n.size) {
     base.style = { width: n.size.width, height: n.size.height };
   } else if (n.type === 'loop') {
-    const { width, height } = loopSizeForChildren(n.children);
+    const { width, height } = loopSizeFromChildren(n.children);
     base.style = { width, height };
   }
   return base;
@@ -685,7 +508,7 @@ function CanvasInner() {
           const child = buildDroppedNode(
             payload,
             local,
-            containing.children ?? [],
+            wf.nodes,
           );
           addChildNode(containing.id, child);
           return;
