@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { connectionsDir } from '../paths';
 import { KNOWN_OUTPUT_FORMATS } from './parsers/index';
 import type {
   CliProviderManifest,
@@ -307,38 +308,23 @@ function expandHermesLocalFile(
 }
 
 interface CacheEntry {
-  dir: string;
+  builtinDir: string;
+  connDir: string;
   manifests: ProviderManifest[];
   byId: Map<string, ProviderManifest>;
 }
 
 let cache: CacheEntry | null = null;
 
-/**
- * Load all `*.json` provider manifests from `INFLOOP_PROVIDERS_DIR` (or
- * `./providers/`). Cached for the process lifetime — restart to pick up new
- * files. Malformed JSON, invalid manifests (missing fields, unknown
- * outputFormat, bad promptVia/glyph), and id collisions are all logged with
- * `console.warn` and skipped — never thrown — so a single typo in one provider
- * file can't break the whole API. First-wins on duplicate ids.
- */
-export async function loadProviders(): Promise<ProviderManifest[]> {
-  const dir = providersDir();
-  if (cache && cache.dir === dir) return cache.manifests;
-
+async function readJsonDir(dir: string): Promise<{ entry: string; file: string; parsed: unknown }[]> {
   let entries: string[];
   try {
     entries = await fs.readdir(dir);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      cache = { dir, manifests: [], byId: new Map() };
-      return [];
-    }
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
     throw err;
   }
-
-  const manifests: ProviderManifest[] = [];
-  const byId = new Map<string, ProviderManifest>();
+  const results: { entry: string; file: string; parsed: unknown }[] = [];
   for (const entry of entries) {
     if (!entry.endsWith('.json')) continue;
     const file = path.join(dir, entry);
@@ -356,24 +342,33 @@ export async function loadProviders(): Promise<ProviderManifest[]> {
       console.warn(`[providers] ${file} is not valid JSON: ${(err as Error).message}`);
       continue;
     }
-    // `*.hermes.local.json` is the user-managed connection format. One
-    // file expands into N manifests — one per port the user registered,
-    // each its own palette card labeled by the discovered profile.
-    const hermesLocalId = hermesLocalIdFromFilename(entry);
-    if (hermesLocalId !== null) {
-      const expanded = expandHermesLocalFile(parsed, hermesLocalId, entry);
-      for (const manifest of expanded) {
-        if (byId.has(manifest.id)) {
-          console.warn(
-            `[providers] id collision: "${manifest.id}" already loaded; ignoring entry from ${entry}`,
-          );
-          continue;
-        }
-        byId.set(manifest.id, manifest);
-        manifests.push(manifest);
-      }
-      continue;
-    }
+    results.push({ entry, file, parsed });
+  }
+  return results;
+}
+
+/**
+ * Load provider manifests from two locations:
+ *   1. Built-in manifests from `INFLOOP_PROVIDERS_DIR` (or `./providers/`).
+ *   2. User-managed Hermes connections from `connectionsDir()` (`~/.infinite-loop/connections/`).
+ *
+ * Cached for the process lifetime — restart or call `_resetProviderCache()`
+ * to pick up new files. Malformed JSON, invalid manifests, and id collisions
+ * are logged with `console.warn` and skipped. First-wins on duplicate ids.
+ */
+export async function loadProviders(): Promise<ProviderManifest[]> {
+  const builtinDir = providersDir();
+  const connDir = connectionsDir();
+  if (cache && cache.builtinDir === builtinDir && cache.connDir === connDir) {
+    return cache.manifests;
+  }
+
+  const manifests: ProviderManifest[] = [];
+  const byId = new Map<string, ProviderManifest>();
+
+  // 1. Built-in manifests from project providers/ dir.
+  for (const { entry, parsed } of await readJsonDir(builtinDir)) {
+    if (hermesLocalIdFromFilename(entry) !== null) continue;
     let manifest: ProviderManifest;
     try {
       manifest = validateManifest(parsed, entry);
@@ -391,8 +386,25 @@ export async function loadProviders(): Promise<ProviderManifest[]> {
     manifests.push(manifest);
   }
 
+  // 2. User-managed Hermes connections from ~/.infinite-loop/connections/.
+  for (const { entry, parsed } of await readJsonDir(connDir)) {
+    const hermesLocalId = hermesLocalIdFromFilename(entry);
+    if (hermesLocalId === null) continue;
+    const expanded = expandHermesLocalFile(parsed, hermesLocalId, entry);
+    for (const manifest of expanded) {
+      if (byId.has(manifest.id)) {
+        console.warn(
+          `[providers] id collision: "${manifest.id}" already loaded; ignoring entry from ${entry}`,
+        );
+        continue;
+      }
+      byId.set(manifest.id, manifest);
+      manifests.push(manifest);
+    }
+  }
+
   manifests.sort((a, b) => a.label.localeCompare(b.label));
-  cache = { dir, manifests, byId };
+  cache = { builtinDir, connDir, manifests, byId };
   return manifests;
 }
 

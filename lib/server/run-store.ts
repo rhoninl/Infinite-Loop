@@ -1,11 +1,12 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { RunRecord, RunSummary } from '../shared/workflow';
+import { dataDir } from './paths';
 
 /* ─── env / paths ─────────────────────────────────────────────────────────── */
 
 function runsDir(): string {
-  return process.env.INFLOOP_RUNS_DIR || path.join(process.cwd(), 'runs');
+  return process.env.INFLOOP_RUNS_DIR || path.join(dataDir(), 'runs');
 }
 
 const DEFAULT_HISTORY_LIMIT = 100;

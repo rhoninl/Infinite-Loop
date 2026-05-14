@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { dataDir, triggersDir } from './paths';
 import type {
   JudgeNodeConfig,
   ParallelConfig,
@@ -42,18 +43,20 @@ function migrateWorkflow(wf: Workflow): Workflow {
 function storageDir(): string {
   return (
     process.env.INFLOOP_WORKFLOWS_DIR ||
-    path.join(process.cwd(), 'workflows')
+    path.join(dataDir(), 'workflows')
   );
 }
 
 /**
- * Read-only library directory shipped with the repo. Lives next to the user
- * storage dir so dev runs (which use the default `cwd/workflows`) pick it up
- * automatically. If the user overrides INFLOOP_WORKFLOWS_DIR the library
- * follows along — they can either copy team.json over or symlink.
+ * Read-only library directory shipped with the repo. Defaults to the
+ * project root so library presets remain available regardless of where
+ * user workflows are stored.
  */
 function libraryDir(): string {
-  return path.join(storageDir(), 'library');
+  return (
+    process.env.INFLOOP_LIBRARY_DIR ||
+    path.join(process.cwd(), 'workflows', 'library')
+  );
 }
 
 function fileFor(id: string): string {
@@ -307,13 +310,6 @@ export async function listWorkflows(): Promise<WorkflowSummary[]> {
     ...librarySummaries.filter((s) => !userIds.has(s.id)),
   ];
   return merged.sort((a, b) => b.updatedAt - a.updatedAt);
-}
-
-function triggersDir(): string {
-  return (
-    process.env.INFLOOP_TRIGGERS_DIR ||
-    path.join(process.cwd(), 'triggers')
-  );
 }
 
 /**

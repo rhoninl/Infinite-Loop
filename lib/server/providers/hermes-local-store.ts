@@ -16,6 +16,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { _resetProviderCache, getProvider, HERMES_LOCAL_SUFFIX } from './loader';
+import { connectionsDir } from '../paths';
 
 export interface PortProfile {
   port: number;
@@ -54,14 +55,8 @@ export interface HermesLocalInput {
  * like "../foo" or "evil.hermes". 30-char cap keeps filenames sane. */
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,29}$/;
 
-function providersDir(): string {
-  return (
-    process.env.INFLOOP_PROVIDERS_DIR || path.join(process.cwd(), 'providers')
-  );
-}
-
 function fileFor(id: string): string {
-  return path.join(providersDir(), `${id}${HERMES_LOCAL_SUFFIX}`);
+  return path.join(connectionsDir(), `${id}${HERMES_LOCAL_SUFFIX}`);
 }
 
 export function isValidLocalId(id: string): boolean {
@@ -317,7 +312,7 @@ async function readOne(id: string): Promise<HermesLocalConnection | null> {
 export async function listConnections(): Promise<HermesLocalConnection[]> {
   let entries: string[];
   try {
-    entries = await fs.readdir(providersDir());
+    entries = await fs.readdir(connectionsDir());
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
     throw err;
@@ -344,7 +339,7 @@ async function writeConnection(
   id: string,
   conn: Omit<HermesLocalConnection, 'id'>,
 ): Promise<void> {
-  const dir = providersDir();
+  const dir = connectionsDir();
   await fs.mkdir(dir, { recursive: true });
   const payload = {
     label: conn.label,
