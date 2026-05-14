@@ -12,3 +12,9 @@ export function triggersDir(): string {
     process.env.INFLOOP_TRIGGERS_DIR || path.join(dataDir(), 'triggers')
   );
 }
+
+export function connectionsDir(): string {
+  return (
+    process.env.INFLOOP_CONNECTIONS_DIR || path.join(dataDir(), 'connections')
+  );
+}

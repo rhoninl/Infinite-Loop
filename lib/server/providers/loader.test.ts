@@ -5,12 +5,17 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 
 let tmpDir: string;
+let tmpConnDir: string;
 let prevDir: string | undefined;
+let prevConnDir: string | undefined;
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infinite-loop-providers-'));
+  tmpConnDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infinite-loop-connections-'));
   prevDir = process.env.INFLOOP_PROVIDERS_DIR;
+  prevConnDir = process.env.INFLOOP_CONNECTIONS_DIR;
   process.env.INFLOOP_PROVIDERS_DIR = tmpDir;
+  process.env.INFLOOP_CONNECTIONS_DIR = tmpConnDir;
 });
 
 afterEach(async () => {
@@ -19,7 +24,13 @@ afterEach(async () => {
   } else {
     process.env.INFLOOP_PROVIDERS_DIR = prevDir;
   }
+  if (prevConnDir === undefined) {
+    delete process.env.INFLOOP_CONNECTIONS_DIR;
+  } else {
+    process.env.INFLOOP_CONNECTIONS_DIR = prevConnDir;
+  }
   await fsp.rm(tmpDir, { recursive: true, force: true });
+  await fsp.rm(tmpConnDir, { recursive: true, force: true });
   // Drop the loader's cache between tests.
   const { _resetProviderCache } = await import('./loader');
   _resetProviderCache();
@@ -28,6 +39,13 @@ afterEach(async () => {
 function writeManifest(name: string, body: object | string): void {
   fs.writeFileSync(
     path.join(tmpDir, name),
+    typeof body === 'string' ? body : JSON.stringify(body),
+  );
+}
+
+function writeConnection(name: string, body: object | string): void {
+  fs.writeFileSync(
+    path.join(tmpConnDir, name),
     typeof body === 'string' ? body : JSON.stringify(body),
   );
 }
@@ -226,7 +244,7 @@ describe('providers/loader', () => {
     // New shape: label / host / token / ports[{port, profile}]. The
     // loader emits one card per port, labeled by the discovered profile
     // and pointing at `<host>:<port>/v1`.
-    writeManifest('my-hermes.hermes.local.json', {
+    writeConnection('my-hermes.hermes.local.json', {
       label: 'My Hermes',
       host: 'https://my-hermes.example',
       token: 'sk-test-123',
@@ -254,7 +272,7 @@ describe('providers/loader', () => {
   });
 
   it('drops malformed port entries but keeps the rest of the connection', async () => {
-    writeManifest('mixed.hermes.local.json', {
+    writeConnection('mixed.hermes.local.json', {
       label: 'Mixed',
       host: 'https://h.example',
       token: 't',
