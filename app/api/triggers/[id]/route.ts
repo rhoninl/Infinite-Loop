@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/server/auth';
+import { pluginIndex } from '@/lib/server/webhook-plugins/index';
+import { validateTriggerAgainstPlugin } from '@/lib/server/trigger-validation';
 import {
   getTrigger,
   saveTrigger,
@@ -63,7 +65,21 @@ export async function PUT(req: Request, { params }: RouteParams): Promise<Respon
       inputs: payload.inputs && typeof payload.inputs === 'object' && !Array.isArray(payload.inputs)
         ? (payload.inputs as Record<string, string>)
         : {},
+      secret: typeof payload.secret === 'string' ? payload.secret : undefined,
+      verifyOptional: payload.verifyOptional === true ? true : undefined,
     };
+
+    const plugin = await pluginIndex.lookup(draft.pluginId);
+    if (plugin) {
+      const v = validateTriggerAgainstPlugin(draft as WebhookTrigger, plugin);
+      if (!v.ok) {
+        return NextResponse.json(
+          { error: 'invalid-trigger', reason: v.reason },
+          { status: 400 },
+        );
+      }
+    }
+
     const saved = await saveTrigger(draft);
     return NextResponse.json({ trigger: saved });
   } catch (err) {

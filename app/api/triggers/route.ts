@@ -3,6 +3,8 @@ import { requireAuth } from '@/lib/server/auth';
 import { listTriggers, saveTrigger } from '@/lib/server/trigger-store';
 import { randomBytes } from 'node:crypto';
 import type { WebhookTrigger } from '@/lib/shared/trigger';
+import { pluginIndex } from '@/lib/server/webhook-plugins/index';
+import { validateTriggerAgainstPlugin } from '@/lib/server/trigger-validation';
 
 function generateId(): string {
   return randomBytes(16).toString('base64url');
@@ -44,7 +46,21 @@ export async function POST(req: Request): Promise<Response> {
     inputs: payload.inputs && typeof payload.inputs === 'object' && !Array.isArray(payload.inputs)
       ? (payload.inputs as Record<string, string>)
       : {},
+    secret: typeof payload.secret === 'string' ? payload.secret : undefined,
+    verifyOptional: payload.verifyOptional === true ? true : undefined,
   };
+
+  const plugin = await pluginIndex.lookup(draft.pluginId);
+  if (plugin) {
+    const v = validateTriggerAgainstPlugin(draft as WebhookTrigger, plugin);
+    if (!v.ok) {
+      return NextResponse.json(
+        { error: 'invalid-trigger', reason: v.reason },
+        { status: 400 },
+      );
+    }
+  }
+
   try {
     const saved = await saveTrigger(draft);
     return NextResponse.json({ trigger: saved }, { status: 201 });
