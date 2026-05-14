@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { registerChild, unregisterChild } from '../child-registry';
 import { resolveBin } from './loader';
 import type { CliProviderManifest } from './types';
 
@@ -92,6 +93,7 @@ export async function listCliAgents(
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: true,
     });
+    if (child.pid != null) registerChild(child.pid);
     let stdout = '';
     let stderr = '';
     let settled = false;
@@ -114,6 +116,7 @@ export async function listCliAgents(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (child.pid != null) unregisterChild(child.pid);
       if (err) reject(err);
       else resolve(agents!);
     };
