@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -15,9 +14,21 @@ import SelectMenu from './SelectMenu';
 import TemplateField from './TemplateField';
 import { TriggersPanel } from './TriggersPanel';
 import {
+  Segmented,
+  TIMEOUT_UNIT_MS,
+  TIMEOUT_UNITS,
+  pickInitialTimeoutUnit,
+  useDebouncedString,
+  type TimeoutUnit,
+} from './config/shared';
+import {
   availableVariables,
   type TemplateRef,
 } from '@/lib/shared/template-refs';
+import {
+  collectWorkflowNodeIdList,
+  findWorkflowNode,
+} from '@/lib/shared/workflow-graph';
 import type { ProviderInfo } from '@/lib/server/providers/types';
 import type {
   AgentConfig,
@@ -41,134 +52,12 @@ import type {
   WorkflowSummary,
 } from '@/lib/shared/workflow';
 
-const DEBOUNCE_MS = 200;
-
-/** Walk the workflow's nodes (and each node's children) to find a node by id. */
-function findNode(
-  nodes: WorkflowNode[] | undefined,
-  id: string,
-): WorkflowNode | null {
-  if (!nodes) return null;
-  for (const n of nodes) {
-    if (n.id === id) return n;
-    if (n.children && n.children.length > 0) {
-      const hit = findNode(n.children, id);
-      if (hit) return hit;
-    }
-  }
-  return null;
-}
-
-/** Collect all node ids in a workflow (recursing into containers). */
-function collectAllIds(nodes: WorkflowNode[] | undefined): string[] {
-  if (!nodes) return [];
-  const out: string[] = [];
-  for (const n of nodes) {
-    out.push(n.id);
-    if (n.children && n.children.length > 0) {
-      out.push(...collectAllIds(n.children));
-    }
-  }
-  return out;
-}
-
 /** Available `{{nodeId.stdout}}` template refs for a given node id. */
 function availableRefs(workflow: Workflow | null, selfId: string): string[] {
   if (!workflow) return [];
-  return collectAllIds(workflow.nodes)
+  return collectWorkflowNodeIdList(workflow.nodes)
     .filter((id) => id !== selfId)
     .map((id) => `{{${id}.stdout}}`);
-}
-
-/* ─── tiny debounced text field hook ───────────────────────── */
-function useDebouncedString(
-  initial: string,
-  onCommit: (next: string) => void,
-  delay = DEBOUNCE_MS,
-): [string, (v: string) => void] {
-  const [value, setValue] = useState(initial);
-  // If the upstream value changes (e.g. node switch), re-sync.
-  const lastInitial = useRef(initial);
-  useEffect(() => {
-    if (initial !== lastInitial.current) {
-      lastInitial.current = initial;
-      setValue(initial);
-    }
-  }, [initial]);
-
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const set = useCallback(
-    (next: string) => {
-      setValue(next);
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => {
-        onCommit(next);
-      }, delay);
-    },
-    [onCommit, delay],
-  );
-
-  // Flush on unmount so we don't lose the last keystroke.
-  useEffect(() => {
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
-  }, []);
-
-  return [value, set];
-}
-
-/* ─── timeout unit helpers ──────────────────────────────────── */
-type TimeoutUnit = 's' | 'min' | 'hr';
-
-const TIMEOUT_UNIT_MS: Record<TimeoutUnit, number> = {
-  s: 1000,
-  min: 60_000,
-  hr: 3_600_000,
-};
-
-const TIMEOUT_UNITS: ReadonlyArray<TimeoutUnit> = ['s', 'min', 'hr'];
-
-/** Pick the largest unit that represents `ms` cleanly (no fractional part).
- * 5 min as 300_000 ms reads as "5 min", not "300 s". Falls back to seconds
- * for the awkward middle values. */
-function pickInitialTimeoutUnit(ms: number): TimeoutUnit {
-  if (ms >= TIMEOUT_UNIT_MS.hr && ms % TIMEOUT_UNIT_MS.hr === 0) return 'hr';
-  if (ms >= TIMEOUT_UNIT_MS.min && ms % TIMEOUT_UNIT_MS.min === 0) return 'min';
-  return 's';
-}
-
-/* ─── segmented control ─────────────────────────────────────── */
-interface SegmentedProps<T extends string> {
-  label: string;
-  value: T;
-  options: ReadonlyArray<{ value: T; label: string }>;
-  onChange: (next: T) => void;
-}
-function Segmented<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: SegmentedProps<T>) {
-  return (
-    <div className="field" role="group" aria-label={label}>
-      <span className="field-label">{label}</span>
-      <div className="segmented">
-        {options.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            data-active={value === opt.value}
-            aria-pressed={value === opt.value}
-            onClick={() => onChange(opt.value)}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 /* ─── display-name field ────────────────────────────────────── */
@@ -2189,7 +2078,7 @@ export default function ConfigPanel() {
   const node = useMemo(
     () =>
       selectedNodeId && currentWorkflow
-        ? findNode(currentWorkflow.nodes, selectedNodeId)
+        ? findWorkflowNode(currentWorkflow.nodes, selectedNodeId)
         : null,
     [selectedNodeId, currentWorkflow],
   );
