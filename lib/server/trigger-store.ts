@@ -4,16 +4,10 @@ import type { WebhookTrigger, WebhookPlugin } from '../shared/trigger';
 import { getWorkflow } from './workflow-store';
 import { pluginIndex } from './webhook-plugins';
 import { triggerIndex } from './trigger-index';
+import { triggersDir } from './paths';
 
 const TRIGGER_ID_RE = /^[A-Za-z0-9_-]{16,32}$/;
 const ALLOWED_OPS = new Set(['==', '!=', 'contains', 'matches']);
-
-function triggersDir(): string {
-  return (
-    process.env.INFLOOP_TRIGGERS_DIR ||
-    path.join(process.cwd(), 'triggers')
-  );
-}
 
 function fileFor(id: string): string {
   return path.join(triggersDir(), `${id}.json`);

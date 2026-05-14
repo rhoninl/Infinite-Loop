@@ -13,6 +13,7 @@ import {
 
 let tmpDir: string;
 let prevEnv: string | undefined;
+let prevLibEnv: string | undefined;
 
 function makeWorkflow(overrides: Partial<Workflow> = {}): Workflow {
   return {
@@ -50,7 +51,9 @@ function makeWorkflow(overrides: Partial<Workflow> = {}): Workflow {
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'infinite-loop-wfstore-'));
   prevEnv = process.env.INFLOOP_WORKFLOWS_DIR;
+  prevLibEnv = process.env.INFLOOP_LIBRARY_DIR;
   process.env.INFLOOP_WORKFLOWS_DIR = tmpDir;
+  process.env.INFLOOP_LIBRARY_DIR = path.join(tmpDir, 'library');
 });
 
 afterEach(async () => {
@@ -58,6 +61,11 @@ afterEach(async () => {
     delete process.env.INFLOOP_WORKFLOWS_DIR;
   } else {
     process.env.INFLOOP_WORKFLOWS_DIR = prevEnv;
+  }
+  if (prevLibEnv === undefined) {
+    delete process.env.INFLOOP_LIBRARY_DIR;
+  } else {
+    process.env.INFLOOP_LIBRARY_DIR = prevLibEnv;
   }
   await fsp.rm(tmpDir, { recursive: true, force: true });
 });
