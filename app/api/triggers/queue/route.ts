@@ -13,6 +13,7 @@ export async function GET(req: Request): Promise<Response> {
     triggerId: item.triggerId,
     workflowId: item.workflow.id,
     workflowName: item.workflow.name,
+    inputs: item.resolvedInputs,
     receivedAt: item.receivedAt,
     position: idx + 1,
   }));

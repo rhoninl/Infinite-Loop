@@ -75,17 +75,21 @@ describe('WorkflowMenu', () => {
     globalThis.fetch = originalFetch;
   });
 
-  it('renders the rename button with the current workflow name', () => {
+  it('renders the menu trigger with the current workflow name', () => {
     useWorkflowStore.setState({ currentWorkflow: SEED });
     render(<WorkflowMenu />);
-    const renameBtn = screen.getByRole('button', { name: 'rename workflow' });
-    expect(renameBtn).toHaveTextContent('My Wf');
+    const menuBtn = screen.getByRole('button', { name: 'workflow menu' });
+    expect(menuBtn).toHaveTextContent('My Wf');
+    expect(
+      screen.queryByRole('button', { name: 'rename workflow' }),
+    ).toBeNull();
   });
 
   it('falls back to "(no workflow)" when nothing is loaded', () => {
     render(<WorkflowMenu />);
     expect(screen.getByText('(no workflow)')).toBeInTheDocument();
-    // No rename button is offered when there's no workflow to rename.
+    // The trigger only toggles the dropdown; row-level rename is unavailable
+    // until the workflow list is open.
     expect(
       screen.queryByRole('button', { name: 'rename workflow' }),
     ).toBeNull();
@@ -176,10 +180,31 @@ describe('WorkflowMenu', () => {
     expect(postCall).toBeTruthy();
   });
 
-  it('renames the current workflow on click-edit + Enter and PUTs the change', async () => {
+  it('opens and closes the dropdown from the title trigger', async () => {
+    const fetchMock = mock(async () => jsonResponse({ workflows: [] }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<WorkflowMenu />);
+    const trigger = screen.getByRole('button', { name: 'workflow menu' });
+    fireEvent.click(trigger);
+    await waitFor(() =>
+      expect(screen.getByLabelText('workflow list')).toBeInTheDocument(),
+    );
+    fireEvent.click(trigger);
+    await waitFor(() =>
+      expect(screen.queryByLabelText('workflow list')).toBeNull(),
+    );
+  });
+
+  it('renames the current workflow from the row action + Enter and PUTs the change', async () => {
     useWorkflowStore.setState({ currentWorkflow: SEED, isDirty: false });
     const fetchMock = mock(async (url: RequestInfo | URL, init?: RequestInit) => {
       const u = String(url);
+      if (u === '/api/workflows' && (!init || !init.method || init.method === 'GET')) {
+        return jsonResponse({
+          workflows: [{ id: SEED.id, name: SEED.name, version: 1, updatedAt: 1 }],
+        });
+      }
       if (u === `/api/workflows/${SEED.id}` && init?.method === 'PUT') {
         const body = JSON.parse(String(init.body)) as Workflow;
         return jsonResponse({ workflow: body });
@@ -189,9 +214,15 @@ describe('WorkflowMenu', () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     render(<WorkflowMenu />);
-    fireEvent.click(screen.getByRole('button', { name: 'rename workflow' }));
+    fireEvent.click(screen.getByRole('button', { name: 'workflow menu' }));
+    const rename = await screen.findByRole('button', {
+      name: `rename workflow ${SEED.id}`,
+    });
+    fireEvent.click(rename);
 
-    const input = screen.getByRole('textbox', { name: 'workflow name' });
+    const input = screen.getByRole('textbox', {
+      name: `workflow name ${SEED.id}`,
+    });
     fireEvent.change(input, { target: { value: 'Renamed Wf' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
@@ -209,59 +240,138 @@ describe('WorkflowMenu', () => {
     expect(sent.id).toBe(SEED.id);
   });
 
-  it('cancels the rename on Escape and does not PUT', async () => {
-    useWorkflowStore.setState({ currentWorkflow: SEED });
-    const fetchMock = mock(async () => {
-      throw new Error('fetch should not be called on cancel');
+  it('commits a row rename when the edit action is clicked again', async () => {
+    useWorkflowStore.setState({ currentWorkflow: SEED, isDirty: false });
+    const fetchMock = mock(async (url: RequestInfo | URL, init?: RequestInit) => {
+      const u = String(url);
+      if (u === '/api/workflows' && (!init || !init.method || init.method === 'GET')) {
+        return jsonResponse({
+          workflows: [{ id: SEED.id, name: SEED.name, version: 1, updatedAt: 1 }],
+        });
+      }
+      if (u === `/api/workflows/${SEED.id}` && init?.method === 'PUT') {
+        const body = JSON.parse(String(init.body)) as Workflow;
+        return jsonResponse({ workflow: body });
+      }
+      throw new Error(`unexpected fetch ${u} ${init?.method}`);
     });
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     render(<WorkflowMenu />);
-    fireEvent.click(screen.getByRole('button', { name: 'rename workflow' }));
+    fireEvent.click(screen.getByRole('button', { name: 'workflow menu' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: `rename workflow ${SEED.id}` }),
+    );
 
-    const input = screen.getByRole('textbox', { name: 'workflow name' });
+    const input = screen.getByRole('textbox', {
+      name: `workflow name ${SEED.id}`,
+    });
+    fireEvent.change(input, { target: { value: 'Saved By Button' } });
+    fireEvent.click(
+      screen.getByRole('button', { name: `save workflow ${SEED.id}` }),
+    );
+
+    await waitFor(() => {
+      expect(useWorkflowStore.getState().currentWorkflow?.name).toBe(
+        'Saved By Button',
+      );
+    });
+    const putCall = fetchMock.mock.calls.find(
+      ([, init]) => (init as RequestInit | undefined)?.method === 'PUT',
+    );
+    expect(putCall).toBeTruthy();
+  });
+
+  it('cancels the rename on Escape and does not PUT', async () => {
+    useWorkflowStore.setState({ currentWorkflow: SEED });
+    const fetchMock = mock(async (url: RequestInfo | URL, init?: RequestInit) => {
+      const u = String(url);
+      if (u === '/api/workflows' && (!init || !init.method || init.method === 'GET')) {
+        return jsonResponse({
+          workflows: [{ id: SEED.id, name: SEED.name, version: 1, updatedAt: 1 }],
+        });
+      }
+      throw new Error(`unexpected fetch ${u} ${init?.method}`);
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<WorkflowMenu />);
+    fireEvent.click(screen.getByRole('button', { name: 'workflow menu' }));
+    const rename = await screen.findByRole('button', {
+      name: `rename workflow ${SEED.id}`,
+    });
+    fireEvent.click(rename);
+
+    const input = screen.getByRole('textbox', {
+      name: `workflow name ${SEED.id}`,
+    });
     fireEvent.change(input, { target: { value: 'Should Not Save' } });
     fireEvent.keyDown(input, { key: 'Escape' });
 
     await waitFor(() => {
       expect(
-        screen.queryByRole('textbox', { name: 'workflow name' }),
+        screen.queryByRole('textbox', { name: `workflow name ${SEED.id}` }),
       ).toBeNull();
     });
     expect(useWorkflowStore.getState().currentWorkflow?.name).toBe('My Wf');
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      fetchMock.mock.calls.some(
+        ([, init]) => (init as RequestInit | undefined)?.method === 'PUT',
+      ),
+    ).toBe(false);
   });
 
   it('does not PUT when the name is unchanged or empty', async () => {
     useWorkflowStore.setState({ currentWorkflow: SEED });
-    const fetchMock = mock(async () => {
-      throw new Error('fetch should not be called for noop rename');
+    const fetchMock = mock(async (url: RequestInfo | URL, init?: RequestInit) => {
+      const u = String(url);
+      if (u === '/api/workflows' && (!init || !init.method || init.method === 'GET')) {
+        return jsonResponse({
+          workflows: [{ id: SEED.id, name: SEED.name, version: 1, updatedAt: 1 }],
+        });
+      }
+      throw new Error(`unexpected fetch ${u} ${init?.method}`);
     });
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     render(<WorkflowMenu />);
+    fireEvent.click(screen.getByRole('button', { name: 'workflow menu' }));
+    const rename = await screen.findByRole('button', {
+      name: `rename workflow ${SEED.id}`,
+    });
+
     // Same name, commit via Enter.
-    fireEvent.click(screen.getByRole('button', { name: 'rename workflow' }));
-    const input1 = screen.getByRole('textbox', { name: 'workflow name' });
+    fireEvent.click(rename);
+    const input1 = screen.getByRole('textbox', {
+      name: `workflow name ${SEED.id}`,
+    });
     fireEvent.keyDown(input1, { key: 'Enter' });
     await waitFor(() =>
       expect(
-        screen.queryByRole('textbox', { name: 'workflow name' }),
+        screen.queryByRole('textbox', { name: `workflow name ${SEED.id}` }),
       ).toBeNull(),
     );
 
     // Whitespace-only name is rejected.
-    fireEvent.click(screen.getByRole('button', { name: 'rename workflow' }));
-    const input2 = screen.getByRole('textbox', { name: 'workflow name' });
+    fireEvent.click(
+      screen.getByRole('button', { name: `rename workflow ${SEED.id}` }),
+    );
+    const input2 = screen.getByRole('textbox', {
+      name: `workflow name ${SEED.id}`,
+    });
     fireEvent.change(input2, { target: { value: '   ' } });
     fireEvent.keyDown(input2, { key: 'Enter' });
     await waitFor(() =>
       expect(
-        screen.queryByRole('textbox', { name: 'workflow name' }),
+        screen.queryByRole('textbox', { name: `workflow name ${SEED.id}` }),
       ).toBeNull(),
     );
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      fetchMock.mock.calls.some(
+        ([, init]) => (init as RequestInit | undefined)?.method === 'PUT',
+      ),
+    ).toBe(false);
     expect(useWorkflowStore.getState().currentWorkflow?.name).toBe('My Wf');
   });
 

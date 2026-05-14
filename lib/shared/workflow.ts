@@ -369,6 +369,7 @@ export interface TriggerEnqueuedEvent {
   queueId: string;
   triggerId: string;
   workflowId: string;
+  inputs?: Record<string, string | number | boolean>;
   position: number;
   receivedAt: number;
 }

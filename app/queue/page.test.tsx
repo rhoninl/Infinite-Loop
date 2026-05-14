@@ -52,11 +52,18 @@ describe('QueuePage', () => {
     });
   });
 
+  test('renders a link back to the console', async () => {
+    installFakes({ size: 0, items: [] });
+    render(<QueuePage />);
+    const back = screen.getByRole('link', { name: /back/i });
+    expect(back).toHaveAttribute('href', '/');
+  });
+
   test('renders one row per item with workflow name and position', async () => {
     installFakes({
       size: 2,
       items: [
-        { queueId: 'q-1', triggerId: 't1', workflowId: 'w1', workflowName: 'First', receivedAt: 100, position: 1 },
+        { queueId: 'q-1', triggerId: 't1', workflowId: 'w1', workflowName: 'First', inputs: {}, receivedAt: 100, position: 1 },
         { queueId: 'q-2', triggerId: 't2', workflowId: 'w2', workflowName: 'Second', receivedAt: 200, position: 2 },
       ],
     });
@@ -69,6 +76,36 @@ describe('QueuePage', () => {
 
     const rows = document.querySelectorAll('.queue-row');
     expect(rows.length).toBe(2);
+  });
+
+  test('folds queued trigger inputs by default and reveals them on click', async () => {
+    installFakes({
+      size: 1,
+      items: [
+        {
+          queueId: 'q-1',
+          triggerId: 't1',
+          workflowId: 'w1',
+          workflowName: 'First',
+          inputs: { topic: 'weekend release', count: 2, urgent: true },
+          receivedAt: 100,
+          position: 1,
+        },
+      ],
+    });
+    render(<QueuePage />);
+    await waitFor(() => screen.getByText('First'));
+
+    expect(screen.queryByText('weekend release')).toBeNull();
+    const toggle = screen.getByRole('button', { name: /inputs \(3\)/i });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('topic')).toBeTruthy();
+    expect(screen.getByText('weekend release')).toBeTruthy();
+    expect(screen.getByText('urgent')).toBeTruthy();
+    expect(screen.getByText('true')).toBeTruthy();
   });
 
   test('shows Confirm/Cancel after clicking Delete; Cancel reverts', async () => {
@@ -166,6 +203,7 @@ describe('QueuePage', () => {
         queueId: 'q-new',
         triggerId: 't-new',
         workflowId: 'w-new',
+        inputs: { msg: 'hello' },
         position: 1,
         receivedAt: 500,
       });
@@ -174,6 +212,7 @@ describe('QueuePage', () => {
     await waitFor(() => {
       expect(document.querySelectorAll('.queue-row').length).toBe(1);
     });
+    expect(screen.getByRole('button', { name: /inputs \(1\)/i })).toBeTruthy();
   });
 
   test('removes a row when trigger_started / trigger_dropped / trigger_removed arrives', async () => {

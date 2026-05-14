@@ -79,6 +79,7 @@ export class TriggerQueue {
       queueId,
       triggerId: full.triggerId,
       workflowId: full.workflow.id,
+      inputs: full.resolvedInputs,
       position,
       receivedAt: full.receivedAt,
     });
