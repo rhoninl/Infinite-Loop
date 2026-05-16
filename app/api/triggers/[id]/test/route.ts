@@ -10,9 +10,24 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
+/** Same cap the public webhook route applies. The webhook route enforces
+ *  this via `Content-Length` before reading the body, but our synthetic
+ *  Request bypasses that path — so we cap here too. */
+const MAX_PAYLOAD_BYTES = 1024 * 1024;
+
 export async function POST(req: Request, { params }: RouteParams): Promise<Response> {
   const unauth = requireAuth(req);
   if (unauth) return unauth;
+  // Honor the incoming Content-Length cap before reading any body —
+  // mirrors the public /api/webhook/[triggerId] guard so a callers can't
+  // use the test route to push past the size limit.
+  const lenHeader = req.headers.get('content-length');
+  if (lenHeader) {
+    const len = Number.parseInt(lenHeader, 10);
+    if (Number.isFinite(len) && len > MAX_PAYLOAD_BYTES) {
+      return NextResponse.json({ error: 'payload-too-large' }, { status: 413 });
+    }
+  }
   const { id } = await params;
   try {
     await getTrigger(id);
@@ -30,8 +45,14 @@ export async function POST(req: Request, { params }: RouteParams): Promise<Respo
     return NextResponse.json({ error: 'invalid JSON body' }, { status: 400 });
   }
   const payloadJson = JSON.stringify(body.payload ?? {});
+  if (Buffer.byteLength(payloadJson, 'utf8') > MAX_PAYLOAD_BYTES) {
+    return NextResponse.json({ error: 'payload-too-large' }, { status: 413 });
+  }
   const headers: Record<string, string> = {
     'content-type': 'application/json',
+    // Forward content-length so the webhook route's own guard sees a
+    // matching value (it would otherwise miss this header on synthetic Requests).
+    'content-length': String(Buffer.byteLength(payloadJson, 'utf8')),
     ...(body.headers ?? {}),
   };
 
