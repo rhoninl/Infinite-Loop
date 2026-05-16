@@ -16,7 +16,10 @@ interface Props {
  *  `[data-checked]` attribute on a button; an aria role of "checkbox"
  *  keeps it accessible to screen readers and keyboard navigation (Space
  *  toggles, as on a native checkbox). When `label` is provided the box
- *  and label compose as a single click target. */
+ *  and label compose as a single click target — using a <span> wrapper
+ *  with a forwarded onClick (NOT <label htmlFor>) to avoid the
+ *  historical browser quirk where a <button> inside <label> can
+ *  double-fire on label-text click. */
 export default function Checkbox({
   checked,
   onChange,
@@ -27,6 +30,7 @@ export default function Checkbox({
 }: Props) {
   const id = useId();
   const classes = ['checkbox', className].filter(Boolean).join(' ');
+  const toggle = () => { if (!disabled) onChange(!checked); };
   const box = (
     <button
       type="button"
@@ -37,12 +41,16 @@ export default function Checkbox({
       disabled={disabled}
       className="checkbox-box"
       data-checked={checked}
-      onClick={() => onChange(!checked)}
+      onClick={(e) => {
+        // Stop propagation so the wrapper span's onClick (when label is
+        // provided) doesn't also toggle — that would un-toggle the box.
+        e.stopPropagation();
+        toggle();
+      }}
       onKeyDown={(e) => {
-        if (e.key === ' ' || e.key === 'Enter') {
-          e.preventDefault();
-          onChange(!checked);
-        }
+        // Native <button> already fires `click` on Space and Enter, so
+        // we only intercept Space to suppress the default page-scroll.
+        if (e.key === ' ') e.preventDefault();
       }}
     >
       <span className="checkbox-mark" aria-hidden="true">
@@ -52,9 +60,9 @@ export default function Checkbox({
   );
   if (!label) return <span className={classes}>{box}</span>;
   return (
-    <label className={classes} htmlFor={id}>
+    <span className={classes} onClick={toggle}>
       {box}
       <span className="checkbox-label">{label}</span>
-    </label>
+    </span>
   );
 }

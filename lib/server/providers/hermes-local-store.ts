@@ -166,7 +166,16 @@ function ipIsPrivateOrLocal(ip: string): boolean {
 /** Refuse to fetch URLs whose hostname resolves to a loopback, RFC1918,
  *  link-local, or other reserved address. This is the SSRF guard for the
  *  Hermes provider create/update flow, where the caller supplies `host`
- *  and we hit `<host>:<port>/v1/models` server-side. */
+ *  and we hit `<host>:<port>/v1/models` server-side.
+ *
+ *  Known residual gap: this guard does one DNS lookup, then `fetch`
+ *  resolves the host again via its own resolver — an attacker who
+ *  controls authoritative DNS can serve a public IP to our lookup and a
+ *  private IP to the subsequent fetch (classic DNS rebinding). Closing
+ *  this would require dialing by resolved IP with the SNI/Host preserved
+ *  (or using a pinning resolver). Acceptable for current deployment
+ *  model (single-tenant local app); revisit if the server moves to a
+ *  shared-tenancy footprint. */
 async function assertHostnameIsPublic(host: string): Promise<void> {
   let url: URL;
   try {

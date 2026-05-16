@@ -48,12 +48,14 @@ export async function POST(req: Request, { params }: RouteParams): Promise<Respo
   if (Buffer.byteLength(payloadJson, 'utf8') > MAX_PAYLOAD_BYTES) {
     return NextResponse.json({ error: 'payload-too-large' }, { status: 413 });
   }
+  // Caller-supplied headers come first so we own the final values of
+  // content-type / content-length — these must not be overridable from
+  // the request body, otherwise the synthesized request can lie about
+  // its size and bypass the webhook route's body-cap re-check.
   const headers: Record<string, string> = {
-    'content-type': 'application/json',
-    // Forward content-length so the webhook route's own guard sees a
-    // matching value (it would otherwise miss this header on synthetic Requests).
-    'content-length': String(Buffer.byteLength(payloadJson, 'utf8')),
     ...(body.headers ?? {}),
+    'content-type': 'application/json',
+    'content-length': String(Buffer.byteLength(payloadJson, 'utf8')),
   };
 
   const synthetic = new Request(`http://test/api/webhook/${id}`, {

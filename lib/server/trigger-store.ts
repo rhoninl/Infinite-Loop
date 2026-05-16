@@ -200,10 +200,13 @@ export async function touchLastFired(id: string, ts: number = Date.now()): Promi
     // touchLastFired is a best-effort hot path; if the trigger file or
     // its parent dir disappeared between the read above and the write
     // here (concurrent deleteTrigger, a test's afterEach `fs.rm`, etc.)
-    // we log and move on. ENOENT is the canonical case; macOS can also
-    // surface EINVAL for renames whose target was unlinked mid-flight.
+    // we log and move on. We swallow ENOENT (target gone) and ENOTDIR
+    // (parent dir replaced by a non-dir) — both are unambiguous
+    // file-gone races. EINVAL is deliberately NOT swallowed: POSIX
+    // EINVAL on rename usually indicates a programming bug (invalid
+    // path component, cross-device flags), not a transient race.
     const code = (err as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT' || code === 'EINVAL' || code === 'ENOTDIR') {
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
       console.warn(`[trigger-store] touchLastFired(${id}) skipped: ${code}`);
       return;
     }
