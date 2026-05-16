@@ -699,9 +699,18 @@ function AgentForm({
   const [agent, setAgent] = useDebouncedString(config.agent ?? '', (next) =>
     onPatch({ ...config, agent: next.trim() ? next.trim() : undefined }),
   );
+  const [worktreeRef, setWorktreeRef] = useDebouncedString(
+    config.worktreeRef ?? '',
+    (next) =>
+      onPatch({
+        ...config,
+        worktreeRef: next.trim() ? next.trim() : undefined,
+      }),
+  );
 
   const providerId = config.providerId ?? 'claude';
   const isHttpProvider = providerInfo?.transport === 'http';
+  const useWorktree = config.useWorktree === true;
 
   // Fetch the CLI provider's available agents so the Agent field can
   // suggest them. The cwd is part of the probe because `claude agents`
@@ -828,6 +837,43 @@ function AgentForm({
           <span className="field-hint">
             Adds <code>--agent &lt;name&gt;</code> to the spawned command. Leave blank to omit the flag.
           </span>
+        </div>
+      )}
+
+      {!isHttpProvider && (
+        <div className="field">
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={useWorktree}
+              onChange={(e) =>
+                onPatch({
+                  ...config,
+                  useWorktree: e.target.checked ? true : undefined,
+                  ...(e.target.checked ? {} : { worktreeRef: undefined }),
+                })
+              }
+            />
+            <span>Run in isolated git worktree</span>
+          </label>
+          <span className="field-hint">
+            Creates a fresh worktree off <code>cwd</code> so parallel agents don&apos;t collide. Uncommitted edits in <code>cwd</code> are NOT included — commit or stash first.
+          </span>
+          {useWorktree && (
+            <div className="field" style={{ marginTop: 8 }}>
+              <span className="field-label">Worktree base ref</span>
+              <input
+                aria-label="Worktree base ref"
+                type="text"
+                value={worktreeRef}
+                onChange={(e) => setWorktreeRef(e.target.value)}
+                placeholder="HEAD"
+              />
+              <span className="field-hint">
+                Branch, tag, or commit. Blank = HEAD of <code>cwd</code>. Supports <code>&#123;&#123;…&#125;&#125;</code> templating.
+              </span>
+            </div>
+          )}
         </div>
       )}
 
