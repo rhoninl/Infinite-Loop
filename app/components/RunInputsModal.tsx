@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { WorkflowInputDecl } from '@/lib/shared/workflow';
 import {
   resolveRunInputs,
@@ -25,6 +25,31 @@ export default function RunInputsModal({ declared, onSubmit, onCancel }: Props) 
     return initial;
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const formRef = useRef<HTMLFormElement | null>(null);
+
+  // Escape closes the modal. Mirrors the pattern in HermesConnectionsModal
+  // so keyboard users can dismiss without mouse-clicking the Cancel button.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onCancel();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+
+  // Autofocus the first interactive field on mount so the user can start
+  // typing immediately. We pick the first focusable in the form rather
+  // than hard-coding to a particular widget so the focus lands correctly
+  // regardless of declared input type.
+  useEffect(() => {
+    const first = formRef.current?.querySelector<HTMLElement>(
+      'input, textarea, [tabindex="0"]',
+    );
+    first?.focus();
+  }, []);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -53,10 +78,16 @@ export default function RunInputsModal({ declared, onSubmit, onCancel }: Props) 
   return (
     <div
       role="dialog"
+      aria-modal="true"
       aria-label="workflow inputs"
       className="modal-backdrop"
+      onClick={(e) => {
+        // Click outside the form (on the backdrop) cancels — same gesture
+        // as Escape, matches the HermesConnectionsModal pattern.
+        if (e.target === e.currentTarget) onCancel();
+      }}
     >
-      <form className="modal" onSubmit={handleSubmit}>
+      <form ref={formRef} className="modal" onSubmit={handleSubmit}>
         <h2>Run with inputs</h2>
         {declared.map((d) => (
           <div key={d.name} className="field">
