@@ -9,6 +9,7 @@ import {
   type ChangeEvent,
 } from 'react';
 import { useWorkflowStore } from '@/lib/client/workflow-store-client';
+import Checkbox from './Checkbox';
 import FolderPicker from './FolderPicker';
 import SelectMenu from './SelectMenu';
 import TemplateField from './TemplateField';
@@ -936,22 +937,20 @@ function ConditionForm({
               onChange={(e) => setPattern(e.target.value)}
             />
           </div>
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={config.sentinel?.isRegex ?? false}
-              onChange={(e) =>
-                onPatch({
-                  ...config,
-                  sentinel: {
-                    pattern: config.sentinel?.pattern ?? '',
-                    isRegex: e.target.checked,
-                  },
-                })
-              }
-            />
-            <span>Treat as regex</span>
-          </label>
+          <Checkbox
+            className="checkbox-row"
+            label="Treat as regex"
+            checked={config.sentinel?.isRegex ?? false}
+            onChange={(next) =>
+              onPatch({
+                ...config,
+                sentinel: {
+                  pattern: config.sentinel?.pattern ?? '',
+                  isRegex: next,
+                },
+              })
+            }
+          />
         </>
       )}
 
@@ -1527,24 +1526,9 @@ function CandidateRow({
 }) {
   const [v, setV] = useDebouncedString(value, onCommit);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <span
-          style={{
-            fontFamily: 'var(--mono)',
-            fontSize: 11,
-            color: 'var(--fg-soft)',
-            letterSpacing: '0.1em',
-          }}
-        >
-          [{index}]
-        </span>
+    <div className="candidate-row">
+      <div className="candidate-row-head">
+        <span className="candidate-row-index">[{index}]</span>
         <button
           type="button"
           className="btn btn-ghost"
@@ -1657,7 +1641,7 @@ function JudgeForm({
 
       <div className="field">
         <span className="field-label">Candidates</span>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="candidate-list">
           {candidates.map((c, i) => (
             // Index-keyed: useDebouncedString re-syncs when the upstream
             // value reference changes, so focus on unaffected rows is
@@ -1673,32 +1657,28 @@ function JudgeForm({
           ))}
           <button
             type="button"
-            className="btn btn-ghost"
+            className="btn btn-ghost kv-add"
             onClick={addCandidate}
-            style={{ alignSelf: 'flex-start' }}
           >
             + add candidate
           </button>
         </div>
       </div>
 
-      <label className="field-checkbox">
-        <input
-          type="checkbox"
-          checked={overridePrompt}
-          onChange={(e) => {
-            const checked = e.target.checked;
-            setOverridePrompt(checked);
-            if (!checked) {
-              // Clear both the local buffer and the stored override so the
-              // engine falls back to the provider default.
-              setJudgePrompt('');
-              onPatch({ ...config, judgePrompt: undefined });
-            }
-          }}
-        />
-        <span>Override judge prompt</span>
-      </label>
+      <Checkbox
+        className="field-checkbox"
+        label="Override judge prompt"
+        checked={overridePrompt}
+        onChange={(next) => {
+          setOverridePrompt(next);
+          if (!next) {
+            // Clear both the local buffer and the stored override so the
+            // engine falls back to the provider default.
+            setJudgePrompt('');
+            onPatch({ ...config, judgePrompt: undefined });
+          }
+        }}
+      />
 
       {overridePrompt && (
         <div className="field">
@@ -1901,7 +1881,7 @@ function ScriptForm({
 
       <div className="field">
         <span className="field-label">Outputs</span>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="script-output-list">
           {outputs.map((name, i) => (
             <OutputNameRow
               key={i}
@@ -1913,9 +1893,8 @@ function ScriptForm({
           ))}
           <button
             type="button"
-            className="btn btn-ghost"
+            className="btn btn-ghost kv-add"
             onClick={addOutput}
-            style={{ alignSelf: 'flex-start' }}
           >
             + add output
           </button>

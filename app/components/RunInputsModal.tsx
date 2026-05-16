@@ -7,6 +7,7 @@ import {
   WorkflowInputError,
   type WorkflowInputValue,
 } from '@/lib/shared/resolve-run-inputs';
+import Checkbox from './Checkbox';
 
 interface Props {
   declared: WorkflowInputDecl[];
@@ -164,11 +165,10 @@ function FieldWidget({
       );
     case 'boolean':
       return (
-        <input
-          id={id}
-          type="checkbox"
+        <Checkbox
+          ariaLabel={decl.name}
           checked={value === true}
-          onChange={(e) => onChange(e.target.checked)}
+          onChange={onChange}
         />
       );
   }

@@ -3728,18 +3728,6 @@ input[type='number'].no-spin {
   margin: 0;
 }
 
-.dsp-new-btn {
-  font-family: var(--mono);
-  font-size: 12px;
-  padding: 4px 10px;
-  border: 1px solid var(--border-strong);
-  background: var(--bg-input);
-  color: var(--fg);
-  cursor: pointer;
-}
-
-.dsp-new-btn:hover { background: var(--bg-elevated); }
-
 .dsp-split {
   display: grid;
   grid-template-columns: 40% 1fr;
@@ -3865,7 +3853,6 @@ input[type='number'].no-spin {
 }
 
 .trg-form-input,
-.trg-form-select,
 .trg-form-textarea {
   font-family: var(--mono);
   font-size: 12px;
@@ -3892,17 +3879,6 @@ input[type='number'].no-spin {
   color: var(--fg-soft);
   display: flex;
   justify-content: space-between;
-}
-
-.trg-form-add,
-.trg-form-remove {
-  font-family: var(--mono);
-  font-size: 11px;
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--fg);
-  cursor: pointer;
 }
 
 .trg-form-predicate {
@@ -3942,19 +3918,6 @@ input[type='number'].no-spin {
 }
 
 .trg-form-actions { display: flex; gap: 8px; padding-top: 4px; }
-
-.trg-form-save,
-.trg-form-cancel {
-  font-family: var(--mono);
-  font-size: 12px;
-  padding: 4px 12px;
-  border: 1px solid var(--border-strong);
-  background: var(--bg-input);
-  color: var(--fg);
-  cursor: pointer;
-}
-
-.trg-form-save:hover { background: var(--bg-elevated); }
 
 .trg-form-url {
   font-family: var(--mono);
@@ -4093,3 +4056,92 @@ input[type='number'].no-spin {
 }
 
 .trg-summary-link:hover { color: var(--fg); }
+
+/* ─── Checkbox (replaces native <input type="checkbox">) ──────────
+ * Same shape as SelectMenu — semantic component lives in
+ * app/components/Checkbox.tsx; visual rules live here. */
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.checkbox-box {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--bg-sunk);
+  border-radius: 2px;
+  cursor: pointer;
+  padding: 0;
+  color: var(--fg);
+  font: inherit;
+  line-height: 1;
+  transition: background 0.1s, border-color 0.1s;
+}
+.checkbox-box:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.checkbox-box[data-checked='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+.checkbox-box:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.checkbox-mark {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+.checkbox-label {
+  color: var(--fg);
+  font-size: 13px;
+}
+
+/* ─── Canvas shell — fills its grid cell. xyflow needs explicit
+ * width/height; expressing as a class keeps the JSX free of inline
+ * style. */
+.canvas-shell {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+/* ─── ConfigPanel: rows lifted out of inline styles ────────────── */
+.kv-add {
+  align-self: flex-start;
+}
+.candidate-list,
+.script-output-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.script-output-list { gap: 8px; }
+.candidate-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.candidate-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.candidate-row-index {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg-soft);
+  letter-spacing: 0.1em;
+}
+.field-hint--mono {
+  font-family: var(--mono);
+}
